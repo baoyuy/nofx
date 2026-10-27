@@ -18,6 +18,15 @@ import {
 import { accountLabel } from '../../lib/frontierAccounts'
 import type { Exchange } from '../../types'
 import type { AccountObservation } from '../../lib/frontierWorkspace'
+import { useLanguage } from '../../contexts/LanguageContext'
+
+function useSafeLanguage() {
+  try {
+    return useLanguage().language
+  } catch {
+    return 'en' as const
+  }
+}
 
 interface OpenOrder {
   order_id: string
@@ -31,14 +40,16 @@ interface OpenOrder {
 }
 const format = (value: number | string) =>
   Number(value).toLocaleString('en-US', { maximumFractionDigits: 8 })
-const amount = (value: number) =>
+const amount = (value: number, zh = false) =>
   Number.isFinite(value)
     ? value.toLocaleString('en-US', {
         minimumFractionDigits: 2,
         maximumFractionDigits:
           Math.abs(value) > 0 && Math.abs(value) < 0.01 ? 4 : 2,
       })
-    : 'Unavailable'
+    : zh
+      ? '不可用'
+      : 'Unavailable'
 const exchangeURL = (venue: string) =>
   venue === 'hyperliquid'
     ? 'https://app.hyperliquid.xyz/'
@@ -83,6 +94,8 @@ export function FrontierAccount({
   onCheck?: (run: LiveRun) => Promise<void>
   onObserve?: (snapshot: AccountObservation | null) => void
 }) {
+  const language = useSafeLanguage()
+  const zh = language === 'zh'
   const [snapshot, setSnapshot] = useState<{
     accountID: string
     positions: AccountPosition[]
@@ -175,7 +188,11 @@ export function FrontierAccount({
       } catch {
         if (version === generation.current) {
           setOrders(null)
-          setOrderError('Current exchange orders could not be verified.')
+          setOrderError(
+            zh
+              ? '无法核实当前交易所订单。'
+              : 'Current exchange orders could not be verified.'
+          )
         }
       } finally {
         clearTimeout(orderDeadline)
@@ -189,7 +206,7 @@ export function FrontierAccount({
         inFlight.current = false
       }
     }
-  }, [accountID, symbol])
+  }, [accountID, symbol, zh])
   useEffect(() => {
     generation.current++
     inFlight.current = false
@@ -265,7 +282,11 @@ export function FrontierAccount({
     setAttempted(new Set(attemptLatch.current))
     setConfirm(null)
     onBusy(true)
-    setNotice('Stopping remaining entries before closing the position…')
+    setNotice(
+      zh
+        ? '正在停止剩余入场，然后平仓…'
+        : 'Stopping remaining entries before closing the position…'
+    )
     let closeSent = false
     let closeMessage = ''
     try {
@@ -277,11 +298,15 @@ export function FrontierAccount({
         )
       )
         throw new Error(
-          'The NOFX account binding changed. Refresh before closing.'
+          zh
+            ? 'NOFX 账户绑定已变更。平仓前请先刷新。'
+            : 'The NOFX account binding changed. Refresh before closing.'
         )
       if (traders.some((t) => t.exchange_id === accountID && t.is_running))
         throw new Error(
-          'Stop Autopilot for this account in Dashboard before manually closing.'
+          zh
+            ? '手动平仓前，请先在仪表盘中停止该账户的 Autopilot。'
+            : 'Stop Autopilot for this account in Dashboard before manually closing.'
         )
       await closeAccountPosition(accountID, venue, position, runs, {
         stop: (run) =>
@@ -295,13 +320,19 @@ export function FrontierAccount({
             (p) => p.symbol === position.symbol && p.side === position.side
           )
           if (!fresh)
-            throw new Error('Position is no longer open; no close was sent.')
+            throw new Error(
+              zh
+                ? '持仓已不存在；未发送平仓。'
+                : 'Position is no longer open; no close was sent.'
+            )
           if (
             fresh.quantity > position.quantity ||
             fresh.entry !== position.entry
           )
             throw new Error(
-              'Position changed. Refresh and review its size before closing.'
+              zh
+                ? '持仓已变更。平仓前请刷新并复核其规模。'
+                : 'Position changed. Refresh and review its size before closing.'
             )
           if (apiKeyVenues.includes(venue)) {
             const quantity = positionDecimal(fresh.quantity)
@@ -331,7 +362,9 @@ export function FrontierAccount({
       })
       setNotice(
         closeMessage ||
-          'Close request accepted. Verify the refreshed position below; no automatic repeat will be sent.'
+          (zh
+            ? '平仓请求已接受。请核对下方刷新后的持仓；不会自动重复发送。'
+            : 'Close request accepted. Verify the refreshed position below; no automatic repeat will be sent.')
       )
     } catch (e) {
       const notSubmitted = !closeSent || e instanceof CloseNotSubmittedError
@@ -342,8 +375,12 @@ export function FrontierAccount({
       setNotice(
         (e instanceof Error ? e.message : String(e)) +
           (notSubmitted
-            ? ' No close order was submitted. Refresh the account, then review the position again.'
-            : ' Check the exchange before sending another close.')
+            ? zh
+              ? ' 未提交任何平仓订单。请刷新账户，然后重新复核持仓。'
+              : ' No close order was submitted. Refresh the account, then review the position again.'
+            : zh
+              ? ' 再次发送平仓前，请先查看交易所。'
+              : ' Check the exchange before sending another close.')
       )
     } finally {
       onBusy(false)
@@ -354,12 +391,12 @@ export function FrontierAccount({
   return (
     <section
       className="frontier-account"
-      aria-label="Account positions and orders"
+      aria-label={zh ? '账户持仓和订单' : 'Account positions and orders'}
     >
       <header>
         <div>
           <h2>
-            Positions & orders{' '}
+            {zh ? '持仓和订单' : 'Positions & orders'}{' '}
             <span className="frontier-count">
               {snapshot?.accountID === accountID ? positions.length : '—'}
             </span>
@@ -367,20 +404,22 @@ export function FrontierAccount({
           <p>
             {account
               ? `${accountLabel(account, accounts)} · ${venueName(venue)}${account.hyperliquidWalletAddr ? ' · ' + account.hyperliquidWalletAddr.slice(0, 8) + '…' + account.hyperliquidWalletAddr.slice(-4) : ''}`
-              : 'Select a trading account to see all its positions.'}
+              : zh
+                ? '选择一个交易账户以查看其全部持仓。'
+                : 'Select a trading account to see all its positions.'}
           </p>
         </div>
         <div className="frontier-account-actions">
           {accountID && (
             <a href={exchangeURL(venue)} target="_blank" rel="noreferrer">
-              Open exchange ↗
+              {zh ? '打开交易所 ↗' : 'Open exchange ↗'}
             </a>
           )}
           <button
             disabled={!accountID || busy || loading}
             onClick={() => void refresh()}
           >
-            {loading ? 'Checking…' : 'Refresh account'}
+            {loading ? (zh ? '检查中…' : 'Checking…') : zh ? '刷新账户' : 'Refresh account'}
           </button>
           <button
             className="frontier-long"
@@ -389,7 +428,7 @@ export function FrontierAccount({
             }
             onClick={() => onManual('long')}
           >
-            Buy / Long
+            {zh ? '买入 / 做多' : 'Buy / Long'}
           </button>
           <button
             className="frontier-short"
@@ -398,20 +437,22 @@ export function FrontierAccount({
             }
             onClick={() => onManual('short')}
           >
-            Sell / Short
+            {zh ? '卖出 / 做空' : 'Sell / Short'}
           </button>
         </div>
       </header>
       {currentBinding?.running && (
         <p className="frontier-notice">
-          Autopilot is running. Stop it in Dashboard before manual trading.
+          {zh
+            ? 'Autopilot 正在运行。手动交易前，请先在仪表盘中停止它。'
+            : 'Autopilot is running. Stop it in Dashboard before manual trading.'}
         </p>
       )}
       {hasPosition && (
         <small>
-          You have a position in {symbol}. You can still generate new drafts.
-          Independent entries cannot execute alongside this position; drafts do
-          not modify existing positions or exit orders.
+          {zh
+            ? `你在 ${symbol} 有持仓。你仍可以生成新草稿。独立入场无法与此持仓同时执行；草稿不会修改现有持仓或出场订单。`
+            : `You have a position in ${symbol}. You can still generate new drafts. Independent entries cannot execute alongside this position; drafts do not modify existing positions or exit orders.`}
         </small>
       )}
       {hasPosition &&
@@ -421,10 +462,11 @@ export function FrontierAccount({
         orders.symbol === symbol &&
         open.length === 0 && (
           <p role="alert" className="frontier-notice">
-            {symbol} position is open, but no working orders were reported.
-            Stop-loss and take-profit protection is not confirmed.{' '}
+            {zh
+              ? `${symbol} 持仓已开仓，但没有报告任何活动订单。止损和止盈保护未得到确认。`
+              : `${symbol} position is open, but no working orders were reported. Stop-loss and take-profit protection is not confirmed.`}{' '}
             <a href={exchangeURL(venue)} target="_blank" rel="noreferrer">
-              Check protection at the exchange ↗
+              {zh ? '在交易所查看保护订单 ↗' : 'Check protection at the exchange ↗'}
             </a>
           </p>
         )}
@@ -435,20 +477,28 @@ export function FrontierAccount({
       )}
       {error && (
         <p role="alert" className="frontier-notice">
-          Positions unavailable: {error}
+          {zh ? '持仓不可用：' : 'Positions unavailable: '} {error}
           {snapshot
-            ? ' Last received values below may be stale.'
-            : ' No empty-account assumption was made.'}
+            ? zh
+              ? ' 下方上次接收的值可能已过期。'
+              : ' Last received values below may be stale.'
+            : zh
+              ? ' 未假定账户为空。'
+              : ' No empty-account assumption was made.'}
         </p>
       )}
       {accountID && (
         <>
           <div className="frontier-account-subhead">
-            <span>All markets · selected account</span>
+            <span>{zh ? '全部市场 · 所选账户' : 'All markets · selected account'}</span>
             <span>
               {snapshot?.accountID === accountID
-                ? `${error ? 'Last received' : 'Received'} ${new Date(snapshot.at).toLocaleTimeString()}`
-                : 'Waiting for exchange response'}
+                ? zh
+                  ? `${error ? '上次接收' : '接收于'} ${new Date(snapshot.at).toLocaleTimeString()}`
+                  : `${error ? 'Last received' : 'Received'} ${new Date(snapshot.at).toLocaleTimeString()}`
+                : zh
+                  ? '等待交易所响应'
+                  : 'Waiting for exchange response'}
             </span>
           </div>
           {positions.length > 0 ? (
@@ -456,15 +506,21 @@ export function FrontierAccount({
               <table>
                 <thead>
                   <tr>
-                    <th>Market</th>
-                    <th>Position value</th>
-                    <th title="Position value divided by leverage. This estimate is not the exchange-reported margin balance.">
-                      Est. initial margin
+                    <th>{zh ? '市场' : 'Market'}</th>
+                    <th>{zh ? '持仓价值' : 'Position value'}</th>
+                    <th
+                      title={
+                        zh
+                          ? '持仓价值除以杠杆。此估算不是交易所报告的保证金余额。'
+                          : 'Position value divided by leverage. This estimate is not the exchange-reported margin balance.'
+                      }
+                    >
+                      {zh ? '预计初始保证金' : 'Est. initial margin'}
                     </th>
-                    <th>Quantity</th>
-                    <th>Average entry</th>
-                    <th>Mark price</th>
-                    <th>Unrealized PnL</th>
+                    <th>{zh ? '数量' : 'Quantity'}</th>
+                    <th>{zh ? '平均入场价' : 'Average entry'}</th>
+                    <th>{zh ? '标记价格' : 'Mark price'}</th>
+                    <th>{zh ? '未实现盈亏' : 'Unrealized PnL'}</th>
                     <th />
                   </tr>
                 </thead>
@@ -474,26 +530,37 @@ export function FrontierAccount({
                       <td>
                         <strong>{nativeMarket(p.symbol, venue)}</strong>
                         <span className={'frontier-position-badge ' + p.side}>
-                          {p.side === 'long' ? 'Long' : 'Short'}{' '}
+                          {p.side === 'long'
+                            ? zh
+                              ? '做多'
+                              : 'Long'
+                            : zh
+                              ? '做空'
+                              : 'Short'}{' '}
                           <b>{p.leverage}x</b>
                         </span>
                       </td>
                       <td className="frontier-position-value">
-                        <strong>{amount(p.quantity * p.mark)}</strong>
+                        <strong>{amount(p.quantity * p.mark, zh)}</strong>
                         <small>
-                          {venue === 'hyperliquid' ? 'USDC' : 'USDT'} notional
+                          {venue === 'hyperliquid' ? 'USDC' : 'USDT'}{' '}
+                          {zh ? '名义价值' : 'notional'}
                         </small>
                       </td>
                       <td
                         className="frontier-position-margin"
-                        title="Current notional / leverage. Cross margin, added collateral and exchange rules can change actual margin requirements."
+                        title={
+                          zh
+                            ? '当前名义价值 / 杠杆。全仓保证金、追加抵押品和交易所规则可能改变实际保证金要求。'
+                            : 'Current notional / leverage. Cross margin, added collateral and exchange rules can change actual margin requirements.'
+                        }
                       >
                         <strong>
-                          ≈ {amount((p.quantity * p.mark) / p.leverage)}
+                          ≈ {amount((p.quantity * p.mark) / p.leverage, zh)}
                         </strong>
                         <small>
-                          {venue === 'hyperliquid' ? 'USDC' : 'USDT'} ·
-                          estimated
+                          {venue === 'hyperliquid' ? 'USDC' : 'USDT'} ·{' '}
+                          {zh ? '估算' : 'estimated'}
                         </small>
                       </td>
                       <td>
@@ -506,7 +573,7 @@ export function FrontierAccount({
                       <td>{format(p.mark)}</td>
                       <td className={p.pnl >= 0 ? 'target-text' : 'stop-text'}>
                         {p.pnl >= 0 ? '+' : ''}
-                        {amount(p.pnl)}{' '}
+                        {amount(p.pnl, zh)}{' '}
                         {venue === 'hyperliquid' ? 'USDC' : 'USDT'}
                       </td>
                       <td>
@@ -516,7 +583,7 @@ export function FrontierAccount({
                             target="_blank"
                             rel="noreferrer"
                           >
-                            Close on exchange ↗
+                            {zh ? '在交易所平仓 ↗' : 'Close on exchange ↗'}
                           </a>
                         ) : (
                           <button
@@ -529,8 +596,12 @@ export function FrontierAccount({
                             onClick={() => setConfirm(p)}
                           >
                             {attempted.has(key(p))
-                              ? 'Verify close at exchange'
-                              : 'Close position'}
+                              ? zh
+                                ? '在交易所核实平仓'
+                                : 'Verify close at exchange'
+                              : zh
+                                ? '平仓'
+                                : 'Close position'}
                           </button>
                         )}
                       </td>
@@ -541,28 +612,38 @@ export function FrontierAccount({
             </div>
           ) : snapshot?.accountID === accountID && !error ? (
             <p className="frontier-flat">
-              No open positions reported by this account.
+              {zh
+                ? '该账户没有报告任何未平仓持仓。'
+                : 'No open positions reported by this account.'}
             </p>
           ) : loading ? (
-            <p>Reading positions…</p>
+            <p>{zh ? '正在读取持仓…' : 'Reading positions…'}</p>
           ) : null}
           {positions.length > 0 && (
             <p className="frontier-margin-note">
-              Position value = quantity × mark price. Estimated initial margin =
-              position value ÷ leverage; actual exchange margin may differ.
+              {zh
+                ? '持仓价值 = 数量 × 标记价格。预计初始保证金 = 持仓价值 ÷ 杠杆；交易所实际保证金可能不同。'
+                : 'Position value = quantity × mark price. Estimated initial margin = position value ÷ leverage; actual exchange margin may differ.'}
             </p>
           )}
           {open.filter((o) => /STOP|TAKE_PROFIT/.test(o.type)).length > 0 && (
             <div className="frontier-protection">
-              <strong>Exchange exit orders · {symbol}</strong>
+              <strong>
+                {zh ? '交易所出场订单' : 'Exchange exit orders'} · {symbol}
+              </strong>
               {open
                 .filter((o) => /STOP|TAKE_PROFIT/.test(o.type))
                 .map((o) => (
                   <span key={o.order_id}>
                     {o.type.includes('TAKE_PROFIT')
-                      ? 'Take profit'
-                      : 'Stop loss'}{' '}
-                    <b>{format(o.stop_price || o.price)}</b> · size{' '}
+                      ? zh
+                        ? '止盈'
+                        : 'Take profit'
+                      : zh
+                        ? '止损'
+                        : 'Stop loss'}{' '}
+                    <b>{format(o.stop_price || o.price)}</b> ·{' '}
+                    {zh ? '数量' : 'size'}{' '}
                     {format(o.quantity)}
                   </span>
                 ))}
@@ -570,10 +651,12 @@ export function FrontierAccount({
           )}
           <details className="frontier-native-orders" open>
             <summary>
-              Exchange orders · {symbol}
+              {zh ? '交易所订单' : 'Exchange orders'} · {symbol}
               {orders?.accountID === accountID && orders.symbol === symbol
                 ? ` · ${open.length}`
-                : ' · not verified'}
+                : zh
+                  ? ' · 未核实'
+                  : ' · not verified'}
             </summary>
             {orderError ? (
               <p>{orderError}</p>
@@ -583,12 +666,12 @@ export function FrontierAccount({
                   <table>
                     <thead>
                       <tr>
-                        <th>Type</th>
-                        <th>Side</th>
-                        <th>Price / trigger</th>
-                        <th>Size</th>
-                        <th>Status</th>
-                        <th>Exchange order ID</th>
+                        <th>{zh ? '类型' : 'Type'}</th>
+                        <th>{zh ? '方向' : 'Side'}</th>
+                        <th>{zh ? '价格 / 触发价' : 'Price / trigger'}</th>
+                        <th>{zh ? '数量' : 'Size'}</th>
+                        <th>{zh ? '状态' : 'Status'}</th>
+                        <th>{zh ? '交易所订单 ID' : 'Exchange order ID'}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -606,10 +689,14 @@ export function FrontierAccount({
                   </table>
                 </div>
               ) : (
-                <p>No open orders reported for {symbol}.</p>
+                <p>
+                  {zh
+                    ? `没有报告 ${symbol} 的未平订单。`
+                    : `No open orders reported for ${symbol}.`}
+                </p>
               )
             ) : (
-              <p>Orders have not been verified.</p>
+              <p>{zh ? '订单尚未核实。' : 'Orders have not been verified.'}</p>
             )}
           </details>
         </>
@@ -625,7 +712,7 @@ export function FrontierAccount({
         )
         const name =
           accounts.find((a) => a.id === run.exchange_id)?.name ||
-          'Account not loaded'
+          (zh ? '账户未加载' : 'Account not loaded')
         const accountVerified =
           snapshot?.accountID === run.exchange_id && !error
         const nativePosition = accountVerified
@@ -639,18 +726,32 @@ export function FrontierAccount({
             )
           : undefined
         const label = unconfirmed
-          ? 'Submission unconfirmed — do not resend'
+          ? zh
+            ? '提交未确认 — 请勿重发'
+            : 'Submission unconfirmed — do not resend'
           : filled > 0
             ? nativePosition
-              ? 'Position open · entry filled'
+              ? zh
+                ? '持仓已开仓 · 入场已成交'
+                : 'Position open · entry filled'
               : accountVerified
-                ? 'Entry filled earlier · no position in latest account snapshot'
-                : 'Entry filled · current position not verified'
+                ? zh
+                  ? '入场此前已成交 · 最新账户快照中无持仓'
+                  : 'Entry filled earlier · no position in latest account snapshot'
+                : zh
+                  ? '入场已成交 · 当前持仓未核实'
+                  : 'Entry filled · current position not verified'
             : accepted
-              ? 'Entry order is working'
+              ? zh
+                ? '入场订单活动中'
+                : 'Entry order is working'
               : run.state === 'approved' && !entries.length
-                ? 'Approved only — no order submitted'
-                : 'No confirmed entry fill'
+                ? zh
+                  ? '仅已批准 — 未提交订单'
+                  : 'Approved only — no order submitted'
+                : zh
+                  ? '没有确认的入场成交'
+                  : 'No confirmed entry fill'
         return (
           <details
             className={
@@ -664,9 +765,15 @@ export function FrontierAccount({
             <summary className="frontier-record-toggle">
               <span>
                 {run.plan.snapshot.symbol} ·{' '}
-                {run.plan.idea.side === 'long' ? 'Long' : 'Short'}{' '}
+                {run.plan.idea.side === 'long'
+                  ? zh
+                    ? '做多'
+                    : 'Long'
+                  : zh
+                    ? '做空'
+                    : 'Short'}{' '}
                 <span className="frontier-record-label">
-                  Execution record · {name}
+                  {zh ? '执行记录' : 'Execution record'} · {name}
                 </span>
               </span>
               <span
@@ -677,16 +784,26 @@ export function FrontierAccount({
                 }
               >
                 {unconfirmed
-                  ? 'Submission unconfirmed'
+                  ? zh
+                    ? '提交未确认'
+                    : 'Submission unconfirmed'
                   : run.state === 'needs_attention'
-                    ? 'Monitor needs review'
+                    ? zh
+                      ? '监控需要复核'
+                      : 'Monitor needs review'
                     : label}
               </span>
             </summary>
             <div>
               <strong>
                 {run.plan.snapshot.symbol} ·{' '}
-                {run.plan.idea.side === 'long' ? 'Long' : 'Short'}
+                {run.plan.idea.side === 'long'
+                  ? zh
+                    ? '做多'
+                    : 'Long'
+                  : zh
+                    ? '做空'
+                    : 'Short'}
               </strong>
               <p>
                 {name} · {run.plan.snapshot.venue} · {label}
@@ -697,9 +814,13 @@ export function FrontierAccount({
               {run.state === 'needs_attention' && (
                 <p className="frontier-monitor-alert">
                   {run.error?.startsWith('Service restarted')
-                    ? 'The server restarted, so this order monitor is paused. Check the live position and exit orders above.'
+                    ? zh
+                      ? '服务器已重启，此订单监控已暂停。请查看上方实时持仓和出场订单。'
+                      : 'The server restarted, so this order monitor is paused. Check the live position and exit orders above.'
                     : run.error ||
-                      'Order monitoring needs review. Check the live position and exit orders above.'}
+                      (zh
+                        ? '订单监控需要复核。请查看上方实时持仓和出场订单。'
+                        : 'Order monitoring needs review. Check the live position and exit orders above.')}
                 </p>
               )}
             </div>
@@ -709,23 +830,23 @@ export function FrontierAccount({
                   run.state
                 ) && (
                   <button disabled={busy} onClick={() => void onCheck(run)}>
-                    Check trade status
+                    {zh ? '检查交易状态' : 'Check trade status'}
                   </button>
                 )}
               <button disabled={busy} onClick={() => onView(run)}>
-                View trade on chart
+                {zh ? '在图表上查看交易' : 'View trade on chart'}
               </button>
               <a
                 href={exchangeURL(run.plan.snapshot.venue)}
                 target="_blank"
                 rel="noreferrer"
               >
-                Open exchange ↗
+                {zh ? '打开交易所 ↗' : 'Open exchange ↗'}
               </a>
             </div>
             <details>
               <summary>
-                Recorded orders
+                {zh ? '已记录订单' : 'Recorded orders'}
                 {run.updated_at
                   ? ' · ' + new Date(run.updated_at).toLocaleTimeString()
                   : ''}
@@ -733,11 +854,11 @@ export function FrontierAccount({
               <table>
                 <thead>
                   <tr>
-                    <th>Order</th>
-                    <th>Price</th>
-                    <th>Filled / size</th>
-                    <th>Last recorded state</th>
-                    <th>Exchange ID</th>
+                    <th>{zh ? '订单' : 'Order'}</th>
+                    <th>{zh ? '价格' : 'Price'}</th>
+                    <th>{zh ? '已成交 / 数量' : 'Filled / size'}</th>
+                    <th>{zh ? '上次记录状态' : 'Last recorded state'}</th>
+                    <th>{zh ? '交易所 ID' : 'Exchange ID'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -745,57 +866,70 @@ export function FrontierAccount({
                     <tr key={o.client_id}>
                       <td>
                         {o.role === 'entry'
-                          ? 'Entry'
+                          ? zh
+                            ? '入场'
+                            : 'Entry'
                           : o.role === 'sl'
-                            ? 'Stop loss'
-                            : 'Take profit'}
+                            ? zh
+                              ? '止损'
+                              : 'Stop loss'
+                            : zh
+                              ? '止盈'
+                              : 'Take profit'}
                       </td>
                       <td>{format(o.average || o.price)}</td>
                       <td>
                         {format(o.filled)} / {format(o.quantity)}
                       </td>
                       <td>{o.status}</td>
-                      <td>{o.order_id || 'Not confirmed'}</td>
+                      <td>{o.order_id || (zh ? '未确认' : 'Not confirmed')}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <small>
-                Order records are not a substitute for a successful live
-                exchange read.
+                {zh
+                  ? '订单记录不能替代一次成功的交易所实时读取。'
+                  : 'Order records are not a substitute for a successful live exchange read.'}
               </small>
             </details>
           </details>
         )
       })}
-      {!importantRuns.length && <small>No active execution.</small>}
+      {!importantRuns.length && (
+        <small>{zh ? '没有进行中的执行。' : 'No active execution.'}</small>
+      )}
       {confirm && (
         <div className="planning-modal-backdrop">
           <section
             className="planning-modal"
             role="dialog"
             aria-modal="true"
-            aria-label="Confirm position close"
+            aria-label={zh ? '确认平仓' : 'Confirm position close'}
           >
             <h2>
-              Close {nativeMarket(confirm.symbol, venue)} {confirm.side}?
+              {zh
+                ? `平仓：${nativeMarket(confirm.symbol, venue)} ${confirm.side === 'long' ? '多头' : '空头'}？`
+                : `Close ${nativeMarket(confirm.symbol, venue)} ${confirm.side}?`}
             </h2>
             <p>
-              {account ? accountLabel(account, accounts) : ''} · {venue} · full
-              position {format(confirm.quantity)}
+              {account ? accountLabel(account, accounts) : ''} · {venue} ·{' '}
+              {zh ? '全部持仓' : 'full position'} {format(confirm.quantity)}
             </p>
             <p>
-              This sends a market close through NOFX. Remaining Frontier entry
-              orders for this market are stopped first. Slippage and fees apply.
-              No typed phrase is needed.
+              {zh
+                ? '这将通过 NOFX 发送市价平仓。该市场剩余的 Frontier 入场订单会先被停止。会有滑点和手续费。无需输入确认短语。'
+                : 'This sends a market close through NOFX. Remaining Frontier entry orders for this market are stopped first. Slippage and fees apply. No typed phrase is needed.'}
             </p>
-            <button onClick={() => setConfirm(null)}>Keep position</button>
+            <button onClick={() => setConfirm(null)}>
+              {zh ? '保留持仓' : 'Keep position'}
+            </button>
             <button
               className="planning-primary"
               disabled={busy}
               onClick={() => void closePosition()}
             >
-              Confirm market close
+              {zh ? '确认市价平仓' : 'Confirm market close'}
             </button>
           </section>
         </div>

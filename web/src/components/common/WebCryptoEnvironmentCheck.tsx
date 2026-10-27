@@ -46,7 +46,8 @@ export function WebCryptoEnvironmentCheck({
       setSummary(
         t('environmentCheck.summary', language, {
           origin: result.origin || 'N/A',
-          protocol: result.protocol || 'unknown',
+          protocol:
+            result.protocol || (language === 'zh' ? '未知' : 'unknown'),
         })
       )
 

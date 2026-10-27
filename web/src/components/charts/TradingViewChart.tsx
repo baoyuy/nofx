@@ -289,7 +289,7 @@ function TradingViewChartComponent({
                         color: '#f6f8fc',
                       }}
                     >
-                      OK
+                      {language === 'zh' ? '确定' : 'OK'}
                     </button>
                   </div>
                 </div>

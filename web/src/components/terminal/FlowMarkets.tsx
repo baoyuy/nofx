@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { FlowMarketItem } from '../../lib/api/data'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 interface FlowMarketsProps {
   items?: FlowMarketItem[]
@@ -33,6 +34,8 @@ const GRID = '64px 96px minmax(120px, 1fr) 80px 96px'
  * latest price. Sorted by net inflow descending (the upstream ordering).
  */
 export function FlowMarkets({ items, window = '1h' }: FlowMarketsProps) {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
   const win = window.toUpperCase()
   const rows = useMemo(() => {
     if (!items || items.length === 0) return []
@@ -56,7 +59,7 @@ export function FlowMarkets({ items, window = '1h' }: FlowMarketsProps) {
   }, [items])
 
   if (rows.length === 0) {
-    return <div className="tm-sc" style={{ padding: '12px 0' }}>No net-flow data (claw402 payment required).</div>
+    return <div className="tm-sc" style={{ padding: '12px 0' }}>{isZh ? '暂无净流量数据（需要 claw402 付费）。' : 'No net-flow data (claw402 payment required).'}</div>
   }
 
   return (
@@ -74,11 +77,11 @@ export function FlowMarkets({ items, window = '1h' }: FlowMarketsProps) {
           fontSize: 9,
         }}
       >
-        <span>SYMBOL</span>
-        <span style={{ textAlign: 'right' }}>{win} NET</span>
-        <span>BUY/SELL</span>
-        <span style={{ textAlign: 'right' }}>TRADES</span>
-        <span style={{ textAlign: 'right' }}>PRICE</span>
+        <span>{isZh ? '币种' : 'SYMBOL'}</span>
+        <span style={{ textAlign: 'right' }}>{isZh ? `${win} 净流入` : `${win} NET`}</span>
+        <span>{isZh ? '买/卖' : 'BUY/SELL'}</span>
+        <span style={{ textAlign: 'right' }}>{isZh ? '交易笔数' : 'TRADES'}</span>
+        <span style={{ textAlign: 'right' }}>{isZh ? '价格' : 'PRICE'}</span>
       </div>
 
       {/* rows */}
@@ -107,7 +110,7 @@ export function FlowMarkets({ items, window = '1h' }: FlowMarketsProps) {
               Green grows from the LEFT (buy), red fills the REST (sell). */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div
-              title={`buy ${r.buyPct.toFixed(0)}% / sell ${(100 - r.buyPct).toFixed(0)}%`}
+              title={isZh ? `买入 ${r.buyPct.toFixed(0)}% / 卖出 ${(100 - r.buyPct).toFixed(0)}%` : `buy ${r.buyPct.toFixed(0)}% / sell ${(100 - r.buyPct).toFixed(0)}%`}
               style={{
                 position: 'relative',
                 height: 8,
@@ -140,8 +143,17 @@ export function FlowMarkets({ items, window = '1h' }: FlowMarketsProps) {
 
       {/* legend — explains every column */}
       <div className="tm-sc" style={{ marginTop: 8, fontSize: 9, lineHeight: 1.6 }}>
-        net inflow = {win} net buying · <span className="tm-up">green</span>/<span className="tm-dn">red</span> = buy/sell split
-        {' · '}trades = count · last price = last traded price
+        {isZh ? (
+          <>
+            净流入 = {win} 净买入 · <span className="tm-up">绿色</span>/<span className="tm-dn">红色</span> = 买入/卖出占比
+            {' · '}交易笔数 = 成交笔数 · 最新价 = 最近成交价
+          </>
+        ) : (
+          <>
+            net inflow = {win} net buying · <span className="tm-up">green</span>/<span className="tm-dn">red</span> = buy/sell split
+            {' · '}trades = count · last price = last traded price
+          </>
+        )}
       </div>
     </div>
   )

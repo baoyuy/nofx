@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { DecisionRecord } from '../../types'
 import { formatRequestError } from '../../lib/requestErrors'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 /**
  * ExecutionLog renders the AI trading agent's real decisions and order results
@@ -83,14 +84,14 @@ const TONE_GLYPH: Record<LogTone, string> = { ok: '✓', warn: '⚠', risk: '❌
  * own), the symbol (already shown), and collapses the wordy throttle phrasing
  * to "throttle · closed 28m ago, wait 2m". Falls back to the original line.
  */
-function cleanLog(raw: string): string {
+function cleanLog(raw: string, isZh = false): string {
   let s = raw.replace(/^[\s└>•·]*[✓✗⚠❌]?\s*/, '').trim()
 
   const throttle = s.match(/closed\s+([0-9smhd.]+)\s+ago;\s*wait\s+([0-9smhd.]+)/i)
   if (throttle) {
     const ago = throttle[1].replace(/(\d)0s$/, '$1').replace(/0s$/, '')
     const wait = throttle[2].replace(/(\d)0s$/, '$1').replace(/0s$/, '')
-    return `throttle · closed ${ago} ago, wait ${wait}`
+    return isZh ? `限流 · ${ago} 前平仓，等待 ${wait}` : `throttle · closed ${ago} ago, wait ${wait}`
   }
   // drop a redundant leading "SYMBOL action" prefix when present
   s = s.replace(/^[A-Z0-9:_-]{2,12}\s+(open_long|open_short|close_long|close_short)\s+/i, '')
@@ -103,6 +104,8 @@ interface ExecutionLogProps {
 }
 
 export function ExecutionLog({ decisions, height = 440 }: ExecutionLogProps) {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
   // Newest cycle first.
   const cycles = useMemo(() => {
     const list = decisions ?? []
@@ -113,16 +116,16 @@ export function ExecutionLog({ decisions, height = 440 }: ExecutionLogProps) {
     <div style={{ fontFamily: 'var(--tm-mono)' }}>
       {/* header */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 2 }}>
-        <span className="tm-px" style={{ fontSize: 11 }}>Execution log</span>
+        <span className="tm-px" style={{ fontSize: 11 }}>{isZh ? '执行日志' : 'Execution log'}</span>
         <span
           className="tm-sc"
           style={{ marginLeft: 'auto', color: cycles.length ? 'var(--tm-up)' : 'var(--tm-muted)' }}
         >
-          {cycles.length ? `${cycles.length} cyc` : '—'}
+          {cycles.length ? (isZh ? `${cycles.length} 轮` : `${cycles.length} cyc`) : '—'}
         </span>
       </div>
       <div className="tm-sc" style={{ fontSize: 9, marginBottom: 5 }}>
-        Execution log · AI decisions & fills per cycle
+        {isZh ? '执行日志 · 每轮 AI 决策与成交' : 'Execution log · AI decisions & fills per cycle'}
       </div>
 
       {/* legend */}
@@ -130,15 +133,15 @@ export function ExecutionLog({ decisions, height = 440 }: ExecutionLogProps) {
         className="tm-sc"
         style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 6, fontSize: 9 }}
       >
-        <Legend glyph="✓" c="var(--tm-up)" label="ok" />
-        <Legend glyph="⚠" c={C_AMBER} label="throttle" />
-        <Legend glyph="❌" c="var(--tm-dn)" label="risk" />
+        <Legend glyph="✓" c="var(--tm-up)" label={isZh ? '正常' : 'ok'} />
+        <Legend glyph="⚠" c={C_AMBER} label={isZh ? '限流' : 'throttle'} />
+        <Legend glyph="❌" c="var(--tm-dn)" label={isZh ? '风险' : 'risk'} />
       </div>
 
       <div className="tm-hair" style={{ marginBottom: 0 }} />
 
       {!cycles.length ? (
-        <div className="tm-sc" style={{ padding: '16px 0' }}>No execution events yet.</div>
+        <div className="tm-sc" style={{ padding: '16px 0' }}>{isZh ? '暂无执行事件。' : 'No execution events yet.'}</div>
       ) : (
         <div
           style={{
@@ -172,6 +175,8 @@ interface CycleProps {
 }
 
 function Cycle({ record }: CycleProps) {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
   const time = fmtTime(record.timestamp)
   const actions = record.decisions ?? []
   const logs = record.execution_log ?? []
@@ -198,14 +203,18 @@ function Cycle({ record }: CycleProps) {
           color: 'var(--tm-ink-2)',
         }}
       >
-        <span style={{ color: 'var(--tm-ink)', fontWeight: 700 }}>CYCLE {record.cycle_number}</span>
+        <span style={{ color: 'var(--tm-ink)', fontWeight: 700 }}>{isZh ? `周期 ${record.cycle_number}` : `CYCLE ${record.cycle_number}`}</span>
         <span style={{ color: 'var(--tm-muted)' }}>·</span>
-        <span style={{ color: 'var(--tm-muted)' }} title="Local time">{time}</span>
+        <span style={{ color: 'var(--tm-muted)' }} title={isZh ? '本地时间' : 'Local time'}>{time}</span>
         <span style={{ marginLeft: 'auto', color: 'var(--tm-muted)' }}>
-          {count === 0 ? 'no action' : `${count} action${count > 1 ? 's' : ''}`}
+          {count === 0 ? (isZh ? '无操作' : 'no action') : isZh ? `${count} 个操作` : `${count} action${count > 1 ? 's' : ''}`}
         </span>
         {fault ? (
-          <span style={{ color: 'var(--tm-dn)', fontWeight: 700 }}>FAULT{failed > 0 ? ` · ${failed}/${trades.length} trades failed/blocked` : ''}</span>
+          <span style={{ color: 'var(--tm-dn)', fontWeight: 700 }}>
+            {isZh
+              ? `故障${failed > 0 ? ` · ${failed}/${trades.length} 笔交易失败/被拦截` : ''}`
+              : `FAULT${failed > 0 ? ` · ${failed}/${trades.length} trades failed/blocked` : ''}`}
+          </span>
         ) : null}
       </div>
 
@@ -233,7 +242,7 @@ function Cycle({ record }: CycleProps) {
             </span>
             {a.confidence != null ? (
               <span style={{ color: 'var(--tm-muted)', flex: '0 0 auto' }}>
-                conf<span style={{ color: 'var(--tm-ink-2)' }}>{Math.round(a.confidence)}</span>
+                {isZh ? '置信度 ' : 'conf'}<span style={{ color: 'var(--tm-ink-2)' }}>{Math.round(a.confidence)}</span>
               </span>
             ) : null}
           </div>
@@ -242,18 +251,29 @@ function Cycle({ record }: CycleProps) {
 
       {/* execution-log result sub-lines */}
       {logs.map((line, i) => (
-        <SubLine key={`log-${i}`} tone={logTone(line)} text={cleanLog(line)} />
+        <SubLine key={`log-${i}`} tone={logTone(line)} text={cleanLog(line, isZh)} />
       ))}
 
       {/* fault message */}
       {record.error_message ? (
-        <SubLine tone="risk" text={cleanLog(record.error_message)} />
+        <SubLine tone="risk" text={cleanLog(record.error_message, isZh)} />
       ) : null}
     </div>
   )
 }
 
+const ACTION_ZH: Record<string, string> = {
+  open_long: '开仓做多',
+  open_short: '开仓做空',
+  close_long: '平多',
+  close_short: '平空',
+  hold: '持有',
+  wait: '等待',
+}
+
 function ActionBadge({ action, side }: { action: string; side: Side }) {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
   const c = sideColor(side)
   return (
     <span
@@ -277,7 +297,7 @@ function ActionBadge({ action, side }: { action: string; side: Side }) {
         whiteSpace: 'nowrap',
       }}
     >
-      {action.toLowerCase()}
+      {isZh ? (ACTION_ZH[action.toLowerCase()] ?? action.toLowerCase()) : action.toLowerCase()}
     </span>
   )
 }

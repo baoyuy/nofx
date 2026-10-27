@@ -11,57 +11,171 @@ import { Link } from 'react-router-dom'
 import { ROUTES } from '../../router/paths'
 import { OFFICIAL_LINKS } from '../../constants/branding'
 import { BrandLogo } from '../common/BrandLogo'
+import { useLanguage } from '../../contexts/LanguageContext'
+
+const TEXT = {
+  en: {
+    eyebrow: 'Open source. Self hosted.',
+    heroTitleA: 'Intelligence',
+    heroTitleB: 'that trades.',
+    heroSub: 'An open trading system you run yourself.',
+    openFrontier: 'Open Frontier',
+    setupWorkspace: 'Set up your workspace',
+    runsOnYourMachine: 'Runs on your machine',
+    yourExchangeAccounts: 'Your exchange accounts',
+    previewAria: 'Illustration of the Frontier planning workspace',
+    workspacePreview: 'Workspace preview',
+    oneIdea: 'One idea. A clear plan.',
+    compareEntry: 'Compare your entry.',
+    chartAria:
+      'Illustrative chart showing an entry, target and stop level',
+    target: 'Target',
+    entry: 'Entry',
+    stop: 'Stop',
+    planTypes: ['Market', 'Limit', 'Ladder', 'TWAP'],
+    planDescs: [
+      'Enter now',
+      'Choose a price',
+      'Split by price',
+      'Split by time',
+    ],
+    reviewBeforeTrade: 'Review before you trade',
+    makeYourNextMove: 'Make your next move',
+    exchangesAria: 'Supported Frontier exchanges',
+    yourMarkets: 'Your markets. Connected.',
+    featuresEyebrow: 'One connected workspace',
+    featuresTitleA: 'Less friction.',
+    featuresTitleB: 'More clarity.',
+    featuresSub: 'AI helps you explore. Clear controls help you act.',
+    features: [
+      {
+        title: 'See the alternatives.',
+        body: 'Compare market, limit, ladder and TWAP plans. See entries, size and exits before committing.',
+        label: 'Explore Frontier',
+      },
+      {
+        title: 'Know where you stand.',
+        body: 'Keep trading balances, open positions and orders in view. AI fees stay separate from trading funds.',
+        label: 'Connect your accounts',
+      },
+      {
+        title: 'Make it your own.',
+        body: 'Choose your AI and trading accounts. Set up optional Autopilot strategies when you’re ready.',
+        label: 'Build a strategy',
+      },
+    ],
+    localEyebrow: 'Built to run locally',
+    localTitleA: 'Your workspace.',
+    localTitleB: 'On your terms.',
+    localBody:
+      'Install NOFX on your computer, connect your accounts and choose how you want to trade.',
+    installationGuide: 'Installation guide',
+  },
+  zh: {
+    eyebrow: '开源。自托管。',
+    heroTitleA: '会交易的',
+    heroTitleB: '智能系统。',
+    heroSub: '一套由你自己运行的开放交易系统。',
+    openFrontier: '打开 Frontier',
+    setupWorkspace: '设置你的工作区',
+    runsOnYourMachine: '运行在你的机器上',
+    yourExchangeAccounts: '你自己的交易所账户',
+    previewAria: 'Frontier 规划工作区示意图',
+    workspacePreview: '工作区预览',
+    oneIdea: '一个想法。一份清晰的计划。',
+    compareEntry: '对比你的入场点。',
+    chartAria: '示意图表：入场、目标与止损位',
+    target: '目标',
+    entry: '入场',
+    stop: '止损',
+    planTypes: ['市价', '限价', '阶梯', 'TWAP'],
+    planDescs: ['立即入场', '指定价格', '按价格分批', '按时间分批'],
+    reviewBeforeTrade: '交易前先复核',
+    makeYourNextMove: '规划你的下一步',
+    exchangesAria: 'Frontier 支持的交易所',
+    yourMarkets: '你的市场，已连接。',
+    featuresEyebrow: '一个互联的工作区',
+    featuresTitleA: '更少摩擦。',
+    featuresTitleB: '更清晰。',
+    featuresSub: 'AI 帮你探索，清晰的控件帮你行动。',
+    features: [
+      {
+        title: '看清每个备选方案。',
+        body: '对比市价、限价、阶梯和 TWAP 计划。在投入前看清入场点、仓位大小和退出方式。',
+        label: '探索 Frontier',
+      },
+      {
+        title: '随时掌握你的状况。',
+        body: '交易余额、未平仓位和订单一目了然。AI 费用与交易资金分开管理。',
+        label: '连接你的账户',
+      },
+      {
+        title: '打造成你的专属工具。',
+        body: '选择你的 AI 和交易账户。准备好后，可设置可选的 Autopilot 自动策略。',
+        label: '构建策略',
+      },
+    ],
+    localEyebrow: '为本地运行而生',
+    localTitleA: '你的工作区。',
+    localTitleB: '按你的方式。',
+    localBody: '把 NOFX 安装到你的电脑上，连接你的账户，按你想要的方式交易。',
+    installationGuide: '安装指南',
+  },
+} as const
+
+const FEATURE_ICONS = [Layers3, Wallet, SlidersHorizontal]
+const FEATURE_ROUTES = [ROUTES.planning, ROUTES.traders, ROUTES.strategy]
 
 export default function FlowLanding() {
+  const { language } = useLanguage()
+  const tx = language === 'zh' ? TEXT.zh : TEXT.en
+
   return (
     <div className="nofx-flow-landing">
       <section className="flow-hero">
         <div className="flow-hero-copy">
           <span className="flow-eyebrow">
-            <span /> Open source. Self hosted.
+            <span /> {tx.eyebrow}
           </span>
           <h1>
-            Intelligence
+            {tx.heroTitleA}
             <br />
-            <em>that trades.</em>
+            <em>{tx.heroTitleB}</em>
           </h1>
-          <p>An open trading system you run yourself.</p>
+          <p>{tx.heroSub}</p>
           <div className="flow-hero-actions">
             <Link to={ROUTES.planning} className="flow-primary">
-              Open Frontier <ArrowRight size={18} />
+              {tx.openFrontier} <ArrowRight size={18} />
             </Link>
             <Link to={ROUTES.traders}>
-              Set up your workspace <ArrowUpRight size={16} />
+              {tx.setupWorkspace} <ArrowUpRight size={16} />
             </Link>
           </div>
           <div className="flow-hero-trust">
             <span>
-              <Check size={14} /> Runs on your machine
+              <Check size={14} /> {tx.runsOnYourMachine}
             </span>
             <span>
-              <Check size={14} /> Your exchange accounts
+              <Check size={14} /> {tx.yourExchangeAccounts}
             </span>
           </div>
         </div>
-        <div
-          className="flow-product-preview"
-          aria-label="Illustration of the Frontier planning workspace"
-        >
+        <div className="flow-product-preview" aria-label={tx.previewAria}>
           <div className="flow-preview-header">
             <BrandLogo />
             <span>Frontier</span>
-            <small>Workspace preview</small>
+            <small>{tx.workspacePreview}</small>
           </div>
           <div className="flow-preview-content">
             <div className="flow-preview-market">
-              <span>One idea. A clear plan.</span>
-              <b>Compare your entry.</b>
+              <span>{tx.oneIdea}</span>
+              <b>{tx.compareEntry}</b>
             </div>
             <svg
               className="flow-preview-chart"
               viewBox="0 0 600 260"
               role="img"
-              aria-label="Illustrative chart showing an entry, target and stop level"
+              aria-label={tx.chartAria}
             >
               <defs>
                 <linearGradient
@@ -96,120 +210,86 @@ export default function FlowLanding() {
               <rect x="350" y="135" width="174" height="45" fill="#fdf0f0" />
               <path d="M350 48H600" stroke="#258563" strokeDasharray="4 4" />
               <text x="536" y="39" fill="#258563" fontSize="11">
-                Target
+                {tx.target}
               </text>
               <path d="M350 135H600" stroke="#295be8" />
               <text x="536" y="126" fill="#295be8" fontSize="11">
-                Entry
+                {tx.entry}
               </text>
               <path d="M350 180H600" stroke="#ca565e" strokeDasharray="4 4" />
               <text x="536" y="198" fill="#ca565e" fontSize="11">
-                Stop
+                {tx.stop}
               </text>
             </svg>
             <div className="flow-preview-plans">
-              {['Market', 'Limit', 'Ladder', 'TWAP'].map((type, i) => (
+              {tx.planTypes.map((type, i) => (
                 <div key={type} data-selected={i === 1}>
                   <span>0{i + 1}</span>
                   <strong>{type}</strong>
-                  <small>
-                    {
-                      [
-                        'Enter now',
-                        'Choose a price',
-                        'Split by price',
-                        'Split by time',
-                      ][i]
-                    }
-                  </small>
+                  <small>{tx.planDescs[i]}</small>
                 </div>
               ))}
             </div>
             <div className="flow-preview-bottom">
               <span>
-                <Check size={14} /> Review before you trade
+                <Check size={14} /> {tx.reviewBeforeTrade}
               </span>
               <span>
-                Make your next move <ArrowUpRight size={14} />
+                {tx.makeYourNextMove} <ArrowUpRight size={14} />
               </span>
             </div>
           </div>
         </div>
       </section>
-      <section
-        className="flow-exchanges"
-        aria-label="Supported Frontier exchanges"
-      >
-        <span>Your markets. Connected.</span>
+      <section className="flow-exchanges" aria-label={tx.exchangesAria}>
+        <span>{tx.yourMarkets}</span>
         {['Binance', 'Hyperliquid', 'OKX', 'Bitget'].map((name) => (
           <b key={name}>{name}</b>
         ))}
       </section>
       <section className="flow-features">
         <div className="flow-section-heading">
-          <span className="flow-eyebrow">One connected workspace</span>
+          <span className="flow-eyebrow">{tx.featuresEyebrow}</span>
           <h2>
-            Less friction.
+            {tx.featuresTitleA}
             <br />
-            More clarity.
+            {tx.featuresTitleB}
           </h2>
-          <p>AI helps you explore. Clear controls help you act.</p>
+          <p>{tx.featuresSub}</p>
         </div>
-        {[
-          {
-            icon: Layers3,
-            title: 'See the alternatives.',
-            body: 'Compare market, limit, ladder and TWAP plans. See entries, size and exits before committing.',
-            label: 'Explore Frontier',
-            to: ROUTES.planning,
-          },
-          {
-            icon: Wallet,
-            title: 'Know where you stand.',
-            body: 'Keep trading balances, open positions and orders in view. AI fees stay separate from trading funds.',
-            label: 'Connect your accounts',
-            to: ROUTES.traders,
-          },
-          {
-            icon: SlidersHorizontal,
-            title: 'Make it your own.',
-            body: 'Choose your AI and trading accounts. Set up optional Autopilot strategies when you’re ready.',
-            label: 'Build a strategy',
-            to: ROUTES.strategy,
-          },
-        ].map((item) => (
-          <article key={item.title}>
-            <item.icon size={23} />
-            <h3>{item.title}</h3>
-            <p>{item.body}</p>
-            <Link to={item.to}>
-              {item.label}
-              <ArrowUpRight size={16} />
-            </Link>
-          </article>
-        ))}
+        {tx.features.map((item, i) => {
+          const Icon = FEATURE_ICONS[i]
+          return (
+            <article key={item.title}>
+              <Icon size={23} />
+              <h3>{item.title}</h3>
+              <p>{item.body}</p>
+              <Link to={FEATURE_ROUTES[i]}>
+                {item.label}
+                <ArrowUpRight size={16} />
+              </Link>
+            </article>
+          )
+        })}
       </section>
       <section className="flow-local">
         <div>
           <span className="flow-eyebrow">
-            <Terminal size={14} /> Built to run locally
+            <Terminal size={14} /> {tx.localEyebrow}
           </span>
           <h2>
-            Your workspace.
+            {tx.localTitleA}
             <br />
-            On your terms.
+            {tx.localTitleB}
           </h2>
-          <p>
-            Install NOFX on your computer, connect your accounts and choose how
-            you want to trade.
-          </p>
+          <p>{tx.localBody}</p>
         </div>
         <a
           href={OFFICIAL_LINKS.github}
           target="_blank"
           rel="noopener noreferrer"
         >
-          Installation guide <ArrowUpRight size={18} />
+          {tx.installationGuide} <ArrowUpRight size={18} />
         </a>
       </section>
     </div>

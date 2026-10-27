@@ -4,6 +4,7 @@ import { api } from '../../lib/api'
 import type { VergexHeatmapBin } from '../../lib/api/data'
 import { demoSeedPrice, demoTick } from '../../lib/demo/demoUniverse'
 import { formatRequestError } from '../../lib/requestErrors'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 const lmRnd = (a: number, b: number) => a + Math.random() * (b - a)
 
@@ -53,6 +54,8 @@ interface LiquidationMapProps {
 }
 
 export function LiquidationMap({ symbol, marketType = 'hip3_perp', height = 460, demo = false }: LiquidationMapProps) {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
   // Use the selected market's metadata. Speculative alternate-market requests
   // can spend the wallet twice and return an unrelated instrument.
   const fetcher = (mt: string) =>
@@ -194,37 +197,74 @@ export function LiquidationMap({ symbol, marketType = 'hip3_perp', height = 460,
   return (
     <div style={{ fontFamily: 'var(--tm-mono)' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
-        <span className="tm-px" style={{ fontSize: 11 }}>Cost / Liq map</span>
+        <span className="tm-px" style={{ fontSize: 11 }}>{isZh ? '成本 / 强平图' : 'Cost / Liq map'}</span>
         <span className="tm-sc">{view.dispSymbol}</span>
         <span className="tm-sc" style={{ marginLeft: 'auto', color: view.rows.length ? 'var(--tm-up)' : 'var(--tm-muted)' }}>
-          {error ? '○ unavailable' : view.rows.length ? '● live' : isLoading ? '○ sync' : '○ —'}
+          {error
+            ? isZh
+              ? '○ 不可用'
+              : '○ unavailable'
+            : view.rows.length
+              ? isZh
+                ? '● 实时'
+                : '● live'
+              : isLoading
+                ? isZh
+                  ? '○ 同步中'
+                  : '○ sync'
+                : '○ —'}
         </span>
       </div>
 
       {/* legend */}
       <div className="tm-sc" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 4, fontSize: 9 }}>
-        <Swatch c={C_LONG_COST} label="Long cost" />
-        <Swatch c={C_SHORT_COST} label="Short cost" />
-        <Swatch c={C_LONG_LIQ} label="Long liq" />
-        <Swatch c={C_SHORT_LIQ} label="Short liq" />
+        <Swatch c={C_LONG_COST} label={isZh ? '做多成本' : 'Long cost'} />
+        <Swatch c={C_SHORT_COST} label={isZh ? '做空成本' : 'Short cost'} />
+        <Swatch c={C_LONG_LIQ} label={isZh ? '做多强平' : 'Long liq'} />
+        <Swatch c={C_SHORT_LIQ} label={isZh ? '做空强平' : 'Short liq'} />
       </div>
 
       {/* hover readout / mark line */}
       <div className="tm-mono" style={{ fontSize: 10, color: 'var(--tm-ink-2)', minHeight: 14, marginBottom: 2 }}>
         {hv ? (
-          <span>
-            <b>{fmtPx(hv.px)}</b> · Cost line <span style={{ color: C_LONG_COST }}>{fmtUsd(hv.longCost)}</span>/<span style={{ color: C_SHORT_COST }}>{fmtUsd(hv.shortCost)}</span>
-            {' · '}liq <span style={{ color: C_LONG_LIQ }}>{fmtUsd(hv.longLiq)}</span>/<span style={{ color: C_SHORT_LIQ }}>{fmtUsd(hv.shortLiq)}</span>
-          </span>
+          isZh ? (
+            <span>
+              <b>{fmtPx(hv.px)}</b> · 成本线 <span style={{ color: C_LONG_COST }}>{fmtUsd(hv.longCost)}</span>/<span style={{ color: C_SHORT_COST }}>{fmtUsd(hv.shortCost)}</span>
+              {' · '}强平 <span style={{ color: C_LONG_LIQ }}>{fmtUsd(hv.longLiq)}</span>/<span style={{ color: C_SHORT_LIQ }}>{fmtUsd(hv.shortLiq)}</span>
+            </span>
+          ) : (
+            <span>
+              <b>{fmtPx(hv.px)}</b> · Cost line <span style={{ color: C_LONG_COST }}>{fmtUsd(hv.longCost)}</span>/<span style={{ color: C_SHORT_COST }}>{fmtUsd(hv.shortCost)}</span>
+              {' · '}liq <span style={{ color: C_LONG_LIQ }}>{fmtUsd(hv.longLiq)}</span>/<span style={{ color: C_SHORT_LIQ }}>{fmtUsd(hv.shortLiq)}</span>
+            </span>
+          )
         ) : (
-          <span className="tm-sc">mark <b style={{ color: 'var(--tm-red)' }}>{view.mark ? fmtPx(view.mark) : '—'}</b> · {view.costAddrs.toLocaleString()} positions / {view.liqAddrs.toLocaleString()} liq levels</span>
+          <span className="tm-sc">
+            {isZh ? (
+              <>标记价 <b style={{ color: 'var(--tm-red)' }}>{view.mark ? fmtPx(view.mark) : '—'}</b> · {view.costAddrs.toLocaleString()} 个持仓 / {view.liqAddrs.toLocaleString()} 个强平价位</>
+            ) : (
+              <>mark <b style={{ color: 'var(--tm-red)' }}>{view.mark ? fmtPx(view.mark) : '—'}</b> · {view.costAddrs.toLocaleString()} positions / {view.liqAddrs.toLocaleString()} liq levels</>
+            )}
+          </span>
         )}
       </div>
 
       {error ? (
-        <div role="alert" className="tm-error" style={{ padding: '16px 0' }}>Heatmap unavailable for {view.dispSymbol}. {formatRequestError(error)} No automatic paid retry.</div>
+        <div role="alert" className="tm-error" style={{ padding: '16px 0' }}>
+          {isZh
+            ? `${view.dispSymbol} 的热力图不可用。${formatRequestError(error)} 不会自动付费重试。`
+            : `Heatmap unavailable for ${view.dispSymbol}. ${formatRequestError(error)} No automatic paid retry.`}
+        </div>
       ) : !view.rows.length ? (
-        <div className="tm-sc" style={{ padding: '16px 0' }}>{isLoading ? 'Loading cost/liquidation map…' : 'No heatmap data in the selected range.'}</div>
+        <div className="tm-sc" style={{ padding: '16px 0' }}>
+          {isLoading
+            ? isZh
+              ? '正在加载成本/强平图…'
+              : 'Loading cost/liquidation map…'
+            : isZh
+              ? '所选范围内暂无热力图数据。'
+              : 'No heatmap data in the selected range.'}
+        </div>
       ) : (
         <div>
           <div ref={scrollRef} style={{ maxHeight: height, overflowY: 'auto' }}>
@@ -269,8 +309,8 @@ export function LiquidationMap({ symbol, marketType = 'hip3_perp', height = 460,
           </div>
           {/* totals footer */}
           <div className="tm-sc" style={{ display: 'flex', gap: 10, marginTop: 4, fontSize: 9, flexWrap: 'wrap' }}>
-            <span>Cost line <span style={{ color: C_LONG_COST }}>{fmtUsd(view.totals.lc)}</span>/<span style={{ color: C_SHORT_COST }}>{fmtUsd(view.totals.sc)}</span></span>
-            <span>liq <span style={{ color: C_LONG_LIQ }}>{fmtUsd(view.totals.ll)}</span>/<span style={{ color: C_SHORT_LIQ }}>{fmtUsd(view.totals.sl)}</span></span>
+            <span>{isZh ? '成本线' : 'Cost line'} <span style={{ color: C_LONG_COST }}>{fmtUsd(view.totals.lc)}</span>/<span style={{ color: C_SHORT_COST }}>{fmtUsd(view.totals.sc)}</span></span>
+            <span>{isZh ? '强平' : 'liq'} <span style={{ color: C_LONG_LIQ }}>{fmtUsd(view.totals.ll)}</span>/<span style={{ color: C_SHORT_LIQ }}>{fmtUsd(view.totals.sl)}</span></span>
           </div>
         </div>
       )}

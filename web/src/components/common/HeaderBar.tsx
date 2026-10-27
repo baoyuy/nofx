@@ -66,14 +66,24 @@ export default function HeaderBar({
     setUserOpen(false)
   }, [location.pathname])
   const tabs: { page: Page; path: string; label: string; auth: boolean }[] = [
-    { page: 'data', path: ROUTES.data, label: 'Data', auth: false },
+    {
+      page: 'data',
+      path: ROUTES.data,
+      label: language === 'zh' ? '数据' : 'Data',
+      auth: false,
+    },
     {
       page: 'traders',
       path: ROUTES.traders,
       label: t('configNav', language),
       auth: true,
     },
-    { page: 'planning', path: ROUTES.planning, label: 'Frontier', auth: true },
+    {
+      page: 'planning',
+      path: ROUTES.planning,
+      label: language === 'zh' ? '前沿' : 'Frontier',
+      auth: true,
+    },
     {
       page: 'trader',
       path: ROUTES.dashboard,
@@ -92,7 +102,12 @@ export default function HeaderBar({
       label: t('realtimeNav', language),
       auth: true,
     },
-    { page: 'faq', path: ROUTES.faq, label: 'Help', auth: false },
+    {
+      page: 'faq',
+      path: ROUTES.faq,
+      label: language === 'zh' ? '帮助' : 'Help',
+      auth: false,
+    },
   ]
   const open = (tab: (typeof tabs)[number]) => {
     if (tab.auth && !isLoggedIn) {
@@ -103,12 +118,15 @@ export default function HeaderBar({
     navigate(tab.path)
   }
   return (
-    <nav className="header-bar nofx-navigation" aria-label="Main navigation">
+    <nav
+      className="header-bar nofx-navigation"
+      aria-label={language === 'zh' ? '主导航' : 'Main navigation'}
+    >
       <div className="nofx-navigation-inner">
         <button
           className="nofx-home"
           onClick={() => navigate(ROUTES.home)}
-          aria-label="NOFX home"
+          aria-label={language === 'zh' ? 'NOFX 首页' : 'NOFX home'}
         >
           <BrandLogo />
         </button>
@@ -136,7 +154,11 @@ export default function HeaderBar({
             <div className="nofx-user" ref={userRef}>
               <button
                 className="nofx-user-button"
-                aria-label={`Account menu for ${user.email}`}
+                aria-label={
+                  language === 'zh'
+                    ? `${user.email} 的账号菜单`
+                    : `Account menu for ${user.email}`
+                }
                 aria-expanded={userOpen}
                 aria-controls="nofx-user-menu"
                 onClick={() => setUserOpen(!userOpen)}
@@ -149,7 +171,7 @@ export default function HeaderBar({
               {userOpen && (
                 <div className="nofx-user-menu" id="nofx-user-menu">
                   <div className="nofx-user-identity">
-                    <small>Signed in as</small>
+                    <small>{language === 'zh' ? '已登录为' : 'Signed in as'}</small>
                     <strong>{user.email}</strong>
                   </div>
                   <button
@@ -158,12 +180,16 @@ export default function HeaderBar({
                       setUserOpen(false)
                     }}
                   >
-                    <Settings size={16} /> Account settings
+                    <Settings size={16} />{' '}
+                    {language === 'zh' ? '账号设置' : 'Account settings'}
                   </button>
                   {[
                     { name: 'GitHub', href: OFFICIAL_LINKS.github },
                     { name: 'X / Twitter', href: OFFICIAL_LINKS.twitter },
-                    { name: 'Community', href: OFFICIAL_LINKS.telegram },
+                    {
+                      name: language === 'zh' ? '社区' : 'Community',
+                      href: OFFICIAL_LINKS.telegram,
+                    },
                   ].map((link) => (
                     <a
                       key={link.name}
@@ -205,7 +231,15 @@ export default function HeaderBar({
           )}
           <button
             className="nofx-nav-toggle lg:hidden"
-            aria-label={menuOpen ? 'Close navigation' : 'Open navigation'}
+            aria-label={
+              menuOpen
+                ? language === 'zh'
+                  ? '关闭导航'
+                  : 'Close navigation'
+                : language === 'zh'
+                  ? '打开导航'
+                  : 'Open navigation'
+            }
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen(!menuOpen)}
           >

@@ -196,7 +196,7 @@ export function ComparisonChart({ traders }: ComparisonChartProps) {
                       style={{ color: '#295be8' }} />
         </div>
         <div className="text-sm mt-4 font-medium" style={{ color: '#707e92' }}>
-          {t('loadingChartData', language) || 'Loading chart data...'}
+          {language === 'zh' ? '加载图表数据中...' : 'Loading chart data...'}
         </div>
       </div>
     )
@@ -547,7 +547,7 @@ export function ComparisonChart({ traders }: ComparisonChartProps) {
         </div>
         <div className="p-3 rounded-lg text-center" style={{ background: 'rgba(46, 139, 87, 0.05)' }}>
           <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: '#707e92' }}>
-            {t('leadPnL', language) || 'Lead PnL'}
+            {language === 'zh' ? '领先盈亏' : 'Lead PnL'}
           </div>
           <div className="text-sm font-bold mono"
                style={{ color: (leader?.currentPnl || 0) >= 0 ? '#2E8B57' : '#D6433A' }}>

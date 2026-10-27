@@ -31,7 +31,7 @@ export function SiteFooter({ language }: { language: Language }) {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Community ↗
+            {language === 'zh' ? '社区 ↗' : 'Community ↗'}
           </a>
         </div>
       </div>

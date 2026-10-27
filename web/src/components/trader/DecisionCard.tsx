@@ -35,6 +35,15 @@ function calcPctChange(entry: number | undefined, target: number | undefined, is
   return `${adjustedPct >= 0 ? '+' : ''}${adjustedPct.toFixed(2)}%`
 }
 
+const ACTION_LABEL_ZH: Record<string, string> = {
+  open_long: '开多',
+  open_short: '开空',
+  close_long: '平多',
+  close_short: '平空',
+  hold: '持有',
+  wait: '等待',
+}
+
 // Get confidence color
 function getConfidenceColor(confidence: number | undefined): string {
   if (!confidence) return '#707e92'
@@ -65,7 +74,7 @@ function ActionCard({ action, language, onSymbolClick }: { action: DecisionActio
             className="font-mono font-bold text-lg cursor-pointer transition-all duration-200 hover:scale-110"
             style={{ color: '#192434' }}
             onClick={() => onSymbolClick?.(action.symbol)}
-            title="Click to view chart"
+            title={language === 'zh' ? '点击查看图表' : 'Click to view chart'}
           >
             {action.symbol.replace('USDT', '')}
           </span>
@@ -73,7 +82,7 @@ function ActionCard({ action, language, onSymbolClick }: { action: DecisionActio
             className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider"
             style={{ background: config.bg, color: config.color, border: `1px solid ${config.color}55` }}
           >
-            {config.label}
+            {language === 'zh' ? (ACTION_LABEL_ZH[action.action] ?? config.label) : config.label}
           </span>
         </div>
 
@@ -226,7 +235,7 @@ export function DecisionCard({ decision, language, onSymbolClick }: DecisionCard
   const copyToClipboard = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text)
-      alert(`${label} copied!`)
+      alert(language === 'zh' ? `${label}已复制！` : `${label} copied!`)
     } catch (err) {
       console.error('Failed to copy:', err)
     }
@@ -304,18 +313,18 @@ export function DecisionCard({ decision, language, onSymbolClick }: DecisionCard
               <div className="flex items-center gap-2">
                 <span className="text-base">⚙️</span>
                 <span className="font-semibold" style={{ color: '#295be8' }}>
-                  System Prompt
+                  {language === 'zh' ? '系统提示词' : 'System Prompt'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    copyToClipboard(decision.system_prompt, 'System Prompt')
+                    copyToClipboard(decision.system_prompt, language === 'zh' ? '系统提示词' : 'System Prompt')
                   }}
                   className="text-xs px-2.5 py-1 rounded-sm hover:opacity-80 transition-opacity flex items-center gap-1"
                   style={{ background: 'rgba(41,91,232, 0.2)', color: '#295be8', border: '1px solid rgba(41,91,232, 0.3)' }}
-                  title="Copy to clipboard"
+                  title={language === 'zh' ? '复制到剪贴板' : 'Copy to clipboard'}
                 >
                   <span>📋</span>
                 </button>
@@ -326,7 +335,7 @@ export function DecisionCard({ decision, language, onSymbolClick }: DecisionCard
                   }}
                   className="text-xs px-2.5 py-1 rounded-sm hover:opacity-80 transition-opacity flex items-center gap-1"
                   style={{ background: 'rgba(41,91,232, 0.2)', color: '#295be8', border: '1px solid rgba(41,91,232, 0.3)' }}
-                  title="Download as file"
+                  title={language === 'zh' ? '下载为文件' : 'Download as file'}
                 >
                   <span>💾</span>
                 </button>
@@ -363,18 +372,18 @@ export function DecisionCard({ decision, language, onSymbolClick }: DecisionCard
               <div className="flex items-center gap-2">
                 <span className="text-base">📥</span>
                 <span className="font-semibold" style={{ color: '#295be8' }}>
-                  User Prompt
+                  {language === 'zh' ? '用户提示词' : 'User Prompt'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    copyToClipboard(decision.input_prompt, 'User Prompt')
+                    copyToClipboard(decision.input_prompt, language === 'zh' ? '用户提示词' : 'User Prompt')
                   }}
                   className="text-xs px-2.5 py-1 rounded-sm hover:opacity-80 transition-opacity flex items-center gap-1"
                   style={{ background: 'rgba(41,91,232, 0.2)', color: '#295be8', border: '1px solid rgba(41,91,232, 0.3)' }}
-                  title="Copy to clipboard"
+                  title={language === 'zh' ? '复制到剪贴板' : 'Copy to clipboard'}
                 >
                   <span>📋</span>
                 </button>
@@ -385,7 +394,7 @@ export function DecisionCard({ decision, language, onSymbolClick }: DecisionCard
                   }}
                   className="text-xs px-2.5 py-1 rounded-sm hover:opacity-80 transition-opacity flex items-center gap-1"
                   style={{ background: 'rgba(41,91,232, 0.2)', color: '#295be8', border: '1px solid rgba(41,91,232, 0.3)' }}
-                  title="Download as file"
+                  title={language === 'zh' ? '下载为文件' : 'Download as file'}
                 >
                   <span>💾</span>
                 </button>

@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { Position } from '../../types'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 /**
  * RiskRadar renders derived risk telemetry for the live trading book — long /
@@ -49,6 +50,8 @@ interface RiskRadarProps {
 }
 
 export function RiskRadar({ positions, account, config, fullStats }: RiskRadarProps) {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
   const pos = positions ?? []
 
   const m = useMemo(() => {
@@ -127,7 +130,7 @@ export function RiskRadar({ positions, account, config, fullStats }: RiskRadarPr
 
   const hasData = pos.length > 0 || account != null
   if (!hasData) {
-    return <div className="tm-sc" style={{ padding: '16px 0' }}>No live risk data.</div>
+    return <div className="tm-sc" style={{ padding: '16px 0' }}>{isZh ? '暂无实时风险数据。' : 'No live risk data.'}</div>
   }
 
   // ── one-glance verdicts ──────────────────────────────────────────────
@@ -135,80 +138,80 @@ export function RiskRadar({ positions, account, config, fullStats }: RiskRadarPr
   const biasSkew = m.longShare - m.shortShare
   const exposureTag: Verdict =
     m.totalNotional === 0
-      ? { text: 'Flat', tone: 'muted' }
+      ? { text: isZh ? '空仓' : 'Flat', tone: 'muted' }
       : biasSkew > 15
-        ? { text: 'Long-lean', tone: 'up' }
+        ? { text: isZh ? '偏多' : 'Long-lean', tone: 'up' }
         : biasSkew < -15
-          ? { text: 'Short-lean', tone: 'dn' }
-          : { text: 'Balanced', tone: 'ink' }
+          ? { text: isZh ? '偏空' : 'Short-lean', tone: 'dn' }
+          : { text: isZh ? '均衡' : 'Balanced', tone: 'ink' }
 
   // Leverage: Safe / High / Risky by avg vs cap.
   const levTag: Verdict =
     m.configMax === 0 || m.avgLev === 0
       ? { text: '—', tone: 'muted' }
       : m.levUse > 80
-        ? { text: 'Risky', tone: 'dn' }
+        ? { text: isZh ? '高风险' : 'Risky', tone: 'dn' }
         : m.levUse >= 50
-          ? { text: 'High', tone: 'amber' }
-          : { text: 'Safe', tone: 'up' }
+          ? { text: isZh ? '偏高' : 'High', tone: 'amber' }
+          : { text: isZh ? '安全' : 'Safe', tone: 'up' }
 
   // Margin used: Ample / Tight / Risky.
   const marginTag: Verdict =
     m.marginPct > 80
-      ? { text: 'Risky', tone: 'dn' }
+      ? { text: isZh ? '高风险' : 'Risky', tone: 'dn' }
       : m.marginPct >= 50
-        ? { text: 'Tight', tone: 'amber' }
-        : { text: 'Ample', tone: 'up' }
+        ? { text: isZh ? '紧张' : 'Tight', tone: 'amber' }
+        : { text: isZh ? '充足' : 'Ample', tone: 'up' }
 
   // Concentration: Spread / Concentrated.
   const concTag: Verdict =
     m.totalNotional === 0
       ? { text: '—', tone: 'muted' }
       : m.concentration >= 35
-        ? { text: 'Concentrated', tone: 'amber' }
-        : { text: 'Spread', tone: 'up' }
+        ? { text: isZh ? '集中' : 'Concentrated', tone: 'amber' }
+        : { text: isZh ? '分散' : 'Spread', tone: 'up' }
 
   // Drawdown: Calm / Caution / Deep by depth.
   const ddTag: Verdict =
     m.drawdown <= 0
-      ? { text: 'Calm', tone: 'up' }
+      ? { text: isZh ? '平稳' : 'Calm', tone: 'up' }
       : m.drawdown >= 20
-        ? { text: 'Deep', tone: 'dn' }
-        : { text: 'Caution', tone: 'amber' }
+        ? { text: isZh ? '较深' : 'Deep', tone: 'dn' }
+        : { text: isZh ? '谨慎' : 'Caution', tone: 'amber' }
 
   // Positions: Room / Full.
   const countTag: Verdict =
     m.maxPositions === 0
       ? { text: `${m.count}`, tone: 'muted' }
       : m.count >= m.maxPositions
-        ? { text: 'Full', tone: 'amber' }
-        : { text: 'Room', tone: 'up' }
+        ? { text: isZh ? '已满' : 'Full', tone: 'amber' }
+        : { text: isZh ? '有余位' : 'Room', tone: 'up' }
 
   return (
     <div style={{ fontFamily: 'var(--tm-mono)' }}>
       {/* header */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 1 }}>
-        <span className="tm-px" style={{ fontSize: 11 }}>Risk radar</span>
+        <span className="tm-px" style={{ fontSize: 11 }}>{isZh ? '风险雷达' : 'Risk radar'}</span>
         <span
           className="tm-sc"
           style={{ marginLeft: 'auto', color: m.totalNotional > 0 ? 'var(--tm-up)' : 'var(--tm-muted)' }}
         >
-          {m.totalNotional > 0 ? '● live' : '○ flat'}
+          {m.totalNotional > 0 ? (isZh ? '● 实时' : '● live') : isZh ? '○ 空仓' : '○ flat'}
         </span>
       </div>
       <div className="tm-sc" style={{ fontSize: 9, marginBottom: 8 }}>
-        Risk radar · live position-risk check
+        {isZh ? '风险雷达 · 实时持仓风险检查' : 'Risk radar · live position-risk check'}
       </div>
 
       {/* Net exposure — diverging long/short split, the visual centerpiece */}
       <div style={{ marginBottom: 9, paddingBottom: 9, borderBottom: '1px solid var(--tm-hair)' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 4 }}>
-          <Label zh="Net exposure" en="NET EXPOSURE" />
+          <Label zh="净敞口" enTitle="Net exposure" en="NET EXPOSURE" />
           <Tag verdict={exposureTag} />
           <span className="tm-mono" style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tm-ink)' }}>
-            long {pct(m.longShare)}
+            {isZh ? '做多' : 'long'} {pct(m.longShare)}
             <span style={{ color: 'var(--tm-muted)' }}> / </span>
-            short {pct(m.shortShare)}
+            {isZh ? '做空' : 'short'} {pct(m.shortShare)}
           </span>
         </div>
         <div style={{ display: 'flex', height: 7, background: 'var(--tm-hair)', overflow: 'hidden' }}>
@@ -216,57 +219,66 @@ export function RiskRadar({ positions, account, config, fullStats }: RiskRadarPr
           <div style={{ width: `${m.shortShare}%`, background: 'var(--tm-dn)' }} />
         </div>
         <div className="tm-mono" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, marginTop: 3 }}>
-          <span style={{ color: 'var(--tm-up)' }}>long {fmtUsd(m.longNotional)}</span>
+          <span style={{ color: 'var(--tm-up)' }}>{isZh ? '做多' : 'long'} {fmtUsd(m.longNotional)}</span>
           <span style={{ color: 'var(--tm-ink-2)' }}>
-            net <b style={{ color: m.netNotional >= 0 ? 'var(--tm-up)' : 'var(--tm-dn)' }}>{fmtUsd(m.netNotional)}</b>
+            {isZh ? '净额' : 'net'} <b style={{ color: m.netNotional >= 0 ? 'var(--tm-up)' : 'var(--tm-dn)' }}>{fmtUsd(m.netNotional)}</b>
           </span>
-          <span style={{ color: 'var(--tm-dn)' }}>short {fmtUsd(m.shortNotional)}</span>
+          <span style={{ color: 'var(--tm-dn)' }}>{isZh ? '做空' : 'short'} {fmtUsd(m.shortNotional)}</span>
         </div>
       </div>
 
       {/* gauge rows */}
       <GaugeRow
-        zh="Leverage"
+        zh="杠杆"
+        enTitle="Leverage"
         en="LEVERAGE"
-        value={`${m.avgLev.toFixed(1)}× avg`}
-        sub={`/ ${m.maxLev > 0 ? `${m.maxLev.toFixed(0)}×` : '—'} peak · ${m.configMax > 0 ? `${m.configMax}×` : '—'} cap`}
+        value={isZh ? `${m.avgLev.toFixed(1)}× 平均` : `${m.avgLev.toFixed(1)}× avg`}
+        sub={
+          isZh
+            ? `/ 峰值 ${m.maxLev > 0 ? `${m.maxLev.toFixed(0)}×` : '—'} · 上限 ${m.configMax > 0 ? `${m.configMax}×` : '—'}`
+            : `/ ${m.maxLev > 0 ? `${m.maxLev.toFixed(0)}×` : '—'} peak · ${m.configMax > 0 ? `${m.configMax}×` : '—'} cap`
+        }
         fill={m.levUse}
         color={levTag.tone === 'dn' ? 'var(--tm-dn)' : levTag.tone === 'amber' ? C_AMBER : 'var(--tm-up)'}
         verdict={levTag}
       />
       <GaugeRow
-        zh="Margin used"
+        zh="保证金占用"
+        enTitle="Margin used"
         en="MARGIN USED"
         value={pct(m.marginPct)}
-        sub="of equity"
+        sub={isZh ? '占净值' : 'of equity'}
         fill={Math.min(100, Math.max(0, m.marginPct))}
         color={utilColor(m.marginPct)}
         verdict={marginTag}
       />
       <GaugeRow
-        zh="Concentration"
+        zh="集中度"
+        enTitle="Concentration"
         en="CONCENTRATION"
         value={pct(m.concentration)}
-        sub="top-position share"
+        sub={isZh ? '最大持仓占比' : 'top-position share'}
         fill={m.concentration}
         color={concTag.tone === 'amber' ? C_AMBER : 'var(--tm-up)'}
         verdict={concTag}
       />
       <GaugeRow
-        zh="Drawdown"
+        zh="回撤"
+        enTitle="Drawdown"
         en="MAX DRAWDOWN"
         value={`-${pct(m.drawdown)}`}
-        sub="peak drawdown"
+        sub={isZh ? '峰值回撤' : 'peak drawdown'}
         fill={Math.min(100, m.drawdown)}
         color="var(--tm-red)"
         verdict={ddTag}
         valueColor="var(--tm-dn)"
       />
       <GaugeRow
-        zh="Positions"
+        zh="持仓数"
+        enTitle="Positions"
         en="POSITIONS"
         value={m.maxPositions > 0 ? `${m.count} / ${m.maxPositions}` : `${m.count}`}
-        sub="held / cap"
+        sub={isZh ? '持仓 / 上限' : 'held / cap'}
         fill={m.maxPositions > 0 ? m.countUse : 0}
         color={countTag.tone === 'amber' ? C_AMBER : 'var(--tm-up)'}
         verdict={countTag}
@@ -282,7 +294,7 @@ export function RiskRadar({ positions, account, config, fullStats }: RiskRadarPr
           borderTop: '1px solid var(--tm-hair)',
         }}
       >
-        <Label zh="Unrealized PnL" en="UNREALIZED PNL" />
+        <Label zh="未实现盈亏" enTitle="Unrealized PnL" en="UNREALIZED PNL" />
         <span
           className="tm-mono"
           style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: m.upnl >= 0 ? 'var(--tm-up)' : 'var(--tm-dn)' }}
@@ -338,10 +350,14 @@ function Tag({ verdict }: { verdict: Verdict }) {
 }
 
 // ── bilingual label block ──────────────────────────────────────────────
-function Label({ zh, en }: { zh: string; en: string }) {
+// zh mode: Chinese title on top, English code below (the panel's bilingual
+// style). Other languages keep the original English title + code exactly.
+function Label({ zh, en, enTitle }: { zh: string; en: string; enTitle: string }) {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
   return (
     <span style={{ display: 'inline-flex', flexDirection: 'column', lineHeight: 1.2 }}>
-      <span style={{ fontSize: 11, color: 'var(--tm-ink)', fontWeight: 600 }}>{zh}</span>
+      <span style={{ fontSize: 11, color: 'var(--tm-ink)', fontWeight: 600 }}>{isZh ? zh : enTitle}</span>
       <span className="tm-sc" style={{ fontSize: 8, letterSpacing: '0.12em' }}>{en}</span>
     </span>
   )
@@ -350,6 +366,7 @@ function Label({ zh, en }: { zh: string; en: string }) {
 interface GaugeRowProps {
   zh: string
   en: string
+  enTitle: string
   value: string
   sub?: string
   fill: number
@@ -358,12 +375,12 @@ interface GaugeRowProps {
   valueColor?: string
 }
 
-function GaugeRow({ zh, en, value, sub, fill, color, verdict, valueColor }: GaugeRowProps) {
+function GaugeRow({ zh, en, enTitle, value, sub, fill, color, verdict, valueColor }: GaugeRowProps) {
   const w = Math.min(100, Math.max(0, fill))
   return (
     <div style={{ marginBottom: 9 }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
-        <Label zh={zh} en={en} />
+        <Label zh={zh} en={en} enTitle={enTitle} />
         <Tag verdict={verdict} />
         <span
           className="tm-mono"

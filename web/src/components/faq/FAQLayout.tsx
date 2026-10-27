@@ -4,19 +4,27 @@ import { DeepVoidBackground } from '../common/DeepVoidBackground'
 import { FAQSearchBar } from './FAQSearchBar'
 import { FAQSidebar } from './FAQSidebar'
 import { FAQContent } from './FAQContent'
-import { faqCategories, faqItemSearchText } from '../../data/faqData'
+import {
+  faqCategories,
+  faqCategoriesZh,
+  faqItemSearchText,
+} from '../../data/faqData'
 import type { FAQCategory } from '../../data/faqData'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 export function FAQLayout() {
+  const { language } = useLanguage()
+  const zh = language === 'zh'
+  const allCategories = zh ? faqCategoriesZh : faqCategories
   const [searchTerm, setSearchTerm] = useState('')
   const [activeItemId, setActiveItemId] = useState<string | null>(null)
 
   const filteredCategories = useMemo(() => {
-    if (!searchTerm.trim()) return faqCategories
+    if (!searchTerm.trim()) return allCategories
 
     const term = searchTerm.toLowerCase()
     const filtered: FAQCategory[] = []
-    faqCategories.forEach((category) => {
+    allCategories.forEach((category) => {
       const matchingItems = category.items.filter((item) =>
         faqItemSearchText(item).includes(term)
       )
@@ -25,12 +33,15 @@ export function FAQLayout() {
       }
     })
     return filtered
-  }, [searchTerm])
+  }, [searchTerm, allCategories])
 
   const totalItems = useMemo(
     () =>
-      faqCategories.reduce((sum, category) => sum + category.items.length, 0),
-    []
+      allCategories.reduce(
+        (sum, category) => sum + category.items.length,
+        0
+      ),
+    [allCategories]
   )
 
   const handleItemClick = (_categoryId: string, itemId: string) => {
@@ -54,11 +65,12 @@ export function FAQLayout() {
               </div>
               <div>
                 <h1 className="font-sans text-2xl font-bold tracking-tight text-nofx-text md:text-3xl">
-                  Help & guides
+                  {zh ? '帮助与指南' : 'Help & guides'}
                 </h1>
                 <p className="mt-1 font-sans text-xs tracking-normal text-nofx-text-muted">
-                  {totalItems} answers · wallets · launch · trading ·
-                  self-hosting
+                  {zh
+                    ? `${totalItems} 条解答 · 钱包 · 启动 · 交易 · 自托管`
+                    : `${totalItems} answers · wallets · launch · trading · self-hosting`}
                 </p>
               </div>
             </div>
@@ -90,13 +102,15 @@ export function FAQLayout() {
             ) : (
               <div className="rounded-xl border border-nofx-gold/20 bg-nofx-bg-lighter py-16 text-center">
                 <p className="font-sans text-sm text-nofx-text-muted">
-                  No matching questions for “{searchTerm}”.
+                  {zh
+                    ? `没有与“${searchTerm}”匹配的问题。`
+                    : `No matching questions for “${searchTerm}”.`}
                 </p>
                 <button
                   onClick={() => setSearchTerm('')}
                   className="mt-4 rounded-lg border border-nofx-gold/30 bg-nofx-gold/10 px-5 py-2 font-sans text-xs font-bold tracking-normal text-nofx-gold hover:bg-nofx-gold/20"
                 >
-                  Clear search
+                  {zh ? '清除搜索' : 'Clear search'}
                 </button>
               </div>
             )}
@@ -106,11 +120,12 @@ export function FAQLayout() {
         {/* still stuck */}
         <div className="mt-12 rounded-xl border border-nofx-gold/20 bg-nofx-bg-lighter p-6 text-center md:p-8">
           <h3 className="font-sans text-sm font-bold tracking-normal text-nofx-text">
-            Still have questions?
+            {zh ? '还有疑问？' : 'Still have questions?'}
           </h3>
           <p className="mt-2 text-sm text-nofx-text-muted">
-            Ask in the community or open an issue — both are answered by the
-            people building NOFX.
+            {zh
+              ? '到社区提问或提交 issue —— 两者都由 NOFX 的开发者亲自答复。'
+              : 'Ask in the community or open an issue — both are answered by the people building NOFX.'}
           </p>
           <div className="mt-5 flex items-center justify-center gap-3">
             <a
@@ -127,7 +142,7 @@ export function FAQLayout() {
               rel="noopener noreferrer"
               className="rounded-lg bg-nofx-gold px-5 py-2.5 font-sans text-xs font-bold tracking-normal text-white hover:bg-nofx-accent"
             >
-              Telegram community
+              {zh ? 'Telegram 社区' : 'Telegram community'}
             </a>
           </div>
         </div>

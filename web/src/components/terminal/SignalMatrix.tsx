@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { SignalRankItem } from '../../lib/api/data'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 /**
  * SignalMatrix renders the Vergex (Claw402) direction board as a high-density
@@ -64,6 +65,10 @@ export function SignalMatrix({
   active,
   onSelect,
 }: SignalMatrixProps) {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
+  const biasLabel = (bias: Bias) =>
+    isZh ? (bias === 'bullish' ? '看涨' : bias === 'bearish' ? '看跌' : '中性') : bias
   const view = useMemo(() => {
     const raw = items ?? []
     const sorted = [...raw].sort((a, b) => a.rank - b.rank).slice(0, max)
@@ -96,7 +101,7 @@ export function SignalMatrix({
     return (
       <div style={{ fontFamily: 'var(--tm-mono)' }}>
         <Head />
-        <div className="tm-sc">No signal data (claw402).</div>
+        <div className="tm-sc">{isZh ? '暂无信号数据（claw402）。' : 'No signal data (claw402).'}</div>
       </div>
     )
   }
@@ -116,13 +121,13 @@ export function SignalMatrix({
           fontSize: 9,
         }}
       >
-        <Swatch c="var(--tm-up)" label="Bullish" />
-        <Swatch c="var(--tm-dn)" label="Bearish" />
-        <Swatch c="var(--tm-muted)" label="Neutral" />
+        <Swatch c="var(--tm-up)" label={isZh ? '看涨' : 'Bullish'} />
+        <Swatch c="var(--tm-dn)" label={isZh ? '看跌' : 'Bearish'} />
+        <Swatch c="var(--tm-muted)" label={isZh ? '中性' : 'Neutral'} />
         {onSelect && (
-          <span style={{ color: 'var(--tm-red)' }}>click to switch ▸</span>
+          <span style={{ color: 'var(--tm-red)' }}>{isZh ? '点击切换 ▸' : 'click to switch ▸'}</span>
         )}
-        <span style={{ marginLeft: 'auto' }}>{view.cells.length} signals</span>
+        <span style={{ marginLeft: 'auto' }}>{isZh ? `${view.cells.length} 个信号` : `${view.cells.length} signals`}</span>
       </div>
 
       <div
@@ -138,7 +143,7 @@ export function SignalMatrix({
           return (
             <div
               key={`${c.rank}-${c.symbol}`}
-              title={`${base} · #${c.rank} · ${c.bias} · ${c.score} — click to switch`}
+              title={isZh ? `${base} · #${c.rank} · ${biasLabel(c.bias)} · ${c.score} — 点击切换` : `${base} · #${c.rank} · ${c.bias} · ${c.score} — click to switch`}
               onClick={onSelect ? () => onSelect(base) : undefined}
               style={{
                 padding: '4px 5px',
@@ -189,6 +194,8 @@ function fmtScore(n: number): string {
 }
 
 function Head() {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
   return (
     <div
       style={{
@@ -199,9 +206,9 @@ function Head() {
       }}
     >
       <span className="tm-px" style={{ fontSize: 11 }}>
-        Signal matrix
+        {isZh ? '信号矩阵' : 'Signal matrix'}
       </span>
-      <span className="tm-sc">Signal matrix · vergex</span>
+      <span className="tm-sc">{isZh ? '信号矩阵 · vergex' : 'Signal matrix · vergex'}</span>
     </div>
   )
 }

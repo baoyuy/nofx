@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { demoSeedPrice, demoTick } from '../../lib/demo/demoUniverse'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a)
 
@@ -63,6 +64,8 @@ interface OrderBookProps {
 }
 
 export function OrderBook({ symbol, markPrice, demo = false }: OrderBookProps) {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
   const base = useMemo(() => baseSymbol(symbol || ''), [symbol])
   const [xyzSet, setXyzSet] = useState<Set<string>>(new Set())
   const [book, setBook] = useState<BookState | null>(null)
@@ -232,25 +235,35 @@ export function OrderBook({ symbol, markPrice, demo = false }: OrderBookProps) {
   return (
     <div style={{ fontFamily: 'var(--tm-mono)' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-        <span className="tm-px" style={{ fontSize: 11 }}>Order book</span>
+        <span className="tm-px" style={{ fontSize: 11 }}>{isZh ? '订单簿' : 'Order book'}</span>
         <span className="tm-sc">L2 · {coin || base || '—'}</span>
         <span
           className="tm-sc"
           style={{ marginLeft: 'auto', color: status === 'live' ? 'var(--tm-up)' : 'var(--tm-muted)' }}
         >
-          {status === 'live' ? '● live' : status === 'connecting' ? '○ sync' : '○ down'}
+          {status === 'live'
+            ? isZh
+              ? '● 实时'
+              : '● live'
+            : status === 'connecting'
+              ? isZh
+                ? '○ 同步中'
+                : '○ sync'
+              : isZh
+                ? '○ 已断开'
+                : '○ down'}
         </span>
       </div>
 
       {!view ? (
-        <div className="tm-sc" style={{ padding: '16px 0' }}>Connecting to Hyperliquid…</div>
+        <div className="tm-sc" style={{ padding: '16px 0' }}>{isZh ? '正在连接 Hyperliquid…' : 'Connecting to Hyperliquid…'}</div>
       ) : (
         <div style={{ fontSize: 11 }}>
           {/* column header */}
           <div className="tm-sc" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4, marginBottom: 2 }}>
-            <span>price</span>
-            <span style={{ textAlign: 'right' }}>size</span>
-            <span style={{ textAlign: 'right' }}>cum $</span>
+            <span>{isZh ? '价格' : 'price'}</span>
+            <span style={{ textAlign: 'right' }}>{isZh ? '数量' : 'size'}</span>
+            <span style={{ textAlign: 'right' }}>{isZh ? '累计 $' : 'cum $'}</span>
           </div>
 
           {/* asks (red), best ask nearest the mid — keyed by PRICE so each level
@@ -273,7 +286,7 @@ export function OrderBook({ symbol, markPrice, demo = false }: OrderBookProps) {
             }}
           >
             <span className="tm-px" style={{ fontSize: 12, color: 'var(--tm-red)' }}>{fmtPx(view.mid)}</span>
-            <span className="tm-sc" style={{ marginLeft: 'auto' }}>spread {fmtPx(view.spread)} · {view.spreadBps.toFixed(1)}bps</span>
+            <span className="tm-sc" style={{ marginLeft: 'auto' }}>{isZh ? `价差 ${fmtPx(view.spread)} · ${view.spreadBps.toFixed(1)}bps` : `spread ${fmtPx(view.spread)} · ${view.spreadBps.toFixed(1)}bps`}</span>
           </div>
 
           {/* bids (green) — keyed by price, same independent-flash behavior */}
@@ -288,8 +301,8 @@ export function OrderBook({ symbol, markPrice, demo = false }: OrderBookProps) {
               <div style={{ flex: 1, background: 'var(--tm-dn)' }} />
             </div>
             <div className="tm-sc" style={{ display: 'flex', fontSize: 9, marginTop: 2 }}>
-              <span className="tm-up">B {view.bidPct.toFixed(1)}%</span>
-              <span style={{ marginLeft: 'auto' }} className="tm-dn">{(100 - view.bidPct).toFixed(1)}% S</span>
+              <span className="tm-up">{isZh ? `买 ${view.bidPct.toFixed(1)}%` : `B ${view.bidPct.toFixed(1)}%`}</span>
+              <span style={{ marginLeft: 'auto' }} className="tm-dn">{isZh ? `${(100 - view.bidPct).toFixed(1)}% 卖` : `${(100 - view.bidPct).toFixed(1)}% S`}</span>
             </div>
           </div>
         </div>

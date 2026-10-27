@@ -1,8 +1,48 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Terminal, Copy, Check, ChevronRight, Server, Command, Shield } from 'lucide-react'
+import { useLanguage } from '../../../contexts/LanguageContext'
+
+const TEXT = {
+    en: {
+        eyebrow: 'System Deployment',
+        titleA: 'DEPLOY',
+        titleB: 'INSTANTLY',
+        body: 'One command on your laptop or any server installs everything. Open the address it prints, create your account, and the guided launch takes you to your first AI trade in about five minutes — around $13 is enough to start.',
+        steps: [
+            'Register — the first account owns this instance.',
+            'Fund two small wallets: $1+ for AI fees, $12+ to trade with (guided, with QR codes).',
+            'Press Start — the AI trades on its own; stop it anytime.',
+        ],
+        cards: [
+            { label: "One-Line Install", desc: "Docker handles every dependency" },
+            { label: "Your Keys Stay Home", desc: "Runs on your machine, keys encrypted locally" }
+        ],
+        terminalComment: '# Initialize NoFX Core Protocol',
+    },
+    zh: {
+        eyebrow: '系统部署',
+        titleA: '即刻',
+        titleB: '部署',
+        body: '在你的笔记本或任何服务器上运行一条命令即可安装全部组件。打开它输出的地址，创建你的账户，引导式启动会带你在约五分钟内完成第一笔 AI 交易 — 约 $13 即可开始。',
+        steps: [
+            '注册 — 第一个账户即为该实例的所有者。',
+            '为两个小钱包充值：$1+ 用于 AI 费用，$12+ 用于交易（全程引导，附二维码）。',
+            '点击开始 — AI 将自主交易；可随时停止。',
+        ],
+        cards: [
+            { label: "一行命令安装", desc: "Docker 处理全部依赖" },
+            { label: "密钥不出本地", desc: "运行在你的机器上，密钥本地加密" }
+        ],
+        terminalComment: '# 初始化 NoFX 核心协议',
+    },
+} as const
+
+const CARD_ICONS = [Command, Shield]
 
 export default function DeploymentHub() {
+    const { language } = useLanguage()
+    const tx = language === 'zh' ? TEXT.zh : TEXT.en
     const [copied, setCopied] = useState(false)
     const installCmd = "curl -fsSL https://raw.githubusercontent.com/NoFxAiOS/nofx/main/install.sh | bash"
 
@@ -23,28 +63,20 @@ export default function DeploymentHub() {
                     {/* Left Column: Context */}
                     <div className="space-y-8">
                         <div className="flex items-center gap-2 text-nofx-gold font-mono text-xs tracking-[0.2em] uppercase">
-                            <Server className="w-4 h-4" /> System Deployment
+                            <Server className="w-4 h-4" /> {tx.eyebrow}
                         </div>
 
                         <h2 className="text-4xl md:text-6xl font-black text-nofx-text leading-tight">
-                            DEPLOY <span className="text-nofx-gold">INSTANTLY</span>
+                            {tx.titleA} <span className="text-nofx-gold">{tx.titleB}</span>
                         </h2>
 
                         <p className="text-nofx-text-muted text-lg leading-relaxed font-light">
-                            One command on your laptop or any server installs
-                            everything. Open the address it prints, create your
-                            account, and the guided launch takes you to your
-                            first AI trade in about five minutes — around $13
-                            is enough to start.
+                            {tx.body}
                         </p>
 
                         {/* the first five minutes, in plain words */}
                         <ol className="space-y-2 pt-2 font-mono text-sm text-nofx-text-muted">
-                            {[
-                                'Register — the first account owns this instance.',
-                                'Fund two small wallets: $1+ for AI fees, $12+ to trade with (guided, with QR codes).',
-                                'Press Start — the AI trades on its own; stop it anytime.',
-                            ].map((step, i) => (
+                            {tx.steps.map((step, i) => (
                                 <li key={i} className="flex gap-3">
                                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border border-nofx-gold/30 bg-nofx-gold/10 text-[11px] font-bold text-nofx-gold">
                                         {i + 1}
@@ -55,20 +87,20 @@ export default function DeploymentHub() {
                         </ol>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                            {[
-                                { icon: Command, label: "One-Line Install", desc: "Docker handles every dependency" },
-                                { icon: Shield, label: "Your Keys Stay Home", desc: "Runs on your machine, keys encrypted locally" }
-                            ].map((item, i) => (
+                            {tx.cards.map((item, i) => {
+                                const Icon = CARD_ICONS[i]
+                                return (
                                 <div key={i} className="flex gap-4 items-start p-4 rounded-sm bg-nofx-bg-lighter border border-[rgba(25,36,52,0.14)] hover:border-nofx-gold/30 transition-colors group">
                                     <div className="p-2 rounded-sm bg-nofx-bg-deeper border border-[rgba(25,36,52,0.14)] text-nofx-gold group-hover:bg-nofx-gold/10 transition-colors">
-                                        <item.icon className="w-5 h-5" />
+                                        <Icon className="w-5 h-5" />
                                     </div>
                                     <div>
                                         <h4 className="text-nofx-text font-bold font-mono text-sm mb-1">{item.label}</h4>
                                         <p className="text-nofx-text-muted text-xs">{item.desc}</p>
                                     </div>
                                 </div>
-                            ))}
+                                )
+                            })}
                         </div>
                     </div>
 
@@ -98,7 +130,7 @@ export default function DeploymentHub() {
 
                             {/* Terminal Content */}
                             <div className="p-8 font-mono text-sm md:text-base bg-nofx-bg-lighter min-h-[200px] flex flex-col justify-center">
-                                <div className="mb-2 text-nofx-text-muted text-xs tracking-wide"># Initialize NoFX Core Protocol</div>
+                                <div className="mb-2 text-nofx-text-muted text-xs tracking-wide">{tx.terminalComment}</div>
                                 <div
                                     className="group relative flex items-start gap-3 p-4 rounded-lg bg-nofx-bg-deeper border border-[rgba(25,36,52,0.14)] hover:border-nofx-gold/50 cursor-pointer transition-all hover:bg-nofx-bg"
                                     onClick={handleCopy}

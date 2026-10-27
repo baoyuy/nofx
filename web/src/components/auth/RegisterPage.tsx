@@ -58,7 +58,11 @@ export function RegisterPage() {
     }
 
     if (betaMode && !betaCode.trim()) {
-      setError('A beta code is required to register during the closed beta')
+      setError(
+        language === 'zh'
+          ? '封闭内测期间，注册时必须填写访问码'
+          : 'A beta code is required to register during the closed beta'
+      )
       return
     }
 
@@ -96,7 +100,9 @@ export function RegisterPage() {
       const errorMsg =
         e instanceof Error
           ? e.message
-          : 'Registration failed due to server error'
+          : language === 'zh'
+            ? '服务器错误，注册失败'
+            : 'Registration failed due to server error'
       const lowerMsg = errorMsg.toLowerCase()
       if (
         lowerMsg.includes('whitelist') ||
@@ -127,7 +133,7 @@ export function RegisterPage() {
             className="flex items-center gap-2 text-nofx-text-muted hover:text-nofx-text transition-colors group px-3 py-1.5 rounded-lg border border-transparent hover:border-[rgba(25,36,52,0.14)] bg-nofx-bg-deeper backdrop-blur-xs"
           >
             <span className="text-xs font-sans tracking-normal">
-              Back to home
+              {language === 'zh' ? '返回首页' : 'Back to home'}
             </span>
           </button>
         </div>
@@ -137,11 +143,12 @@ export function RegisterPage() {
             <BrandLogo />
           </div>
           <h1 className="text-3xl font-bold tracking-tighter text-nofx-text mb-2">
-            Create your account
+            {language === 'zh' ? '创建你的账户' : 'Create your account'}
           </h1>
           <p className="text-nofx-text-muted text-sm">
-            Set up your local NOFX workspace. Connect your AI wallet and trading
-            accounts when you are ready.
+            {language === 'zh'
+              ? '设置你的本地 NOFX 工作区。准备好后，即可连接你的 AI 钱包和交易账户。'
+              : 'Set up your local NOFX workspace. Connect your AI wallet and trading accounts when you are ready.'}
           </p>
         </div>
 
@@ -219,7 +226,7 @@ export function RegisterPage() {
               <div className="bg-nofx-bg-deeper p-3 rounded-lg border border-[rgba(25,36,52,0.14)]">
                 <div className="text-[10px] tracking-normal text-nofx-text-muted mb-2 font-bold flex items-center gap-2">
                   <div className="w-1 h-1 rounded-full bg-nofx-text-muted"></div>
-                  Password requirements
+                  {language === 'zh' ? '密码要求' : 'Password requirements'}
                 </div>
                 <div className="text-xs font-sans text-nofx-text-muted">
                   <PasswordChecklist
@@ -252,7 +259,7 @@ export function RegisterPage() {
               {betaMode && (
                 <div>
                   <label className="block text-xs tracking-normal text-nofx-gold mb-1.5 ml-1 font-bold">
-                    Priority Access Code
+                    {language === 'zh' ? '优先访问码' : 'Priority Access Code'}
                   </label>
                   <input
                     type="text"
@@ -268,7 +275,9 @@ export function RegisterPage() {
                     required={betaMode}
                   />
                   <p className="text-[10px] text-nofx-text-muted font-sans mt-1 ml-1">
-                    Enter your six-character access code.
+                    {language === 'zh'
+                      ? '请输入你的六位访问码。'
+                      : 'Enter your six-character access code.'}
                   </p>
                 </div>
               )}
@@ -287,10 +296,14 @@ export function RegisterPage() {
                 className="w-full bg-nofx-gold text-nofx-bg font-bold py-3 px-4 rounded-lg text-sm tracking-normal hover:bg-nofx-gold-highlight transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed font-sans flex items-center justify-center gap-2 group mt-4"
               >
                 {loading ? (
-                  <span className="animate-pulse">Creating account…</span>
+                  <span className="animate-pulse">
+                    {language === 'zh' ? '正在创建账户…' : 'Creating account…'}
+                  </span>
                 ) : (
                   <>
-                    <span>Create account</span>
+                    <span>
+                      {language === 'zh' ? '创建账户' : 'Create account'}
+                    </span>
                     <span className="group-hover:translate-x-1 transition-transform">
                       -&gt;
                     </span>
@@ -303,19 +316,19 @@ export function RegisterPage() {
 
         <div className="text-center mt-8 space-y-4">
           <p className="text-xs font-sans text-nofx-text-muted">
-            Already have an account?{' '}
+            {language === 'zh' ? '已有账户？' : 'Already have an account?'}{' '}
             <button
               onClick={() => navigate('/login')}
               className="text-nofx-gold hover:underline hover:text-nofx-gold-highlight transition-colors ml-1"
             >
-              Sign in
+              {language === 'zh' ? '登录' : 'Sign in'}
             </button>
           </p>
           <button
             onClick={() => navigate('/')}
             className="text-[10px] text-nofx-text-muted hover:text-nofx-danger transition-colors tracking-normal hover:underline decoration-nofx-danger/30 font-sans"
           >
-            Back to home
+            {language === 'zh' ? '返回首页' : 'Back to home'}
           </button>
         </div>
       </div>

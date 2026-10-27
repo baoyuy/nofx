@@ -108,7 +108,7 @@ function StatCard({
 }
 
 // Symbol Stats Row
-function SymbolStatsRow({ stat }: { stat: SymbolStats }) {
+function SymbolStatsRow({ stat, language }: { stat: SymbolStats; language: Language }) {
   const totalPnl = stat.total_pnl || 0
   const winRate = stat.win_rate || 0
   const pnlColor = totalPnl >= 0 ? '#2E8B57' : '#D6433A'
@@ -125,13 +125,13 @@ function SymbolStatsRow({ stat }: { stat: SymbolStats }) {
           {(stat.symbol || '').replace('USDT', '')}
         </span>
         <span className="text-xs" style={{ color: '#707e92' }}>
-          {stat.total_trades || 0} trades
+          {stat.total_trades || 0} {language === 'zh' ? '笔交易' : 'trades'}
         </span>
       </div>
       <div className="flex items-center gap-6">
         <div className="text-right">
           <div className="text-xs" style={{ color: '#707e92' }}>
-            Win Rate
+            {language === 'zh' ? '胜率' : 'Win Rate'}
           </div>
           <div className="font-mono font-semibold" style={{ color: winRateColor }}>
             {winRate.toFixed(1)}%
@@ -139,7 +139,7 @@ function SymbolStatsRow({ stat }: { stat: SymbolStats }) {
         </div>
         <div className="text-right min-w-[80px]">
           <div className="text-xs" style={{ color: '#707e92' }}>
-            P&L
+            {language === 'zh' ? '盈亏' : 'P&L'}
           </div>
           <div className="font-mono font-semibold" style={{ color: pnlColor }}>
             {totalPnl >= 0 ? '+' : ''}
@@ -175,7 +175,7 @@ function DirectionStatsCard({ stat, language }: { stat: DirectionStats; language
           className="font-bold uppercase"
           style={{ color: iconColor }}
         >
-          {stat.side || 'Unknown'}
+          {language === 'zh' ? ((stat.side || '').toLowerCase() === 'long' ? '多头' : (stat.side || '').toLowerCase() === 'short' ? '空头' : (stat.side || '未知')) : (stat.side || 'Unknown')}
         </span>
       </div>
       <div className="grid grid-cols-4 gap-4">
@@ -229,7 +229,7 @@ function DirectionStatsCard({ stat, language }: { stat: DirectionStats; language
 }
 
 // Position Row Component
-function PositionRow({ position }: { position: HistoricalPosition }) {
+function PositionRow({ position, language }: { position: HistoricalPosition; language: Language }) {
   const side = position.side || ''
   const isLong = side.toUpperCase() === 'LONG'
   const realizedPnl = position.realized_pnl || 0
@@ -276,7 +276,7 @@ function PositionRow({ position }: { position: HistoricalPosition }) {
               border: `1px solid ${sideColor}44`,
             }}
           >
-            {side}
+            {language === 'zh' ? (side.toUpperCase() === 'LONG' ? '多头' : side.toUpperCase() === 'SHORT' ? '空头' : side) : side}
           </span>
         </div>
       </td>
@@ -368,7 +368,7 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
         setSymbolStats(data.symbol_stats || [])
         setDirectionStats(data.direction_stats || [])
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load history')
+        setError(err instanceof Error ? err.message : (language === 'zh' ? '加载历史记录失败' : 'Failed to load history'))
       } finally {
         setLoading(false)
       }
@@ -645,7 +645,7 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
           </div>
           <div className="space-y-1">
             {symbolStats.slice(0, 10).map((stat) => (
-              <SymbolStatsRow key={stat.symbol} stat={stat} />
+              <SymbolStatsRow key={stat.symbol} stat={stat} language={language} />
             ))}
           </div>
         </div>
@@ -699,7 +699,7 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
                     color: filterSide === side ? '#192434' : '#707e92',
                   }}
                 >
-                  {side === 'all' ? t('positionHistory.all', language) : side}
+                  {side === 'all' ? t('positionHistory.all', language) : language === 'zh' ? (side === 'LONG' ? '多头' : '空头') : side}
                 </button>
               ))}
             </div>
@@ -795,7 +795,7 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
             </thead>
             <tbody>
               {filteredPositions.map((position) => (
-                <PositionRow key={position.id} position={position} />
+                <PositionRow key={position.id} position={position} language={language} />
               ))}
             </tbody>
           </table>
@@ -838,7 +838,7 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
             {/* Page size selector */}
             <div className="flex items-center gap-2">
               <span className="text-xs" style={{ color: '#707e92' }}>
-                {language === 'zh' ? 'Per page' : 'Per page'}:
+                {language === 'zh' ? '每页条数' : 'Per page'}:
               </span>
               <NofxSelect
                 value={pageSize}

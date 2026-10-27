@@ -3,6 +3,7 @@ import { ArrowRight, Shield, Activity, CircuitBoard, Wifi, Globe, Zap, Star, Git
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useGitHubStats } from '../../../hooks/useGitHubStats'
+import { useLanguage } from '../../../contexts/LanguageContext'
 import AgentTerminal from '../brand/AgentTerminal'
 
 const tickerLabels: Record<string, string> = {
@@ -17,6 +18,14 @@ const tickerLabels: Record<string, string> = {
 }
 
 export default function TerminalHero() {
+    const { language } = useLanguage()
+    const zh = language === 'zh'
+    const labelFor = (symbol: string) =>
+        symbol === 'PREIPO'
+            ? zh
+                ? '上市前指数'
+                : 'PRE-IPO INDEX'
+            : tickerLabels[symbol] || symbol.toUpperCase()
     const navigate = useNavigate()
 
     // Real-time price state
@@ -119,11 +128,11 @@ export default function TerminalHero() {
                     <div className="space-y-6">
                         <div className="border border-[rgba(25,36,52,0.14)] rounded-sm p-4 bg-nofx-bg-lighter">
                             <h3 className="text-xs font-mono text-nofx-gold mb-4 flex items-center gap-2">
-                                <Activity className="w-3 h-3" /> SYSTEM_DIAGNOSTICS
+                                <Activity className="w-3 h-3" /> {zh ? '系统诊断' : 'SYSTEM_DIAGNOSTICS'}
                             </h3>
                             <div className="space-y-3 font-mono text-[10px] text-nofx-text-muted">
                                 <div className="flex justify-between items-center">
-                                    <span>KERNEL_LATENCY</span>
+                                    <span>{zh ? '内核延迟' : 'KERNEL_LATENCY'}</span>
                                     <span className="text-nofx-accent">12ms</span>
                                 </div>
                                 <div className="w-full h-1 bg-nofx-bg-deeper rounded-full overflow-hidden">
@@ -131,7 +140,7 @@ export default function TerminalHero() {
                                 </div>
 
                                 <div className="flex justify-between items-center">
-                                    <span>MEMORY_INTEGRITY</span>
+                                    <span>{zh ? '内存完整性' : 'MEMORY_INTEGRITY'}</span>
                                     <span className="text-nofx-success">100%</span>
                                 </div>
                                 <div className="w-full h-1 bg-nofx-bg-deeper rounded-full overflow-hidden">
@@ -139,7 +148,7 @@ export default function TerminalHero() {
                                 </div>
 
                                 <div className="flex justify-between items-center">
-                                    <span>UPTIME</span>
+                                    <span>{zh ? '运行时长' : 'UPTIME'}</span>
                                     <span className="text-nofx-text">99.999%</span>
                                 </div>
                             </div>
@@ -148,7 +157,7 @@ export default function TerminalHero() {
                         <div className="p-4 border border-[rgba(25,36,52,0.14)] rounded-sm bg-nofx-bg-lighter">
                             <div className="flex items-center gap-3 text-nofx-text-muted mb-2">
                                 <Shield className="w-4 h-4" />
-                                <span className="text-[10px] font-mono tracking-widest">SECURITY PROTOCOLS</span>
+                                <span className="text-[10px] font-mono tracking-widest">{zh ? '安全协议' : 'SECURITY PROTOCOLS'}</span>
                             </div>
                             <div className="flex gap-1">
                                 <div className="h-1 flex-1 bg-nofx-gold"></div>
@@ -156,16 +165,16 @@ export default function TerminalHero() {
                                 <div className="h-1 flex-1 bg-nofx-gold"></div>
                                 <div className="h-1 flex-1 bg-nofx-bg-deeper"></div>
                             </div>
-                            <div className="mt-2 text-right text-[10px] text-nofx-gold/80 font-mono">LEVEL 3 ACTIVATE</div>
+                            <div className="mt-2 text-right text-[10px] text-nofx-gold/80 font-mono">{zh ? '3 级防护已启用' : 'LEVEL 3 ACTIVATE'}</div>
                         </div>
                     </div>
 
                     {/* Bottom: Network Log */}
                     <div className="font-mono text-[10px] text-nofx-text-muted space-y-1 opacity-70">
-                        <div>&gt; CONNECTING TO MARKET DATA... OK</div>
-                        <div>&gt; SYNCING VENUES (424/424)... OK</div>
-                        <div>&gt; LOADING MULTI-ASSET UNIVERSE... DONE</div>
-                        <div className="animate-pulse">&gt; AWAITING USER INPUT_</div>
+                        <div>{zh ? '> 正在连接市场数据… OK' : '> CONNECTING TO MARKET DATA... OK'}</div>
+                        <div>{zh ? '> 正在同步交易场所 (424/424)… OK' : '> SYNCING VENUES (424/424)... OK'}</div>
+                        <div>{zh ? '> 正在加载多资产市场… 完成' : '> LOADING MULTI-ASSET UNIVERSE... DONE'}</div>
+                        <div className="animate-pulse">{zh ? '> 等待用户输入_' : '> AWAITING USER INPUT_'}</div>
                     </div>
                 </div>
 
@@ -182,20 +191,21 @@ export default function TerminalHero() {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-nofx-gold opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-nofx-gold"></span>
                         </span>
-                        <span className="text-xs font-mono text-nofx-gold tracking-widest">NOFX PROFESSIONAL MULTI-ASSET AGENT OS</span>
+                        <span className="text-xs font-mono text-nofx-gold tracking-widest">{zh ? 'NOFX 专业多资产智能体系统' : 'NOFX PROFESSIONAL MULTI-ASSET AGENT OS'}</span>
                     </motion.div>
 
                     {/* Main Title - Massive & Impactful */}
                     {/* Main Title - Massive & Impactful */}
                     <div className="relative z-20">
                         <h1 className="text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-black tracking-tighter leading-[0.9] md:leading-[0.8] mb-6 select-none text-nofx-text">
-                            AGENTIC<br />
-                            <span className="text-nofx-gold animate-shimmer tracking-tight">TRADING</span>
+                            {zh ? '智能体' : 'AGENTIC'}<br />
+                            <span className="text-nofx-gold animate-shimmer tracking-tight">{zh ? '交易' : 'TRADING'}</span>
                         </h1>
 
                         <p className="max-w-xl text-nofx-text-muted text-lg mb-6 font-light leading-relaxed">
-                            Professional AI trading agents for US stocks, commodities, FX and Pre-IPO synthetic markets.
-                            Build institutional-grade strategies by chatting in plain English.
+                            {zh
+                                ? '面向美股、大宗商品、外汇和上市前合成市场的专业 AI 交易智能体。用日常语言对话即可构建机构级策略。'
+                                : 'Professional AI trading agents for US stocks, commodities, FX and Pre-IPO synthetic markets. Build institutional-grade strategies by chatting in plain English.'}
                         </p>
                     </div>
 
@@ -207,10 +217,10 @@ export default function TerminalHero() {
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-nofx-success opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-nofx-success"></span>
                             </span>
-                            Live Data Feeds Active
+                            {zh ? '实时数据流已开启' : 'Live Data Feeds Active'}
                         </div>
                         <div className="flex flex-wrap gap-4 font-mono">
-                            {['US STOCKS', 'COMMODITIES', 'FOREX', 'PRE-IPO'].map((market) => (
+                            {(zh ? ['美股', '大宗商品', '外汇', '上市前市场'] : ['US STOCKS', 'COMMODITIES', 'FOREX', 'PRE-IPO']).map((market) => (
                                 <div key={market} className="relative group cursor-default">
                                     <div className="absolute -inset-0.5 bg-nofx-gold/15 rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition duration-500"></div>
                                     <div className="relative flex items-center gap-3 px-6 py-3 rounded-lg bg-nofx-bg-lighter border border-[rgba(25,36,52,0.14)] hover:border-nofx-gold/50 transition-all duration-300">
@@ -238,7 +248,7 @@ export default function TerminalHero() {
                             style={{ clipPath: 'polygon(10% 0, 100% 0, 100% 70%, 90% 100%, 0 100%, 0 30%)' }}
                         >
                             <span className="relative z-10 flex items-center gap-2">
-                                START THE AUTOPILOT <ArrowRight className="w-4 h-4" />
+                                {zh ? '启动自动驾驶' : 'START THE AUTOPILOT'} <ArrowRight className="w-4 h-4" />
                             </span>
                             <div className="absolute inset-0 bg-nofx-text/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                         </button>
@@ -246,14 +256,15 @@ export default function TerminalHero() {
                             onClick={() => document.getElementById('market-scanner')?.scrollIntoView({ behavior: 'smooth' })}
                             className="px-8 py-4 font-bold font-mono tracking-wider text-nofx-text border border-[rgba(25,36,52,0.2)] rounded-sm hover:border-nofx-gold/50 hover:text-nofx-gold transition-colors"
                         >
-                            SEE IT WORK
+                            {zh ? '查看演示' : 'SEE IT WORK'}
                         </button>
                     </div>
 
                     {/* Plain-language promise — the anti-jargon line */}
                     <p className="mt-5 text-sm text-nofx-text-muted font-mono">
-                        Self-hosted &amp; open source · about $13 is enough to start · guided
-                        setup, no API keys — first trade in minutes
+                        {zh
+                            ? '自托管且开源 · 约 $13 即可开始 · 引导式设置，无需 API 密钥 — 几分钟完成第一笔交易'
+                            : 'Self-hosted & open source · about $13 is enough to start · guided setup, no API keys — first trade in minutes'}
                     </p>
 
                     {/* Community Stats Row */}
@@ -287,23 +298,23 @@ export default function TerminalHero() {
             {/* FLOATING TICKER FOOTER */}
             <div className="absolute bottom-0 w-full bg-nofx-bg-lighter border-t border-[rgba(25,36,52,0.14)] backdrop-blur-md z-30 overflow-hidden py-2 flex items-center">
                 <div className="flex animate-marquee whitespace-nowrap gap-12 text-xs font-mono text-nofx-text-muted px-4">
-                    <span className="flex items-center gap-2"><Globe className="w-3 h-3 text-nofx-text-muted" /> GLOBAL MARKET ACCESS</span>
-                    <span className="flex items-center gap-2 text-nofx-gold"><Zap className="w-3 h-3" /> MULTI-ASSET ROUTING ENABLED</span>
-                    <span className="flex items-center gap-2"><Wifi className="w-3 h-3 text-nofx-success" /> LOW LATENCY LINK: 12ms</span>
+                    <span className="flex items-center gap-2"><Globe className="w-3 h-3 text-nofx-text-muted" /> {zh ? '全球市场接入' : 'GLOBAL MARKET ACCESS'}</span>
+                    <span className="flex items-center gap-2 text-nofx-gold"><Zap className="w-3 h-3" /> {zh ? '多资产路由已启用' : 'MULTI-ASSET ROUTING ENABLED'}</span>
+                    <span className="flex items-center gap-2"><Wifi className="w-3 h-3 text-nofx-success" /> {zh ? '低延迟连接：12ms' : 'LOW LATENCY LINK: 12ms'}</span>
 
                     {/* Dynamic Coins */}
                     {Object.entries(prices).map(([symbol, price]) => (
                         <span key={symbol} className="flex items-center gap-2">
-                            {tickerLabels[symbol] || symbol.toUpperCase()} <span className="text-nofx-success">${price}</span>
+                            {labelFor(symbol)} <span className="text-nofx-success">${price}</span>
                         </span>
                     ))}
 
-                    <span className="flex items-center gap-2"><CircuitBoard className="w-3 h-3 text-nofx-accent" /> AI MODEL: Claude Opus 4.6</span>
+                    <span className="flex items-center gap-2"><CircuitBoard className="w-3 h-3 text-nofx-accent" /> {zh ? 'AI 模型：' : 'AI MODEL:'} Claude Opus 4.6</span>
 
                     {/* Duplicate sequence for seamless loop effect (basic set) */}
                     {Object.entries(prices).map(([symbol, price]) => (
                         <span key={`${symbol} -dup`} className="flex items-center gap-2 md:hidden">
-                            {tickerLabels[symbol] || symbol.toUpperCase()} <span className="text-nofx-success">${price}</span>
+                            {labelFor(symbol)} <span className="text-nofx-success">${price}</span>
                         </span>
                     ))}
                 </div>
@@ -316,32 +327,34 @@ export default function TerminalHero() {
 import { OFFICIAL_LINKS } from '../../../constants/branding'
 
 function CommunityStats() {
+    const { language } = useLanguage()
+    const zh = language === 'zh'
     const { stars, forks, contributors, isLoading, error } = useGitHubStats('NoFxAiOS', 'nofx')
 
     const stats = [
         {
-            label: 'GITHUB STARS',
+            label: zh ? 'GitHub 星标' : 'GITHUB STARS',
             value: isLoading ? '...' : (error ? '10,500+' : stars.toLocaleString()),
             icon: Star,
             color: 'text-nofx-gold',
             href: OFFICIAL_LINKS.github
         },
         {
-            label: 'FORKS',
+            label: zh ? '复刻' : 'FORKS',
             value: isLoading ? '...' : (error ? '2,800+' : forks.toLocaleString()),
             icon: GitFork,
             color: 'text-nofx-accent',
             href: `${OFFICIAL_LINKS.github}/fork`
         },
         {
-            label: 'CONTRIBUTORS',
+            label: zh ? '贡献者' : 'CONTRIBUTORS',
             value: isLoading ? '...' : (contributors > 0 ? contributors : '50+'),
             icon: Users,
             color: 'text-nofx-success',
             href: `${OFFICIAL_LINKS.github}/graphs/contributors`
         },
         {
-            label: 'DEV COMMUNITY',
+            label: zh ? '开发者社区' : 'DEV COMMUNITY',
             value: '6,600+',
             icon: MessageCircle,
             color: 'text-nofx-accent',

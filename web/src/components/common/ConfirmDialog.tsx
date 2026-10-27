@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from '../ui/alert-dialog'
 import { setGlobalConfirm } from '../../lib/notify'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 interface ConfirmOptions {
   title?: string
@@ -55,6 +56,9 @@ export function ConfirmDialogProvider({
 }: {
   children: React.ReactNode
 }) {
+  const { language } = useLanguage()
+  const defaultOkText = language === 'zh' ? '确认' : 'Confirm'
+  const defaultCancelText = language === 'zh' ? '取消' : 'Cancel'
   const [state, setState] = useState<ConfirmState>({
     isOpen: false,
     message: '',
@@ -62,18 +66,21 @@ export function ConfirmDialogProvider({
     cancelText: 'Cancel',
   })
 
-  const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
-    return new Promise((resolve) => {
-      setState({
-        isOpen: true,
-        title: options.title,
-        message: options.message,
-        okText: options.okText || 'Confirm',
-        cancelText: options.cancelText || 'Cancel',
-        resolve,
+  const confirm = useCallback(
+    (options: ConfirmOptions): Promise<boolean> => {
+      return new Promise((resolve) => {
+        setState({
+          isOpen: true,
+          title: options.title,
+          message: options.message,
+          okText: options.okText || defaultOkText,
+          cancelText: options.cancelText || defaultCancelText,
+          resolve,
+        })
       })
-    })
-  }, [])
+    },
+    [defaultOkText, defaultCancelText]
+  )
 
   // Register global confirm function
   useEffect(() => {

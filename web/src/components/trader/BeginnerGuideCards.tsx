@@ -38,24 +38,24 @@ export function BeginnerGuideCards({
     {
       key: 'model',
       icon: Brain,
-      title: isZh ? '1. Fast AI' : '1. Fast AI',
+      title: isZh ? '1. 快速 AI' : '1. Fast AI',
       desc: isZh
-        ? 'Start with Claw402 + DeepSeek. No model picking needed for the first run.'
+        ? '从 Claw402 + DeepSeek 开始，首次运行无需挑选模型。'
         : 'Start with Claw402 + DeepSeek. No model picking needed for the first run.',
       meta: walletAddress
         ? isZh
-          ? `Wallet ${truncateAddress(walletAddress)}`
+          ? `钱包 ${truncateAddress(walletAddress)}`
           : `Wallet ${truncateAddress(walletAddress)}`
         : isZh
-          ? 'Pay per call with Base USDC'
+          ? '使用 Base USDC 按次付费'
           : 'Pay per call with Base USDC',
       ready: claw402Ready,
       actionLabel: claw402Ready
         ? isZh
-          ? 'Configured'
+          ? '已配置'
           : 'Configured'
         : isZh
-          ? 'One-click setup'
+          ? '一键设置'
           : 'One-click setup',
       onAction: onQuickSetupClaw402,
       disabled: claw402Ready,
@@ -63,13 +63,13 @@ export function BeginnerGuideCards({
     {
       key: 'exchange',
       icon: Landmark,
-      title: isZh ? '2. Add Exchange' : '2. Add Exchange',
+      title: isZh ? '2. 添加交易所' : '2. Add Exchange',
       desc: isZh
-        ? 'Connect an exchange so the AI can actually place trades.'
+        ? '连接交易所，让 AI 能真正下单交易。'
         : 'Connect an exchange so the AI can actually place trades.',
       meta: exchangeReady
         ? isZh
-          ? 'Ready'
+          ? '已就绪'
           : 'Ready'
         : isZh
           ? 'Binance / OKX / Bybit / Hyperliquid'
@@ -77,10 +77,10 @@ export function BeginnerGuideCards({
       ready: exchangeReady,
       actionLabel: exchangeReady
         ? isZh
-          ? 'Manage'
+          ? '管理'
           : 'Manage'
         : isZh
-          ? 'Configure'
+          ? '配置'
           : 'Configure',
       onAction: onOpenExchange,
       disabled: false,
@@ -88,47 +88,47 @@ export function BeginnerGuideCards({
     {
       key: 'strategy',
       icon: Sparkles,
-      title: isZh ? '3. Pick Strategy' : '3. Pick Strategy',
+      title: isZh ? '3. 选择策略' : '3. Pick Strategy',
       desc: isZh
-        ? 'You can start with a default strategy and fine-tune later.'
+        ? '可以先用默认策略，之后再慢慢微调。'
         : 'You can start with a default strategy and fine-tune later.',
       meta: strategyReady
         ? isZh
-          ? 'Strategy ready'
+          ? '策略已就绪'
           : 'Strategy ready'
         : isZh
-          ? 'Optional, but worth a quick look'
+          ? '可选，但值得快速看一下'
           : 'Optional, but worth a quick look',
       ready: strategyReady,
-      actionLabel: isZh ? 'Open strategy' : 'Open strategy',
+      actionLabel: isZh ? '打开策略' : 'Open strategy',
       onAction: onOpenStrategy,
       disabled: false,
     },
     {
       key: 'trader',
       icon: Rocket,
-      title: isZh ? '4. Create Trader' : '4. Create Trader',
+      title: isZh ? '4. 创建交易员' : '4. Create Trader',
       desc: isZh
-        ? 'Last step: bind your model and exchange, then start running.'
+        ? '最后一步：绑定你的模型和交易所，然后开始运行。'
         : 'Last step: bind your model and exchange, then start running.',
       meta: traderReady
         ? isZh
-          ? 'Trader created, you can add more'
+          ? '交易员已创建，还可以继续添加'
           : 'Trader created, you can add more'
         : canCreateTrader
           ? isZh
-            ? 'Ready to create'
+            ? '可以创建了'
             : 'Ready to create'
         : isZh
-          ? 'Finish the first three steps first'
+          ? '请先完成前三步'
           : 'Finish the first three steps first',
       ready: traderReady,
       actionLabel: traderReady
         ? isZh
-          ? 'Create another'
+          ? '再创建一位'
           : 'Create another'
         : isZh
-          ? 'Create now'
+          ? '立即创建'
           : 'Create now',
       onAction: onCreateTrader,
       disabled: !canCreateTrader,
@@ -140,11 +140,11 @@ export function BeginnerGuideCards({
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.3em] text-nofx-gold/80">
-            {isZh ? 'Quickstart' : 'Quickstart'}
+            {isZh ? '快速开始' : 'Quickstart'}
           </div>
           <h2 className="mt-1 text-xl font-bold text-nofx-text">
             {isZh
-              ? 'Follow these 4 steps to get started fast'
+              ? '按这 4 步快速开始'
               : 'Follow these 4 steps to get started fast'}
           </h2>
         </div>
@@ -174,10 +174,10 @@ export function BeginnerGuideCards({
                 >
                   {card.ready
                     ? isZh
-                      ? 'Ready'
+                      ? '已就绪'
                       : 'Ready'
                     : isZh
-                      ? 'Pending'
+                      ? '待完成'
                       : 'Pending'}
                 </span>
               </div>

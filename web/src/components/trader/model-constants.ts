@@ -5,6 +5,7 @@ export interface Claw402Model {
   name: string
   provider: string
   desc: string
+  descZh: string
   brand: string // key for getModelIcon / getModelColor
   priceIn: number // USD per 1M input tokens (upto pay-as-you-go)
   priceOut: number // USD per 1M output tokens
@@ -50,6 +51,7 @@ export const CLAW402_MODELS: Claw402Model[] = [
     name: 'GPT-6 Astra',
     provider: 'OpenAI',
     desc: 'Most capable · 1.05M context',
+    descZh: '能力最强 · 1.05M 上下文',
     brand: 'openai',
     priceIn: 14.375,
     priceOut: 57.5,
@@ -60,6 +62,7 @@ export const CLAW402_MODELS: Claw402Model[] = [
     name: 'GPT-6.1 Sol',
     provider: 'OpenAI',
     desc: 'Latest workhorse · 1.05M context',
+    descZh: '最新主力 · 1.05M 上下文',
     brand: 'openai',
     priceIn: 2.875,
     priceOut: 11.5,
@@ -70,6 +73,7 @@ export const CLAW402_MODELS: Claw402Model[] = [
     name: 'GPT-6 Sol',
     provider: 'OpenAI',
     desc: 'Previous workhorse · 1.05M context',
+    descZh: '上一代主力 · 1.05M 上下文',
     brand: 'openai',
     priceIn: 2.875,
     priceOut: 11.5,
@@ -80,6 +84,7 @@ export const CLAW402_MODELS: Claw402Model[] = [
     name: 'GPT-6 Luna',
     provider: 'OpenAI',
     desc: 'Fast and cost-efficient · 1.05M context',
+    descZh: '快速且高性价比 · 1.05M 上下文',
     brand: 'openai',
     priceIn: 0.14375,
     priceOut: 0.575,
@@ -90,6 +95,7 @@ export const CLAW402_MODELS: Claw402Model[] = [
     name: 'GPT-5.6 Sol',
     provider: 'OpenAI',
     desc: 'Previous flagship',
+    descZh: '上一代旗舰',
     brand: 'openai',
     priceIn: 5.75,
     priceOut: 34.5,
@@ -99,6 +105,7 @@ export const CLAW402_MODELS: Claw402Model[] = [
     name: 'GPT-5.6 Terra',
     provider: 'OpenAI',
     desc: 'Balanced',
+    descZh: '均衡之选',
     brand: 'openai',
     priceIn: 2.875,
     priceOut: 17.25,
@@ -108,6 +115,7 @@ export const CLAW402_MODELS: Claw402Model[] = [
     name: 'GPT-5.6 Luna',
     provider: 'OpenAI',
     desc: 'Cost-efficient',
+    descZh: '高性价比',
     brand: 'openai',
     priceIn: 1.15,
     priceOut: 6.9,
@@ -117,6 +125,7 @@ export const CLAW402_MODELS: Claw402Model[] = [
     name: 'Claude Fable 5',
     provider: 'Anthropic',
     desc: 'Most capable',
+    descZh: '能力最强',
     brand: 'claude',
     priceIn: 14.375,
     priceOut: 57.5,
@@ -126,6 +135,7 @@ export const CLAW402_MODELS: Claw402Model[] = [
     name: 'Claude Opus 4.8',
     provider: 'Anthropic',
     desc: 'Coding & agents flagship',
+    descZh: '编程与智能体旗舰',
     brand: 'claude',
     priceIn: 7.1875,
     priceOut: 28.75,
@@ -135,6 +145,7 @@ export const CLAW402_MODELS: Claw402Model[] = [
     name: 'DeepSeek V4.1 Flash',
     provider: 'DeepSeek',
     desc: 'Fast general model',
+    descZh: '快速通用模型',
     brand: 'deepseek',
     priceIn: 0.345,
     priceOut: 1.38,
@@ -144,6 +155,7 @@ export const CLAW402_MODELS: Claw402Model[] = [
     name: 'DeepSeek-V4 Pro',
     provider: 'DeepSeek',
     desc: 'Advanced reasoning',
+    descZh: '高级推理',
     brand: 'deepseek',
     priceIn: 1.518,
     priceOut: 4.554,
@@ -153,11 +165,21 @@ export const CLAW402_MODELS: Claw402Model[] = [
     name: 'GLM-5',
     provider: 'Z.ai',
     desc: 'Deep reasoning flagship',
+    descZh: '深度推理旗舰',
     brand: 'zhipu',
     priceIn: 1.15,
     priceOut: 3.68,
   },
 ]
+
+// Display description for a Claw402 model in the requested language.
+// `desc` stays the canonical English text; `descZh` is the Chinese display text.
+export function getClaw402ModelDesc(
+  model: Claw402Model,
+  language?: string
+): string {
+  return language === 'zh' ? model.descZh : model.desc
+}
 
 // AI Provider configuration - default models and API links
 export const AI_PROVIDER_CONFIG: Record<string, AIProviderConfig> = {
@@ -176,9 +198,10 @@ export function getExchangeDisplayName(
     exchange_type?: string
     name: string
     account_name?: string
-  }[]
+  }[],
+  language?: string
 ): string {
-  if (!exchangeId) return 'Unknown'
+  if (!exchangeId) return language === 'zh' ? '未知' : 'Unknown'
   const exchange = exchanges.find((e) => e.id === exchangeId)
   if (!exchange) return exchangeId.substring(0, 8).toUpperCase() + '...' // Show truncated UUID if not found
   const typeName = exchange.exchange_type?.toUpperCase() || exchange.name

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 /**
  * OrchestrationTopology renders the decision funnel as a chain of tightly-packed
@@ -86,6 +87,8 @@ function splitDedup(items: FunnelItem[]) {
 }
 
 export function OrchestrationTopology({ layers, className }: OrchestrationTopologyProps) {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
   const { prepared, cellsByLayer, realByLayer, height, cy, colX } = useMemo(() => {
     const prep = layers.map((l) => ({ ...l, ...splitDedup(l.items) }))
     const xs = prep.map((_, i) => LAYER_START + i * LAYER_STEP)
@@ -158,16 +161,16 @@ export function OrchestrationTopology({ layers, className }: OrchestrationTopolo
 
   return (
     <svg width="100%" viewBox={`0 0 ${VB_W} ${height}`} role="img"
-      aria-label="Decision funnel matrix: flow, signal, decision, execute, hold"
+      aria-label={isZh ? '决策漏斗矩阵：流量、信号、决策、执行、持有' : 'Decision funnel matrix: flow, signal, decision, execute, hold'}
       className={className} style={{ display: 'block' }}>
 
       {prepared.map((d, li) => (
         <g key={d.key} fontFamily="var(--tm-mono)">
           <text x={colX[li] - 2} y={12} fontSize={8} fill="var(--tm-muted)" style={{ letterSpacing: '0.08em' }}>{d.title}</text>
           <text x={colX[li] - 2} y={23} fontSize={8}>
-            <tspan fill="var(--tm-up)">L{d.longs.length}</tspan>
+            <tspan fill="var(--tm-up)">{isZh ? '多' : 'L'}{d.longs.length}</tspan>
             <tspan fill="var(--tm-muted)"> </tspan>
-            <tspan fill="var(--tm-dn)">S{d.shorts.length}</tspan>
+            <tspan fill="var(--tm-dn)">{isZh ? '空' : 'S'}{d.shorts.length}</tspan>
           </text>
         </g>
       ))}

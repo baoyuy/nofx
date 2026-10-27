@@ -11,51 +11,61 @@ import {
   Zap,
 } from 'lucide-react'
 import { ROUTES } from '../../router/paths'
+import { useLanguage } from '../../contexts/LanguageContext'
 
-const setupSteps = [
+function getSetupSteps(isZh: boolean) {
+  return [
   {
-    title: 'Create your NOFX account',
+    title: isZh ? '创建你的 NOFX 账户' : 'Create your NOFX account',
     detail:
-      'Your account keeps the Autopilot configuration, wallet authorization state, and trading dashboard in one place.',
+      isZh ? '你的账户将 Autopilot 配置、钱包授权状态和交易看板集中在一处管理。' : 'Your account keeps the Autopilot configuration, wallet authorization state, and trading dashboard in one place.',
     icon: KeyRound,
-    action: 'Create account',
+    action: isZh ? '创建账户' : 'Create account',
     to: ROUTES.register,
   },
   {
-    title: 'Fund the AI fee wallet',
+    title: isZh ? '为 AI 手续费钱包充值' : 'Fund the AI fee wallet',
     detail:
-      'NOFX prepares a Base USDC wallet for Claw402.ai data and model calls. This wallet is separate from trading collateral.',
+      isZh ? 'NOFX 会准备一个 Base USDC 钱包，用于 Claw402.ai 数据和模型调用。该钱包与交易抵押品分开。' : 'NOFX prepares a Base USDC wallet for Claw402.ai data and model calls. This wallet is separate from trading collateral.',
     icon: CircleDollarSign,
-    action: 'Open deposit QR',
+    action: isZh ? '打开充值二维码' : 'Open deposit QR',
     to: ROUTES.login,
     returnUrl: `${ROUTES.traders}?setup=claw402`,
   },
   {
-    title: 'Authorize Hyperliquid',
+    title: isZh ? '授权 Hyperliquid' : 'Authorize Hyperliquid',
     detail:
-      'Connect your trading wallet, approve the NOFX Agent, and approve the builder fee. Funds remain in your Hyperliquid account.',
+      isZh ? '连接你的交易钱包，批准 NOFX Agent，并批准 builder 费用。资金保留在你的 Hyperliquid 账户中。' : 'Connect your trading wallet, approve the NOFX Agent, and approve the builder fee. Funds remain in your Hyperliquid account.',
     icon: Wallet,
-    action: 'Connect exchange',
+    action: isZh ? '连接交易所' : 'Connect exchange',
     to: ROUTES.login,
     returnUrl: `${ROUTES.traders}?setup=hyperliquid`,
   },
   {
-    title: 'Deposit trading USDC',
+    title: isZh ? '存入交易 USDC' : 'Deposit trading USDC',
     detail:
-      'Add USDC on Hyperliquid, then start NOFX Autopilot. The strategy is created and launched automatically.',
+      isZh ? '在 Hyperliquid 中充入 USDC，然后启动 NOFX Autopilot。策略会自动创建并启动。' : 'Add USDC on Hyperliquid, then start NOFX Autopilot. The strategy is created and launched automatically.',
     icon: Zap,
-    action: 'Open Hyperliquid',
+    action: isZh ? '打开 Hyperliquid' : 'Open Hyperliquid',
     href: 'https://app.hyperliquid.xyz/',
   },
-]
+  ]
+}
 
-const pipeline = [
-  'Read the live Claw402.ai board, with US stocks prioritized before crypto.',
-  'Load current direction, direction history, and cost/liquidation structure for each candidate.',
-  'Confirm with raw OHLCV candles, then trade full-size 10x only when the setup is strong enough.',
-]
+function getPipeline(isZh: boolean) {
+  return [
+  isZh ? '读取 Claw402.ai 实时榜单，美股优先于加密货币。' : 'Read the live Claw402.ai board, with US stocks prioritized before crypto.',
+  isZh ? '加载每个候选标的的当前方向、方向历史以及成本/强平结构。' : 'Load current direction, direction history, and cost/liquidation structure for each candidate.',
+  isZh ? '用原始 OHLCV K 线确认，只有形态足够强时才以 10 倍杠杆全仓交易。' : 'Confirm with raw OHLCV candles, then trade full-size 10x only when the setup is strong enough.',
+  ]
+}
 
 export function TraderLaunchGuestPage() {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
+  const setupSteps = getSetupSteps(isZh)
+  const pipeline = getPipeline(isZh)
+
   return (
     <div className="min-h-[calc(100vh-4rem)] overflow-hidden bg-nofx-bg px-4 py-10 md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
@@ -66,12 +76,12 @@ export function TraderLaunchGuestPage() {
               NOFX Autopilot
             </div>
             <h1 className="max-w-3xl text-4xl font-bold tracking-tight text-nofx-text md:text-5xl">
-              One strategy. Four setup steps. Then it trades.
+              {isZh ? '一个策略，四步设置，然后开始交易。' : 'One strategy. Four setup steps. Then it trades.'}
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-nofx-text-muted">
-              NOFX runs a single Claw402-driven strategy: board, per-market
-              details, liquidation structure, candles, execution. No strategy
-              picker, no manual symbol picking required.
+              {isZh
+                ? 'NOFX 只运行一个由 Claw402 驱动的策略：榜单、各市场详情、强平结构、K 线、执行。无需挑选策略，也无需手动选币。'
+                : 'NOFX runs a single Claw402-driven strategy: board, per-market details, liquidation structure, candles, execution. No strategy picker, no manual symbol picking required.'}
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -84,14 +94,14 @@ export function TraderLaunchGuestPage() {
                 }
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-nofx-gold px-5 py-3 text-sm font-bold text-white transition hover:bg-nofx-gold/90"
               >
-                Start setup
+                {isZh ? '开始设置' : 'Start setup'}
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 to={ROUTES.register}
                 className="inline-flex items-center justify-center rounded-xl border border-nofx-gold/20 bg-nofx-bg-deeper px-5 py-3 text-sm font-semibold text-nofx-text transition hover:border-nofx-gold/40 hover:bg-nofx-bg-deeper"
               >
-                Create account
+                {isZh ? '创建账户' : 'Create account'}
               </Link>
             </div>
           </div>
@@ -163,12 +173,12 @@ export function TraderLaunchGuestPage() {
         <section className="grid gap-5 rounded-2xl border border-nofx-gold/20 bg-nofx-bg-lighter p-5 md:grid-cols-[0.78fr_1.22fr] md:p-6">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-nofx-gold">
-              No trading wallet yet?
+              {isZh ? '还没有交易钱包？' : 'No trading wallet yet?'}
             </div>
             <p className="mt-3 text-sm leading-6 text-nofx-text-muted">
-              NOFX does not need your main-wallet private key. Install or unlock
-              an EVM wallet, fund Hyperliquid with USDC, then authorize the NOFX
-              Agent after sign-in.
+              {isZh
+                ? 'NOFX 不需要你的主钱包私钥。安装或解锁一个 EVM 钱包，为 Hyperliquid 充入 USDC，登录后授权 NOFX Agent。'
+                : 'NOFX does not need your main-wallet private key. Install or unlock an EVM wallet, fund Hyperliquid with USDC, then authorize the NOFX Agent after sign-in.'}
             </p>
           </div>
           <div className="grid gap-3 lg:grid-cols-3">
@@ -179,9 +189,9 @@ export function TraderLaunchGuestPage() {
               className="group rounded-xl border border-nofx-gold/20 bg-nofx-bg-deeper p-4 transition hover:border-nofx-gold/30 hover:bg-nofx-gold/6"
             >
               <Download className="mb-3 h-4 w-4 text-nofx-gold" />
-              <div className="font-semibold text-nofx-text">Install Rabby</div>
+              <div className="font-semibold text-nofx-text">{isZh ? '安装 Rabby' : 'Install Rabby'}</div>
               <p className="mt-2 text-sm leading-6 text-nofx-text-muted">
-                Create or import an EVM wallet before connecting to Hyperliquid.
+                {isZh ? '连接 Hyperliquid 前，先创建或导入一个 EVM 钱包。' : 'Create or import an EVM wallet before connecting to Hyperliquid.'}
               </p>
             </a>
             <a
@@ -193,8 +203,9 @@ export function TraderLaunchGuestPage() {
               <ExternalLink className="mb-3 h-4 w-4 text-nofx-gold" />
               <div className="font-semibold text-nofx-text">MetaMask</div>
               <p className="mt-2 text-sm leading-6 text-nofx-text-muted">
-                Already use MetaMask? Unlock it, then continue setup inside
-                NOFX.
+                {isZh
+                  ? '已经在用 MetaMask？解锁它，然后在 NOFX 内继续设置。'
+                  : 'Already use MetaMask? Unlock it, then continue setup inside NOFX.'}
               </p>
             </a>
             <a
@@ -205,11 +216,12 @@ export function TraderLaunchGuestPage() {
             >
               <ExternalLink className="mb-3 h-4 w-4 text-nofx-gold" />
               <div className="font-semibold text-nofx-text">
-                Open Hyperliquid
+                {isZh ? '打开 Hyperliquid' : 'Open Hyperliquid'}
               </div>
               <p className="mt-2 text-sm leading-6 text-nofx-text-muted">
-                Deposit USDC there. Trading funds stay in your Hyperliquid
-                account.
+                {isZh
+                  ? '在那里存入 USDC。交易资金保留在你的 Hyperliquid 账户中。'
+                  : 'Deposit USDC there. Trading funds stay in your Hyperliquid account.'}
               </p>
             </a>
           </div>
@@ -218,11 +230,12 @@ export function TraderLaunchGuestPage() {
         <section className="grid gap-4 rounded-2xl border border-nofx-gold/20 bg-nofx-bg-lighter p-5 md:grid-cols-[0.72fr_1.28fr] md:p-6">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-nofx-gold">
-              What runs after launch
+              {isZh ? '启动后运行什么' : 'What runs after launch'}
             </div>
             <p className="mt-3 text-sm leading-6 text-nofx-text-muted">
-              The same production path runs every cycle. The interface only asks
-              you to fund, authorize, and start.
+              {isZh
+                ? '每个周期都运行同一条生产路径。界面只要求你充值、授权和启动。'
+                : 'The same production path runs every cycle. The interface only asks you to fund, authorize, and start.'}
             </p>
           </div>
           <div className="grid gap-3 lg:grid-cols-3">

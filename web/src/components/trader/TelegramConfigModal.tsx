@@ -375,7 +375,7 @@ export function TelegramConfigModal({ onClose, language }: TelegramConfigModalPr
                       <div className="w-2 h-2 rounded-full bg-nofx-success shrink-0" />
                       <div className="min-w-0">
                         <div className="text-xs font-mono" style={{ color: '#707e92' }}>
-                          Bot Token
+                          {language === 'zh' ? '机器人令牌' : 'Bot Token'}
                         </div>
                         <div className="text-sm font-mono truncate" style={{ color: '#192434' }}>
                           {config.token_masked}

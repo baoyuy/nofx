@@ -192,7 +192,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
           style={{ background: '#ffffff', border: '1px solid rgba(25,36,52, 0.14)' }}
         >
           <div className="text-xs mb-1" style={{ color: '#707e92' }}>
-            Cycle #{data.cycle != null ? data.cycle : '—'}
+            {language === 'zh' ? '周期' : 'Cycle'} #{data.cycle != null ? data.cycle : '—'}
           </div>
           <div className="font-bold mono" style={{ color: '#192434' }}>
             {data.raw_equity.toFixed(2)} USDT

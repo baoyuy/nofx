@@ -6,17 +6,17 @@ import { useLanguage } from '../../contexts/LanguageContext'
 
 const labels = {
   zh: {
-    welcome: 'Welcome to NOFX',
-    subtitle: 'Create your account to get started',
-    email: 'Email',
+    welcome: '欢迎使用 NOFX',
+    subtitle: '创建您的账户，开始使用',
+    email: '邮箱',
     emailPlaceholder: 'you@example.com',
-    password: 'Password',
-    passwordPlaceholder: 'At least 8 characters',
-    passwordError: 'Password must be at least 8 characters',
-    submit: 'Get Started',
-    submitting: 'Creating account...',
-    setupFailed: 'Setup failed, please try again',
-    singleUser: 'Single-user system — this is the only account',
+    password: '密码',
+    passwordPlaceholder: '至少 8 个字符',
+    passwordError: '密码至少需要 8 个字符',
+    submit: '开始使用',
+    submitting: '正在创建账户...',
+    setupFailed: '设置失败，请重试',
+    singleUser: '单用户系统 — 这是唯一的账户',
   },
   en: {
     welcome: 'Welcome to NOFX',

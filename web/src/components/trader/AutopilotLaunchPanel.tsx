@@ -67,12 +67,12 @@ function formatUSDC(value: number) {
   }).format(value)
 }
 
-async function copyText(value: string, label: string) {
+async function copyText(value: string, label: string, isZh = false) {
   try {
     await navigator.clipboard.writeText(value)
-    toast.success(`${label} copied`)
+    toast.success(isZh ? `${label}已复制` : `${label} copied`)
   } catch {
-    toast.error('Copy failed')
+    toast.error(isZh ? '复制失败' : 'Copy failed')
   }
 }
 
@@ -282,7 +282,7 @@ export function AutopilotLaunchPanel({
         toast.warning(outcome.warning)
       }
       await onRefresh()
-      toast.success('NOFX Autopilot is running')
+      toast.success(isZh ? 'NOFX Autopilot 正在运行' : 'NOFX Autopilot is running')
       navigate(buildDashboardPath(outcome.traderId))
     } finally {
       setLaunching(false)
@@ -297,15 +297,17 @@ export function AutopilotLaunchPanel({
     action?: JSX.Element
   }> = [
     {
-      title: 'Step 1 · Fund the AI wallet ($1+)',
+      title: isZh ? '步骤 1 · 为 AI 钱包充值（$1 起）' : 'Step 1 · Fund the AI wallet ($1+)',
       detail:
-        'The AI pays a tiny fee each time it thinks. Send $1 or more of USDC on the Base network to this address — from Binance, OKX, Coinbase or any wallet. Separate from your trading money.',
+        isZh ? 'AI 每次思考都会支付一笔小额费用。将 1 美元或以上的 USDC 通过 Base 网络发送到此地址——可从 Binance、OKX、Coinbase 或任意钱包转入。与你的交易资金分开存放。' : 'The AI pays a tiny fee each time it thinks. Send $1 or more of USDC on the Base network to this address — from Binance, OKX, Coinbase or any wallet. Separate from your trading money.',
       status: feeReady ? 'ready' : 'action',
       meta: feeWalletAddress
         ? `${shortAddress(feeWalletAddress)} · ${formatUSDC(feeWalletBalance)} USDC${
-            feeReady ? '' : ` · needs ≥ ${minAIFeeUSDC} USDC`
+            feeReady ? '' : isZh ? ` · 需要 ≥ ${minAIFeeUSDC} USDC` : ` · needs ≥ ${minAIFeeUSDC} USDC`
           }`
-        : 'Takes 1 minute — we create the wallet for you',
+        : isZh
+          ? '只需 1 分钟——我们为你创建钱包'
+          : 'Takes 1 minute — we create the wallet for you',
       action: feeWalletAddress ? (
         <div className="flex flex-wrap items-center gap-3">
           <button
@@ -314,15 +316,15 @@ export function AutopilotLaunchPanel({
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-nofx-gold hover:text-nofx-accent"
           >
             <CircleDollarSign className="h-3.5 w-3.5" />
-            Deposit
+            {isZh ? '充值' : 'Deposit'}
           </button>
           <button
             type="button"
-            onClick={() => void copyText(feeWalletAddress, 'AI fee wallet')}
+            onClick={() => void copyText(feeWalletAddress, isZh ? 'AI 手续费钱包' : 'AI fee wallet', isZh)}
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-nofx-gold hover:text-nofx-accent"
           >
             <Copy className="h-3.5 w-3.5" />
-            Copy
+            {isZh ? '复制' : 'Copy'}
           </button>
         </div>
       ) : (
@@ -332,18 +334,18 @@ export function AutopilotLaunchPanel({
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-nofx-gold hover:text-nofx-accent"
         >
           <ArrowRight className="h-3.5 w-3.5" />
-          Create
+          {isZh ? '创建' : 'Create'}
         </button>
       ),
     },
     {
-      title: 'Step 2 · Connect Hyperliquid',
+      title: isZh ? '步骤 2 · 连接 Hyperliquid' : 'Step 2 · Connect Hyperliquid',
       detail:
-        'Approve NOFX once with your crypto wallet (Rabby or MetaMask). This lets the AI place trades for you — it can never withdraw your money.',
+        isZh ? '用你的加密钱包（Rabby 或 MetaMask）授权 NOFX 一次。这样 AI 就能替你下单交易——它永远无法提取你的资金。' : 'Approve NOFX once with your crypto wallet (Rabby or MetaMask). This lets the AI place trades for you — it can never withdraw your money.',
       status: hyperliquidConnected ? 'ready' : 'action',
       meta: hyperliquidExchange?.hyperliquidWalletAddr
-        ? `${shortAddress(hyperliquidExchange.hyperliquidWalletAddr)} · ${hyperliquidConnected ? 'authorized' : 'authorization not verified — reconnect'} `
-        : 'A few clicks + 3 wallet signatures',
+        ? `${shortAddress(hyperliquidExchange.hyperliquidWalletAddr)} · ${hyperliquidConnected ? (isZh ? '已授权' : 'authorized') : (isZh ? '授权未验证——请重新连接' : 'authorization not verified — reconnect')} `
+        : isZh ? '几次点击 + 3 次钱包签名' : 'A few clicks + 3 wallet signatures',
       action: (
         <button
           type="button"
@@ -351,37 +353,43 @@ export function AutopilotLaunchPanel({
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-nofx-gold hover:text-nofx-accent"
         >
           <Wallet className="h-3.5 w-3.5" />
-          Open
+          {isZh ? '打开' : 'Open'}
         </button>
       ),
     },
     {
-      title: 'Step 3 · Add trading money ($12+)',
+      title: isZh ? '步骤 3 · 充入交易资金（$12 起）' : 'Step 3 · Add trading money ($12+)',
       detail:
-        'Deposit USDC into your Hyperliquid account (app.hyperliquid.xyz → Deposit, USDC on Arbitrum). This is what the AI trades with — start small, you can add more anytime.',
+        isZh ? '将 USDC 存入你的 Hyperliquid 账户（app.hyperliquid.xyz → 充值，Arbitrum 上的 USDC）。这是 AI 用来交易的资金——先从小额开始，随时可以追加。' : 'Deposit USDC into your Hyperliquid account (app.hyperliquid.xyz → Deposit, USDC on Arbitrum). This is what the AI trades with — start small, you can add more anytime.',
       status: tradingBalanceReady
         ? 'ready'
         : hyperliquidConnected
           ? 'action'
           : 'blocked',
       meta: hyperliquidConnected
-        ? `${formatUSDC(tradingBalance)} USDC available${
-            tradingBalanceReady ? '' : ` · needs ≥ ${minTradingUSDC} USDC`
-          }`
-        : 'Finish step 2 first',
+        ? isZh
+          ? `${formatUSDC(tradingBalance)} USDC 可用${
+              tradingBalanceReady ? '' : ` · 需要 ≥ ${minTradingUSDC} USDC`
+            }`
+          : `${formatUSDC(tradingBalance)} USDC available${
+              tradingBalanceReady ? '' : ` · needs ≥ ${minTradingUSDC} USDC`
+            }`
+        : isZh
+          ? '请先完成步骤 2'
+          : 'Finish step 2 first',
     },
     {
-      title: 'Step 4 · Press start',
+      title: isZh ? '步骤 4 · 点击启动' : 'Step 4 · Press start',
       detail:
-        'The AI reads the market every few minutes, picks its trades, and manages them on its own. Watch every decision live on the dashboard — stop it with one click anytime.',
+        isZh ? 'AI 每隔几分钟读取一次市场，自行挑选交易并管理持仓。在看板上实时观看每一个决策——随时一键停止。' : 'The AI reads the market every few minutes, picks its trades, and manages them on its own. Watch every decision live on the dashboard — stop it with one click anytime.',
       status: allReady ? 'ready' : 'blocked',
       meta: autopilotTrader?.is_running
-        ? 'Running — open the dashboard to watch'
+        ? isZh ? '运行中——打开看板观看' : 'Running — open the dashboard to watch'
         : autopilotTrader
-          ? 'Ready to start'
+          ? isZh ? '可以启动了' : 'Ready to start'
           : allReady
-            ? 'Everything is ready — press the button'
-            : 'Unlocks when steps 1–3 are green',
+            ? isZh ? '一切就绪——点击按钮启动' : 'Everything is ready — press the button'
+            : isZh ? '步骤 1–3 全部通过后解锁' : 'Unlocks when steps 1–3 are green',
     },
   ]
 
@@ -393,7 +401,7 @@ export function AutopilotLaunchPanel({
           onClick={() => navigate(ROUTES.welcome)}
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-nofx-gold px-4 py-3 text-sm font-bold text-white hover:bg-nofx-accent"
         >
-          Set up the AI wallet
+          {isZh ? '设置 AI 钱包' : 'Set up the AI wallet'}
           <ArrowRight className="h-4 w-4" />
         </button>
       )
@@ -414,7 +422,7 @@ export function AutopilotLaunchPanel({
           }}
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-nofx-gold px-4 py-3 text-sm font-bold text-white hover:bg-nofx-accent"
         >
-          Connect Hyperliquid
+          {isZh ? '连接 Hyperliquid' : 'Connect Hyperliquid'}
           <ArrowRight className="h-4 w-4" />
         </button>
       )
@@ -428,7 +436,7 @@ export function AutopilotLaunchPanel({
           rel="noreferrer"
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-nofx-gold px-4 py-3 text-sm font-bold text-white hover:bg-nofx-accent"
         >
-          Deposit USDC on Hyperliquid
+          {isZh ? '在 Hyperliquid 充值 USDC' : 'Deposit USDC on Hyperliquid'}
           <ExternalLink className="h-4 w-4" />
         </a>
       )
@@ -443,7 +451,7 @@ export function AutopilotLaunchPanel({
           }
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-nofx-success px-4 py-3 text-sm font-bold text-white hover:bg-nofx-success/80"
         >
-          Open dashboard
+          {isZh ? '打开看板' : 'Open dashboard'}
           <ArrowRight className="h-4 w-4" />
         </button>
       )
@@ -461,7 +469,7 @@ export function AutopilotLaunchPanel({
         ) : (
           <Zap className="h-4 w-4" />
         )}
-        Start NOFX Autopilot
+        {isZh ? '启动 NOFX Autopilot' : 'Start NOFX Autopilot'}
       </button>
     )
   }
@@ -477,14 +485,15 @@ export function AutopilotLaunchPanel({
             <div>
               <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-nofx-gold/25 bg-nofx-gold/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-nofx-gold">
                 <ShieldCheck className="h-3.5 w-3.5" />
-                Guided Launch
+                {isZh ? '引导启动' : 'Guided Launch'}
               </div>
               <h2 className="text-2xl font-bold tracking-tight text-nofx-text md:text-3xl">
-                Start NOFX Autopilot in minutes
+                {isZh ? '几分钟内启动 NOFX Autopilot' : 'Start NOFX Autopilot in minutes'}
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-nofx-text-muted">
-                Four small steps, about $13 total. No API keys, no config files
-                — the AI trades for you, and you can stop it anytime.
+                {isZh
+                  ? '四个小步骤，总共约 $13。无需 API 密钥，无需配置文件——AI 替你交易，随时可以停止。'
+                  : 'Four small steps, about $13 total. No API keys, no config files — the AI trades for you, and you can stop it anytime.'}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -497,7 +506,7 @@ export function AutopilotLaunchPanel({
                 <RefreshCw
                   className={`h-3.5 w-3.5 ${refreshing || walletLoading ? 'animate-spin' : ''}`}
                 />
-                Refresh
+                {isZh ? '刷新' : 'Refresh'}
               </button>
               {renderPrimaryAction()}
             </div>
@@ -550,20 +559,21 @@ export function AutopilotLaunchPanel({
         <aside className="border-t border-nofx-gold/20 bg-nofx-bg p-5 md:p-6 xl:border-l xl:border-t-0">
           <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-nofx-text">
             <Wallet className="h-4 w-4 text-nofx-gold" />
-            Hyperliquid setup
+            {isZh ? 'Hyperliquid 设置' : 'Hyperliquid setup'}
           </div>
           {hyperliquidConnected ? (
             <div className="rounded-lg border border-nofx-success/25 bg-nofx-success/10 p-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-nofx-success">
                 <CheckCircle2 className="h-4 w-4" />
-                Trading authorization is ready
+                {isZh ? '交易授权已就绪' : 'Trading authorization is ready'}
               </div>
               <div className="mt-2 font-mono text-xs text-nofx-success/90">
                 {shortAddress(hyperliquidExchange?.hyperliquidWalletAddr)}
               </div>
               <p className="mt-3 text-xs leading-5 text-nofx-text-muted">
-                Funds stay in your Hyperliquid account. NOFX only stores the
-                authorized Agent key required for automated execution.
+                {isZh
+                  ? '资金保留在你的 Hyperliquid 账户中。NOFX 只保存自动执行所需的已授权 Agent 密钥。'
+                  : 'Funds stay in your Hyperliquid account. NOFX only stores the authorized Agent key required for automated execution.'}
               </p>
             </div>
           ) : (

@@ -82,17 +82,17 @@ export function LoginPage() {
             <div className="inline-flex items-center gap-2 mb-7 px-3 py-1 rounded-full border border-nofx-gold/20 bg-nofx-gold/6">
               <div className="w-1.5 h-1.5 rounded-full bg-nofx-gold" />
               <span className="text-xs font-medium text-nofx-gold">
-                Your trading workspace
+                {language === 'zh'
+                  ? '你的交易工作台'
+                  : 'Your trading workspace'}
               </span>
             </div>
             <h2 className="text-4xl xl:text-5xl font-bold tracking-tight text-nofx-text leading-[1.05]">
               {language === 'zh' ? (
                 <>
-                  AI-Powered
+                  AI 驱动
                   <br />
-                  <span className="text-nofx-gold">
-                    Multi-Market Trading Terminal
-                  </span>
+                  <span className="text-nofx-gold">多市场交易终端</span>
                 </>
               ) : language === 'id' ? (
                 <>
@@ -110,7 +110,7 @@ export function LoginPage() {
             </h2>
             <p className="mt-5 text-nofx-text-muted text-base leading-relaxed max-w-md">
               {language === 'zh'
-                ? 'Plug into 10+ exchanges including Hyperliquid, OKX, Aster, and 7 LLM models. Deploy 24/7 automated strategies with natural language.'
+                ? '接入 10+ 家交易所，包括 Hyperliquid、OKX、Aster 等，并支持 7 个 LLM 模型。使用自然语言部署 24/7 全天候自动策略。'
                 : language === 'id'
                   ? 'Hubungkan ke 10+ bursa termasuk Hyperliquid, OKX, Aster dan 7 model LLM. Terapkan strategi otomatis 24/7 dengan bahasa alami.'
                   : 'Plug into 10+ exchanges including Hyperliquid, OKX, Aster, and 7 LLM models. Deploy 24/7 automated strategies with natural language.'}
@@ -123,7 +123,7 @@ export function LoginPage() {
               value="10+"
               label={
                 language === 'zh'
-                  ? 'Exchanges'
+                  ? '交易所'
                   : language === 'id'
                     ? 'Bursa'
                     : 'Exchanges'
@@ -133,7 +133,7 @@ export function LoginPage() {
               value="7"
               label={
                 language === 'zh'
-                  ? 'AI Models'
+                  ? 'AI 模型'
                   : language === 'id'
                     ? 'Model AI'
                     : 'AI Models'
@@ -143,7 +143,7 @@ export function LoginPage() {
               value="24/7"
               label={
                 language === 'zh'
-                  ? 'Always On'
+                  ? '全天候运行'
                   : language === 'id'
                     ? 'Sepanjang Waktu'
                     : 'Always On'
@@ -167,7 +167,7 @@ export function LoginPage() {
               </h1>
               <p className="mt-1.5 text-sm text-nofx-text-muted">
                 {language === 'zh'
-                  ? 'Continue with your email'
+                  ? '使用你的邮箱继续'
                   : language === 'id'
                     ? 'Lanjutkan dengan email Anda'
                     : 'Continue with your email'}
@@ -222,7 +222,13 @@ export function LoginPage() {
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-nofx-text-muted hover:text-nofx-text transition-colors"
                     aria-label={
-                      showPassword ? 'Hide password' : 'Show password'
+                      showPassword
+                        ? language === 'zh'
+                          ? '隐藏密码'
+                          : 'Hide password'
+                        : language === 'zh'
+                          ? '显示密码'
+                          : 'Show password'
                     }
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -247,7 +253,7 @@ export function LoginPage() {
                 {loading ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
-                    {t('loggingIn', language) || 'Signing in...'}
+                    {language === 'zh' ? '登录中...' : 'Signing in...'}
                   </>
                 ) : (
                   <>
@@ -263,7 +269,9 @@ export function LoginPage() {
 
             {/* Footer */}
             <div className="mt-8 pt-5 border-t border-[rgba(25,36,52,0.14)] flex items-center justify-between text-[11px]">
-              <span className="text-nofx-text-muted">Local workspace</span>
+              <span className="text-nofx-text-muted">
+                {language === 'zh' ? '本地工作区' : 'Local workspace'}
+              </span>
               <button
                 type="button"
                 onClick={handleResetAccount}

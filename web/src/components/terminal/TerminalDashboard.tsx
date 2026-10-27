@@ -22,6 +22,7 @@ import { SignalMatrix } from './SignalMatrix'
 import { RiskRadar } from './RiskRadar'
 import { EdgeProfile } from './EdgeProfile'
 import { useDemoEngine } from '../../lib/demo/useDemoEngine'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 // crypto majors trade on the Hyperliquid main dex (no hip3 cost/liq heatmap);
 // everything else in the universe is an xyz-dex synthetic market that does.
@@ -116,6 +117,8 @@ export function TerminalDashboard({
   positions: propPositions,
   decisions: propDecisions,
 }: TerminalDashboardProps) {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
   const traderId = selectedTrader?.trader_id || selectedTraderId
   useTick(1000)
   const clock = new Date().toLocaleTimeString('en-GB', { hour12: false })
@@ -123,22 +126,25 @@ export function TerminalDashboard({
 
   async function closePositionRow(symbol: string, side: 'LONG' | 'SHORT') {
     if (!traderId || closing) return
-    const ok = await confirmToast(`Market-close ${symbol} ${side}?`, {
-      title: 'Close position',
-      okText: 'Close',
-      cancelText: 'Cancel',
-    })
+    const ok = await confirmToast(
+      isZh ? `以市价平仓 ${symbol} ${side}？` : `Market-close ${symbol} ${side}?`,
+      {
+        title: isZh ? '平仓' : 'Close position',
+        okText: isZh ? '平仓' : 'Close',
+        cancelText: isZh ? '取消' : 'Cancel',
+      }
+    )
     if (!ok) return
     setClosing(symbol)
     try {
       await api.closePosition(traderId, symbol, side)
-      notify.success(`${symbol} ${side} closed`)
+      notify.success(isZh ? `${symbol} ${side} 已平仓` : `${symbol} ${side} closed`)
       await Promise.all([
         mutate(`positions-${traderId}`),
         mutate(`account-${traderId}`),
       ])
     } catch (err) {
-      notify.error(err instanceof Error ? err.message : 'Close failed')
+      notify.error(err instanceof Error ? err.message : isZh ? '平仓失败' : 'Close failed')
     } finally {
       setClosing(null)
     }
@@ -147,8 +153,12 @@ export function TerminalDashboard({
   async function closeAllPositions(open: Position[]) {
     if (!traderId || closing || open.length === 0) return
     const ok = await confirmToast(
-      `Market-close ALL ${open.length} open positions?`,
-      { title: 'Flatten book', okText: 'Close all', cancelText: 'Cancel' }
+      isZh ? `以市价平掉全部 ${open.length} 个持仓？` : `Market-close ALL ${open.length} open positions?`,
+      {
+        title: isZh ? '全部平仓' : 'Flatten book',
+        okText: isZh ? '全部平仓' : 'Close all',
+        cancelText: isZh ? '取消' : 'Cancel',
+      }
     )
     if (!ok) return
     setClosing('__all__')
@@ -166,8 +176,8 @@ export function TerminalDashboard({
       mutate(`positions-${traderId}`),
       mutate(`account-${traderId}`),
     ])
-    if (failed === 0) notify.success('All positions closed')
-    else notify.error(`${failed}/${open.length} closes failed`)
+    if (failed === 0) notify.success(isZh ? '全部持仓已平仓' : 'All positions closed')
+    else notify.error(isZh ? `${failed}/${open.length} 笔平仓失败` : `${failed}/${open.length} closes failed`)
     setClosing(null)
   }
 
@@ -318,7 +328,7 @@ export function TerminalDashboard({
   let countdown = '—'
   if (nextCycleMs) {
     const ms = nextCycleMs - Date.now()
-    if (ms <= 0) countdown = 'due now'
+    if (ms <= 0) countdown = isZh ? '已到期' : 'due now'
     else {
       const s = Math.floor(ms / 1000)
       countdown = `${Math.floor(s / 60)}m ${s % 60}s`
@@ -348,7 +358,7 @@ export function TerminalDashboard({
       <button
         type="button"
         onClick={() => setDemo((v) => !v)}
-        aria-label="toggle presentation mode"
+        aria-label={isZh ? '切换演示模式' : 'toggle presentation mode'}
         style={{
           position: 'fixed',
           right: 10,
@@ -369,22 +379,34 @@ export function TerminalDashboard({
       {navSlot &&
         createPortal(
           <span className="nofx-terminal" style={{ background: 'transparent', display: 'flex', alignItems: 'center', gap: 12, marginLeft: 16, paddingLeft: 16, borderLeft: '1px solid rgba(25,36,52,0.15)', fontSize: 11 }}>
-            <span className="tm-sc" style={{ color: 'var(--tm-muted)' }}>orchestration</span>
+            <span className="tm-sc" style={{ color: 'var(--tm-muted)' }}>{isZh ? '编排' : 'orchestration'}</span>
             {traders && traders.length > 0 && (
               <select value={traderId || ''} onChange={(e) => onTraderSelect(e.target.value)} className="tm-mono"
                 style={{ background: 'var(--tm-panel)', color: 'var(--tm-ink)', border: '1px solid var(--tm-hair)', borderRadius: 0, fontSize: 11, padding: '3px 6px' }}>
                 {traders.map((t) => (<option key={t.trader_id} value={t.trader_id} style={{ color: '#111' }}>{t.trader_name}</option>))}
               </select>
             )}
-            <span style={{ color: status?.trading_blocked ? 'var(--tm-dn)' : running ? 'var(--tm-up)' : 'var(--tm-muted)' }}>{status?.trading_blocked ? '● trading blocked' : running ? '● running' : '○ stopped'}</span>
-            <span className="tm-sc" style={{ color: 'var(--tm-muted)' }}>cycle</span><span className="tm-mono" style={{ color: 'var(--tm-ink)' }}>{status?.call_count ?? '—'}</span>
+            <span style={{ color: status?.trading_blocked ? 'var(--tm-dn)' : running ? 'var(--tm-up)' : 'var(--tm-muted)' }}>
+              {status?.trading_blocked
+                ? isZh
+                  ? '● 交易已阻断'
+                  : '● trading blocked'
+                : running
+                  ? isZh
+                    ? '● 运行中'
+                    : '● running'
+                  : isZh
+                    ? '○ 已停止'
+                    : '○ stopped'}
+            </span>
+            <span className="tm-sc" style={{ color: 'var(--tm-muted)' }}>{isZh ? '周期' : 'cycle'}</span><span className="tm-mono" style={{ color: 'var(--tm-ink)' }}>{status?.call_count ?? '—'}</span>
             <span className="tm-px" style={{ fontSize: 12, color: 'var(--tm-ink)' }}>{clock}</span>
           </span>,
           navSlot,
         )}
       <div className="nofx-dashboard-heading">
-        <div><h1>Dashboard</h1><p>Performance, positions and your AI’s latest decisions.</p></div>
-        <span>Live account overview</span>
+        <div><h1>{isZh ? '仪表盘' : 'Dashboard'}</h1><p>{isZh ? '业绩、持仓与 AI 的最新决策。' : 'Performance, positions and your AI’s latest decisions.'}</p></div>
+        <span>{isZh ? '实时账户概览' : 'Live account overview'}</span>
       </div>
       <div className="tm-box nofx-dashboard-body" style={{ maxWidth: 1280, margin: '0 auto', border: 'none' }}>
         {!on && status?.trading_blocked && (
@@ -400,14 +422,22 @@ export function TerminalDashboard({
           <div className="tm-mono" style={{ display: 'flex', gap: 10, alignItems: 'center', margin: '8px 14px 0', padding: '8px 12px', fontSize: 11, border: '1px solid var(--tm-down)', color: 'var(--tm-down)', background: 'rgba(200,60,40,0.06)', flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 600 }}>
               {status.ai_wallet_status === 'empty'
-                ? 'AI fee wallet is out of USDC — decisions are failing.'
+                ? isZh
+                  ? 'AI 手续费钱包的 USDC 已用完 — 决策正在失败。'
+                  : 'AI fee wallet is out of USDC — decisions are failing.'
                 : status.ai_wallet_status === 'low'
-                  ? `AI fee wallet is low (${(status.ai_wallet_balance_usdc ?? 0).toFixed(2)} USDC) — top up soon.`
-                  : 'Safe mode: AI failed repeatedly, no new positions are being opened.'}
+                  ? isZh
+                    ? `AI 手续费钱包余额较低（${(status.ai_wallet_balance_usdc ?? 0).toFixed(2)} USDC）— 请尽快充值。`
+                    : `AI fee wallet is low (${(status.ai_wallet_balance_usdc ?? 0).toFixed(2)} USDC) — top up soon.`
+                  : isZh
+                    ? '安全模式：AI 连续失败，暂不新开仓位。'
+                    : 'Safe mode: AI failed repeatedly, no new positions are being opened.'}
             </span>
             <span style={{ color: 'var(--tm-ink-2)' }}>
               {status.ai_wallet_status === 'empty' || status.ai_wallet_status === 'low'
-                ? 'Deposit Base USDC to the Claw402 wallet, the trader recovers automatically.'
+                ? isZh
+                  ? '向 Claw402 钱包存入 Base USDC，交易员将自动恢复。'
+                  : 'Deposit Base USDC to the Claw402 wallet, the trader recovers automatically.'
                 : status.safe_mode_reason || ''}
             </span>
           </div>
@@ -416,27 +446,29 @@ export function TerminalDashboard({
             minute (the AI is reading the market); tell newcomers what to expect */}
         {!on && status?.is_running && (status.call_count ?? 0) <= 1 && !status.safe_mode && !status.trading_blocked && status.trading_checked_at && (
           <div className="tm-mono" style={{ display: 'flex', gap: 10, alignItems: 'center', margin: '8px 14px 0', padding: '8px 12px', fontSize: 11, border: '1px solid var(--tm-up)', color: 'var(--tm-ink)', background: 'rgba(40,140,80,0.06)', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 600, color: 'var(--tm-up)' }}>Your AI is live.</span>
+            <span style={{ fontWeight: 600, color: 'var(--tm-up)' }}>{isZh ? '你的 AI 已上线。' : 'Your AI is live.'}</span>
             <span style={{ color: 'var(--tm-ink-2)' }}>
-              It reads the whole market before acting — the first decision usually lands within a minute or two and will appear in the Execution Log below. You can stop it anytime from the Config page.
+              {isZh
+                ? '它会先通读整个市场再行动 — 第一个决策通常在一两分钟内产生，并会出现在下方的执行日志中。你可以随时在配置页面停止它。'
+                : 'It reads the whole market before acting — the first decision usually lands within a minute or two and will appear in the Execution Log below. You can stop it anytime from the Config page.'}
             </span>
           </div>
         )}
         {/* config / identity strip — first row, flows directly under the global nav */}
         <div className="tm-mono" style={{ display: 'flex', gap: 16, padding: '6px 14px', fontSize: 11, color: 'var(--tm-ink-2)', flexWrap: 'wrap' }}>
           <span style={{ fontWeight: 500 }}>{selectedTrader?.trader_name ?? 'NOFX'}</span>
-          <span><span className="tm-sc">model </span>{(() => {
+          <span><span className="tm-sc">{isZh ? '模型 ' : 'model '}</span>{(() => {
             const raw = config?.ai_model || status?.ai_model || ''
             if (!raw) return '—'
             if (/claw402/i.test(raw)) return 'CLAW402'
             return raw.length > 16 ? raw.slice(0, 16).toUpperCase() : raw.toUpperCase()
           })()}</span>
-          <span><span className="tm-sc">strategy </span>{config?.strategy_name || selectedTrader?.strategy_name || '—'}</span>
-          <span><span className="tm-sc">lev </span>{config?.btc_eth_leverage ?? '—'}× / {config?.altcoin_leverage ?? '—'}×</span>
-          <span><span className="tm-sc">scan </span>{scanMin}m</span>
-          <span><span className="tm-sc">universe </span>{candidateCoins.length}</span>
-          <span><span className="tm-sc">positions </span>{positions?.length ?? 0}</span>
-          <span style={{ marginLeft: 'auto' }}><span className="tm-sc">next cycle </span>{countdown}</span>
+          <span><span className="tm-sc">{isZh ? '策略 ' : 'strategy '}</span>{config?.strategy_name || selectedTrader?.strategy_name || '—'}</span>
+          <span><span className="tm-sc">{isZh ? '杠杆 ' : 'lev '}</span>{config?.btc_eth_leverage ?? '—'}× / {config?.altcoin_leverage ?? '—'}×</span>
+          <span><span className="tm-sc">{isZh ? '扫描 ' : 'scan '}</span>{scanMin}m</span>
+          <span><span className="tm-sc">{isZh ? '标的池 ' : 'universe '}</span>{candidateCoins.length}</span>
+          <span><span className="tm-sc">{isZh ? '持仓 ' : 'positions '}</span>{positions?.length ?? 0}</span>
+          <span style={{ marginLeft: 'auto' }}><span className="tm-sc">{isZh ? '下一周期 ' : 'next cycle '}</span>{countdown}</span>
         </div>
         <div className="tm-rule" />
 
@@ -445,16 +477,16 @@ export function TerminalDashboard({
             so the two never read as contradicting each other */}
         <div className="nofx-dashboard-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)' }}>
           {[
-            { l: 'Equity', v: fmtUsd(account?.total_equity), c: 'var(--tm-ink)' },
-            { l: 'Total P/L · incl. unrealized', v: `${fmtUsd(pnl, true)} (${fmtPct(pnlPct)})`, c: up ? 'var(--tm-up)' : 'var(--tm-dn)' },
+            { l: isZh ? '净值' : 'Equity', v: fmtUsd(account?.total_equity), c: 'var(--tm-ink)' },
+            { l: isZh ? '总盈亏 · 含未实现' : 'Total P/L · incl. unrealized', v: `${fmtUsd(pnl, true)} (${fmtPct(pnlPct)})`, c: up ? 'var(--tm-up)' : 'var(--tm-dn)' },
             {
-              l: 'Realized P/L · closed trades',
+              l: isZh ? '已实现盈亏 · 已平仓交易' : 'Realized P/L · closed trades',
               v: fullStats != null ? fmtUsd(fullStats.total_pnl, true) : '—',
               c: fullStats != null && fullStats.total_pnl >= 0 ? 'var(--tm-up)' : 'var(--tm-dn)',
             },
-            { l: 'Profit factor', v: fullStats != null ? fullStats.profit_factor.toFixed(2) : '—', c: 'var(--tm-ink)' },
+            { l: isZh ? '利润因子' : 'Profit factor', v: fullStats != null ? fullStats.profit_factor.toFixed(2) : '—', c: 'var(--tm-ink)' },
             // max_drawdown_pct is already a percent (18.5 = -18.5%)
-            { l: 'Max drawdown', v: fullStats != null ? `-${fullStats.max_drawdown_pct.toFixed(1)}%` : '—', c: 'var(--tm-dn)' },
+            { l: isZh ? '最大回撤' : 'Max drawdown', v: fullStats != null ? `-${fullStats.max_drawdown_pct.toFixed(1)}%` : '—', c: 'var(--tm-dn)' },
           ].map((m, i) => (
             <div key={m.l} style={{ padding: '12px 14px', borderRight: i < 4 ? cellBorder : 'none' }}>
               <div className="tm-sc">{m.l}</div>
@@ -468,15 +500,15 @@ export function TerminalDashboard({
         {fullStats != null && (
           <>
             <div className="tm-mono" style={{ display: 'flex', gap: 18, padding: '6px 14px', fontSize: 11, color: 'var(--tm-ink-2)', flexWrap: 'wrap' }}>
-              <span className="tm-sc">trades <b style={{ color: 'var(--tm-ink)' }}>{fullStats.total_trades}</b></span>
-              <span className="tm-sc tm-up">win {fullStats.win_trades} ({fullStats.win_rate.toFixed(1)}%)</span>
-              <span className="tm-sc tm-dn">loss {fullStats.loss_trades}</span>
+              <span className="tm-sc">{isZh ? '交易' : 'trades'} <b style={{ color: 'var(--tm-ink)' }}>{fullStats.total_trades}</b></span>
+              <span className="tm-sc tm-up">{isZh ? '胜' : 'win'} {fullStats.win_trades} ({fullStats.win_rate.toFixed(1)}%)</span>
+              <span className="tm-sc tm-dn">{isZh ? '负' : 'loss'} {fullStats.loss_trades}</span>
               {/* fee-drag chain: gross realized − fees = net realized */}
-              <span className="tm-sc">gross <b style={{ color: 'var(--tm-ink)' }}>{fmtUsd(fullStats.total_pnl + fullStats.total_fee, true)}</b></span>
-              <span className="tm-sc">fees <b style={{ color: 'var(--tm-ink)' }}>-{fmtUsd(fullStats.total_fee)}</b></span>
-              <span className="tm-sc">net <b style={{ color: fullStats.total_pnl >= 0 ? 'var(--tm-up)' : 'var(--tm-dn)' }}>{fmtUsd(fullStats.total_pnl, true)}</b></span>
-              <span className="tm-sc">sharpe/trade <b style={{ color: 'var(--tm-ink)' }}>{fullStats.sharpe_ratio.toFixed(2)}</b></span>
-              <span className="tm-sc">avg win/loss <b style={{ color: 'var(--tm-ink)' }}>{fullStats.avg_win.toFixed(2)}/{fullStats.avg_loss.toFixed(2)}</b></span>
+              <span className="tm-sc">{isZh ? '毛利' : 'gross'} <b style={{ color: 'var(--tm-ink)' }}>{fmtUsd(fullStats.total_pnl + fullStats.total_fee, true)}</b></span>
+              <span className="tm-sc">{isZh ? '手续费' : 'fees'} <b style={{ color: 'var(--tm-ink)' }}>-{fmtUsd(fullStats.total_fee)}</b></span>
+              <span className="tm-sc">{isZh ? '净额' : 'net'} <b style={{ color: fullStats.total_pnl >= 0 ? 'var(--tm-up)' : 'var(--tm-dn)' }}>{fmtUsd(fullStats.total_pnl, true)}</b></span>
+              <span className="tm-sc">{isZh ? '每笔夏普' : 'sharpe/trade'} <b style={{ color: 'var(--tm-ink)' }}>{fullStats.sharpe_ratio.toFixed(2)}</b></span>
+              <span className="tm-sc">{isZh ? '平均盈/亏' : 'avg win/loss'} <b style={{ color: 'var(--tm-ink)' }}>{fullStats.avg_win.toFixed(2)}/{fullStats.avg_loss.toFixed(2)}</b></span>
             </div>
             <div className="tm-rule" />
           </>
@@ -526,15 +558,15 @@ export function TerminalDashboard({
         {/* orchestration topology — second row, full width (the agent workflow) */}
         <div style={sc}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
-            <span className="tm-px" style={{ fontSize: 12 }}>Orchestration topology</span>
-            <span className="tm-sc">Orchestration topology · net inflow → signal → execute → hold</span>
+            <span className="tm-px" style={{ fontSize: 12 }}>{isZh ? '编排拓扑' : 'Orchestration topology'}</span>
+            <span className="tm-sc">{isZh ? '编排拓扑 · 净流入 → 信号 → 执行 → 持有' : 'Orchestration topology · net inflow → signal → execute → hold'}</span>
           </div>
           <OrchestrationTopology
             layers={[
               {
                 key: 'flow',
-                title: 'FLOW',
-                zh: 'flow',
+                title: isZh ? '流量' : 'FLOW',
+                zh: '流量',
                 items: [
                   ...(flow?.data?.inflow ?? []).map((i) => ({ symbol: i.symbol, dir: 'long' as const })),
                   ...(flow?.data?.outflow ?? []).map((i) => ({ symbol: i.symbol, dir: 'short' as const })),
@@ -542,8 +574,8 @@ export function TerminalDashboard({
               },
               {
                 key: 'signal',
-                title: 'SIGNAL',
-                zh: 'signal',
+                title: isZh ? '信号' : 'SIGNAL',
+                zh: '信号',
                 items: (signalRank?.items ?? []).map((s) => ({
                   symbol: s.symbol,
                   dir: (s.bias || '').toLowerCase() === 'bearish' ? ('short' as const) : ('long' as const),
@@ -552,8 +584,8 @@ export function TerminalDashboard({
               {
                 // every candidate the AI actually judged this cycle (its full decision set)
                 key: 'decision',
-                title: 'DECISION',
-                zh: 'decision',
+                title: isZh ? '决策' : 'DECISION',
+                zh: '决策',
                 items: candidateCoins.map((c) => ({ symbol: c, dir: dirFor(c) })),
               },
               {
@@ -561,8 +593,8 @@ export function TerminalDashboard({
                 // EXECUTE mirrors the live book (this cycle's fills plus anything
                 // still open from prior cycles) and flows straight into HOLD
                 key: 'exec',
-                title: 'EXECUTE',
-                zh: 'execute',
+                title: isZh ? '执行' : 'EXECUTE',
+                zh: '执行',
                 items: (positions ?? []).map((p) => ({
                   symbol: p.symbol,
                   dir: (p.side || '').toLowerCase().includes('short') ? ('short' as const) : ('long' as const),
@@ -570,8 +602,8 @@ export function TerminalDashboard({
               },
               {
                 key: 'hold',
-                title: 'HOLD',
-                zh: 'hold',
+                title: isZh ? '持有' : 'HOLD',
+                zh: '持有',
                 items: (positions ?? []).map((p) => ({
                   symbol: p.symbol,
                   dir: (p.side || '').toLowerCase().includes('short') ? ('short' as const) : ('long' as const),
@@ -593,9 +625,9 @@ export function TerminalDashboard({
           <div style={sc}>
             {/* live open positions (the book right now) */}
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-              <span className="tm-px" style={{ fontSize: 11 }}>Positions</span>
-              <span className="tm-sc">Current positions · live</span>
-              <span className="tm-sc" style={{ marginLeft: 'auto' }}>{positions?.length ?? 0} open</span>
+              <span className="tm-px" style={{ fontSize: 11 }}>{isZh ? '持仓' : 'Positions'}</span>
+              <span className="tm-sc">{isZh ? '当前持仓 · 实时' : 'Current positions · live'}</span>
+              <span className="tm-sc" style={{ marginLeft: 'auto' }}>{isZh ? `${positions?.length ?? 0} 个未平仓` : `${positions?.length ?? 0} open`}</span>
               {traderId && !on && positions && positions.length > 0 && (
                 <button
                   type="button"
@@ -613,7 +645,7 @@ export function TerminalDashboard({
                     opacity: closing ? 0.5 : 1,
                   }}
                 >
-                  {closing === '__all__' ? 'closing…' : 'close all'}
+                  {closing === '__all__' ? (isZh ? '平仓中…' : 'closing…') : isZh ? '全部平仓' : 'close all'}
                 </button>
               )}
             </div>
@@ -621,12 +653,12 @@ export function TerminalDashboard({
               <table className="tm-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
                   <tr className="tm-sc" style={{ fontSize: 9 }}>
-                    <td style={{ padding: '0 0 3px' }}>symbol</td>
-                    <td style={{ padding: '0 0 3px' }}>side·lev</td>
-                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>entry</td>
-                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>size</td>
-                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>PnL</td>
-                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>return%</td>
+                    <td style={{ padding: '0 0 3px' }}>{isZh ? '币种' : 'symbol'}</td>
+                    <td style={{ padding: '0 0 3px' }}>{isZh ? '方向·杠杆' : 'side·lev'}</td>
+                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>{isZh ? '入场价' : 'entry'}</td>
+                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>{isZh ? '规模' : 'size'}</td>
+                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>{isZh ? '盈亏' : 'PnL'}</td>
+                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>{isZh ? '收益率%' : 'return%'}</td>
                     {traderId && !on && <td style={{ padding: '0 0 3px' }} />}
                   </tr>
                 </thead>
@@ -638,7 +670,7 @@ export function TerminalDashboard({
                     return (
                       <tr key={`${p.symbol}-${i}`} style={{ borderTop: '1px solid var(--tm-hair)' }}>
                         <td style={{ padding: '5px 0', fontWeight: 500 }}>{baseLabel(p.symbol)}</td>
-                        <td style={{ padding: '5px 0' }} className={long ? 'tm-up' : 'tm-dn'}>{long ? 'long' : 'short'} <span style={{ color: 'var(--tm-muted)' }}>{p.leverage}×</span></td>
+                        <td style={{ padding: '5px 0' }} className={long ? 'tm-up' : 'tm-dn'}>{isZh ? (long ? '做多' : '做空') : long ? 'long' : 'short'} <span style={{ color: 'var(--tm-muted)' }}>{p.leverage}×</span></td>
                         <td style={{ padding: '5px 0', textAlign: 'right', color: 'var(--tm-ink-2)' }}>{fmtPx(p.entry_price)}</td>
                         <td style={{ padding: '5px 0', textAlign: 'right', color: 'var(--tm-ink-2)' }}>{fmtUsd(notional)}</td>
                         <td style={{ padding: '5px 0', textAlign: 'right' }} className={win ? 'tm-up' : 'tm-dn'}>{fmtUsd(p.unrealized_pnl, true)}</td>
@@ -649,7 +681,7 @@ export function TerminalDashboard({
                               type="button"
                               onClick={() => void closePositionRow(p.symbol, long ? 'LONG' : 'SHORT')}
                               disabled={closing !== null}
-                              title={`Close ${p.symbol}`}
+                              title={isZh ? `平仓 ${p.symbol}` : `Close ${p.symbol}`}
                               className="tm-mono"
                               style={{
                                 background: 'transparent',
@@ -662,7 +694,7 @@ export function TerminalDashboard({
                                 opacity: closing ? 0.5 : 1,
                               }}
                             >
-                              {closing === p.symbol ? '…' : 'close'}
+                              {closing === p.symbol ? '…' : isZh ? '平仓' : 'close'}
                             </button>
                           </td>
                         )}
@@ -671,23 +703,23 @@ export function TerminalDashboard({
                   })}
                 </tbody>
               </table>
-            ) : <div className="tm-sc" style={{ padding: '8px 0' }}>No open positions.</div>}
+            ) : <div className="tm-sc" style={{ padding: '8px 0' }}>{isZh ? '暂无持仓。' : 'No open positions.'}</div>}
 
             <div className="tm-rule" style={{ margin: '12px 0 10px' }} />
 
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-              <span className="tm-px" style={{ fontSize: 11 }}>Recent trades</span>
-              <span className="tm-sc">Recent closes · symbol/side/hold/pnl</span>
+              <span className="tm-px" style={{ fontSize: 11 }}>{isZh ? '最近交易' : 'Recent trades'}</span>
+              <span className="tm-sc">{isZh ? '最近平仓 · 币种/方向/持仓时长/盈亏' : 'Recent closes · symbol/side/hold/pnl'}</span>
             </div>
             {recentTrades.length > 0 ? (
               <table className="tm-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
                   <tr className="tm-sc" style={{ fontSize: 9 }}>
-                    <td style={{ padding: '0 0 3px' }}>symbol</td>
-                    <td style={{ padding: '0 0 3px' }}>side</td>
-                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>hold</td>
-                    <td style={{ padding: '0 0 3px' }}> closed</td>
-                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>PnL</td>
+                    <td style={{ padding: '0 0 3px' }}>{isZh ? '币种' : 'symbol'}</td>
+                    <td style={{ padding: '0 0 3px' }}>{isZh ? '方向' : 'side'}</td>
+                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>{isZh ? '持仓时长' : 'hold'}</td>
+                    <td style={{ padding: '0 0 3px' }}>{isZh ? ' 平仓时间' : ' closed'}</td>
+                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>{isZh ? '盈亏' : 'PnL'}</td>
                   </tr>
                 </thead>
                 <tbody>
@@ -696,7 +728,7 @@ export function TerminalDashboard({
                     return (
                       <tr key={p.id} style={{ borderTop: '1px solid var(--tm-hair)' }}>
                         <td style={{ padding: '5px 0', fontWeight: 500 }}>{baseLabel(p.symbol)}</td>
-                        <td style={{ padding: '5px 0' }} className={p.side === 'long' || p.side === 'LONG' ? 'tm-up' : 'tm-dn'}>{p.side.toLowerCase()}</td>
+                        <td style={{ padding: '5px 0' }} className={p.side === 'long' || p.side === 'LONG' ? 'tm-up' : 'tm-dn'}>{isZh ? (p.side.toLowerCase() === 'long' ? '做多' : '做空') : p.side.toLowerCase()}</td>
                         <td style={{ padding: '5px 0', textAlign: 'right', color: 'var(--tm-ink-2)' }}>{fmtHold(p.entry_time, p.exit_time)}</td>
                         <td style={{ padding: '5px 0 5px 6px', color: 'var(--tm-muted)' }}>{fmtTime(p.exit_time)}</td>
                         <td style={{ padding: '5px 0', textAlign: 'right' }} className={win ? 'tm-up' : 'tm-dn'}>{fmtUsd(p.realized_pnl, true)}</td>
@@ -705,7 +737,7 @@ export function TerminalDashboard({
                   })}
                 </tbody>
               </table>
-            ) : <div className="tm-sc" style={{ padding: '8px 0' }}>No closed trades yet.</div>}
+            ) : <div className="tm-sc" style={{ padding: '8px 0' }}>{isZh ? '暂无已平仓交易。' : 'No closed trades yet.'}</div>}
           </div>
         </div>
         <div className="tm-rule" />
@@ -714,34 +746,34 @@ export function TerminalDashboard({
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,0.9fr) minmax(0,0.9fr)' }}>
           <div style={{ ...sc, borderRight: cellBorder }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
-              <span className="tm-px" style={{ fontSize: 12 }}>Market net inflow</span>
-              <span className="tm-sc">Market net inflow · {flow?.data?.window || '1h'} · Vergex</span>
-              <span className="tm-sc" style={{ marginLeft: 'auto' }}>{flowItems.length} markets</span>
+              <span className="tm-px" style={{ fontSize: 12 }}>{isZh ? '市场净流入' : 'Market net inflow'}</span>
+              <span className="tm-sc">{isZh ? `市场净流入 · ${flow?.data?.window || '1h'} · Vergex` : `Market net inflow · ${flow?.data?.window || '1h'} · Vergex`}</span>
+              <span className="tm-sc" style={{ marginLeft: 'auto' }}>{isZh ? `${flowItems.length} 个市场` : `${flowItems.length} markets`}</span>
             </div>
             <FlowMarkets items={flowItems} window={flow?.data?.window} />
           </div>
           <div style={{ ...sc, borderRight: cellBorder }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-              <span className="tm-px" style={{ fontSize: 11 }}>By symbol</span>
-              <span className="tm-sc">By-symbol history · trades/win/pnl</span>
+              <span className="tm-px" style={{ fontSize: 11 }}>{isZh ? '按币种' : 'By symbol'}</span>
+              <span className="tm-sc">{isZh ? '分币种历史 · 交易/胜/盈亏' : 'By-symbol history · trades/win/pnl'}</span>
             </div>
             {symbolStats.length > 0 ? symbolStats.map((s) => (
               <div key={s.symbol} style={{ marginBottom: 7 }}>
                 <div className="tm-mono" style={{ display: 'flex', fontSize: 11, marginBottom: 2 }}>
                   <span style={{ fontWeight: 500 }}>{baseLabel(s.symbol)}</span>
-                  <span className="tm-sc" style={{ marginLeft: 8 }}>{s.total_trades} trades · {s.win_rate.toFixed(0)}% win</span>
+                  <span className="tm-sc" style={{ marginLeft: 8 }}>{isZh ? `${s.total_trades} 笔交易 · 胜率 ${s.win_rate.toFixed(0)}%` : `${s.total_trades} trades · ${s.win_rate.toFixed(0)}% win`}</span>
                   <span className={s.total_pnl >= 0 ? 'tm-up' : 'tm-dn'} style={{ marginLeft: 'auto' }}>{fmtUsd(s.total_pnl, true)}</span>
                 </div>
                 <div style={{ height: 4, background: 'var(--tm-hair)' }}>
                   <div style={{ height: 4, width: `${(s.total_trades / maxSymTrades) * 100}%`, background: s.total_pnl >= 0 ? 'var(--tm-up)' : 'var(--tm-dn)' }} />
                 </div>
               </div>
-            )) : <div className="tm-sc">No symbol history.</div>}
+            )) : <div className="tm-sc">{isZh ? '暂无分币种历史。' : 'No symbol history.'}</div>}
           </div>
           <div style={sc}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-              <span className="tm-px" style={{ fontSize: 11 }}>Edge profile</span>
-              <span className="tm-sc">Net by hold time &amp; side · after fees</span>
+              <span className="tm-px" style={{ fontSize: 11 }}>{isZh ? '优势分布' : 'Edge profile'}</span>
+              <span className="tm-sc">{isZh ? '按持仓时长与方向的净额 · 扣费后' : 'Net by hold time & side · after fees'}</span>
             </div>
             <EdgeProfile positions={history?.positions} />
           </div>

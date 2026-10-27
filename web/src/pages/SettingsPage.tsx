@@ -37,6 +37,9 @@ function configBadge(label: string, active: boolean) {
 export function SettingsPage() {
   const { user } = useAuth()
   const { language } = useLanguage()
+  // Local bilingual helper: zh shows Chinese, en (and id fallback) keeps the
+  // original English copy verbatim.
+  const tt = (en: string, zh: string) => (language === 'zh' ? zh : en)
   const [searchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const tab = searchParams.get('tab')
@@ -87,7 +90,7 @@ export function SettingsPage() {
       const response = await api.getExchangeAccountState()
       setExchangeStates(response.states || {})
     } catch {
-      toast.error('Failed to load exchange balances')
+      toast.error(tt('Failed to load exchange balances', '加载交易所余额失败'))
     } finally {
       setExchangeStatesLoading(false)
     }
@@ -96,11 +99,13 @@ export function SettingsPage() {
   // Fetch data when tabs are visited
   useEffect(() => {
     if (activeTab === 'models') {
-      refreshModelConfigs().catch(() => toast.error('Failed to load AI models'))
+      refreshModelConfigs().catch(() =>
+        toast.error(tt('Failed to load AI models', '加载 AI 模型失败'))
+      )
     }
     if (activeTab === 'exchanges') {
       refreshExchangeConfigs().catch(() =>
-        toast.error('Failed to load exchanges')
+        toast.error(tt('Failed to load exchanges', '加载交易所失败'))
       )
     }
   }, [activeTab])
@@ -108,7 +113,7 @@ export function SettingsPage() {
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault()
     if (newPassword.length < 8) {
-      toast.error('Password must be at least 8 characters')
+      toast.error(tt('Password must be at least 8 characters', '密码至少需要 8 个字符'))
       return
     }
     setChangingPassword(true)
@@ -123,13 +128,15 @@ export function SettingsPage() {
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to update password')
+        throw new Error(data.error || tt('Failed to update password', '更新密码失败'))
       }
-      toast.success('Password updated successfully')
+      toast.success(tt('Password updated successfully', '密码更新成功'))
       setNewPassword('')
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : 'Failed to update password'
+        err instanceof Error
+          ? err.message
+          : tt('Failed to update password', '更新密码失败')
       )
     } finally {
       setChangingPassword(false)
@@ -147,7 +154,7 @@ export function SettingsPage() {
       const modelTemplate = supportedModels.find((m) => m.id === modelId)
       const modelToUpdate = existingModel || modelTemplate
       if (!modelToUpdate) {
-        toast.error('Model not found')
+        toast.error(tt('Model not found', '未找到模型'))
         return
       }
 
@@ -191,12 +198,12 @@ export function SettingsPage() {
         ),
       }
       await api.updateModelConfigs(request)
-      toast.success('Model config saved')
+      toast.success(tt('Model config saved', '模型配置已保存'))
       await refreshModelConfigs()
       setShowModelModal(false)
       setEditingModel(null)
     } catch {
-      toast.error('Failed to save model config')
+      toast.error(tt('Failed to save model config', '保存模型配置失败'))
     }
   }
 
@@ -230,9 +237,9 @@ export function SettingsPage() {
       await refreshModelConfigs()
       setShowModelModal(false)
       setEditingModel(null)
-      toast.success('Model config removed')
+      toast.success(tt('Model config removed', '模型配置已移除'))
     } catch {
-      toast.error('Failed to remove model config')
+      toast.error(tt('Failed to remove model config', '移除模型配置失败'))
     }
   }
 
@@ -257,7 +264,7 @@ export function SettingsPage() {
       if (exchangeType === 'hyperliquid') {
         toast.error(
           language === 'zh'
-            ? 'Hyperliquid must be connected through wallet authorization, not manual keys.'
+            ? 'Hyperliquid 必须通过钱包授权连接，不能手动填写密钥。'
             : 'Hyperliquid must be connected through wallet authorization, not manual keys.'
         )
         return
@@ -284,7 +291,7 @@ export function SettingsPage() {
           },
         }
         await api.updateExchangeConfigsEncrypted(request)
-        toast.success('Exchange config updated')
+        toast.success(tt('Exchange config updated', '交易所配置已更新'))
       } else {
         const createRequest = {
           exchange_type: exchangeType,
@@ -305,32 +312,36 @@ export function SettingsPage() {
           lighter_api_key_index: lighterApiKeyIndex || 0,
         }
         await api.createExchangeEncrypted(createRequest)
-        toast.success('Exchange account created')
+        toast.success(tt('Exchange account created', '交易所账户已创建'))
       }
       await refreshExchangeConfigs()
       setShowExchangeModal(false)
       setEditingExchange(null)
     } catch {
-      toast.error('Failed to save exchange config')
+      toast.error(tt('Failed to save exchange config', '保存交易所配置失败'))
     }
   }
 
   const handleDeleteExchange = async (exchangeId: string) => {
     try {
       await api.deleteExchange(exchangeId)
-      toast.success('Exchange account deleted')
+      toast.success(tt('Exchange account deleted', '交易所账户已删除'))
       await refreshExchangeConfigs()
       setShowExchangeModal(false)
       setEditingExchange(null)
     } catch {
-      toast.error('Failed to delete exchange account')
+      toast.error(tt('Failed to delete exchange account', '删除交易所账户失败'))
     }
   }
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'account', label: 'Account', icon: <User size={16} /> },
-    { key: 'models', label: 'AI Models', icon: <Cpu size={16} /> },
-    { key: 'exchanges', label: 'Exchanges', icon: <Building2 size={16} /> },
+    { key: 'account', label: tt('Account', '账户'), icon: <User size={16} /> },
+    { key: 'models', label: tt('AI Models', 'AI 模型'), icon: <Cpu size={16} /> },
+    {
+      key: 'exchanges',
+      label: tt('Exchanges', '交易所'),
+      icon: <Building2 size={16} />,
+    },
   ]
 
   return (
@@ -339,7 +350,9 @@ export function SettingsPage() {
       style={{ background: '#f6f8fc' }}
     >
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-xl font-bold text-nofx-text mb-6">Settings</h1>
+        <h1 className="text-xl font-bold text-nofx-text mb-6">
+          {tt('Settings', '设置')}
+        </h1>
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 bg-nofx-bg-lighter border border-[rgba(25,36,52,0.14)] rounded-xl p-1">
@@ -366,7 +379,9 @@ export function SettingsPage() {
           {activeTab === 'account' && (
             <div className="space-y-6">
               <div>
-                <p className="text-xs text-nofx-text-muted mb-1">Email</p>
+                <p className="text-xs text-nofx-text-muted mb-1">
+                  {tt('Email', '邮箱')}
+                </p>
                 <p className="text-sm text-nofx-text font-medium">
                   {user?.email}
                 </p>
@@ -374,12 +389,12 @@ export function SettingsPage() {
 
               <div className="border-t border-[rgba(25,36,52,0.14)] pt-6">
                 <h3 className="text-sm font-semibold text-nofx-text mb-4">
-                  Change Password
+                  {tt('Change Password', '修改密码')}
                 </h3>
                 <form onSubmit={handleChangePassword} className="space-y-4">
                   <div>
                     <label className="block text-xs font-medium text-nofx-text-muted mb-2">
-                      New Password
+                      {tt('New Password', '新密码')}
                     </label>
                     <div className="relative">
                       <input
@@ -387,7 +402,7 @@ export function SettingsPage() {
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         className="w-full bg-nofx-bg-deeper border border-[rgba(25,36,52,0.14)] rounded-xl px-4 py-3 pr-11 text-sm text-nofx-text placeholder-nofx-text-muted focus:outline-hidden focus:border-nofx-gold/60 focus:ring-1 focus:ring-nofx-gold/30 transition-all"
-                        placeholder="At least 8 characters"
+                        placeholder={tt('At least 8 characters', '至少 8 个字符')}
                         required
                       />
                       <button
@@ -408,7 +423,9 @@ export function SettingsPage() {
                     disabled={changingPassword || newPassword.length < 8}
                     className="w-full bg-nofx-gold hover:bg-nofx-gold-highlight active:scale-[0.98] text-nofx-bg font-semibold py-3 rounded-xl text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {changingPassword ? 'Updating...' : 'Update Password'}
+                    {changingPassword
+                      ? tt('Updating...', '更新中...')
+                      : tt('Update Password', '更新密码')}
                   </button>
                 </form>
               </div>
@@ -420,8 +437,9 @@ export function SettingsPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-nofx-text-muted">
-                  {configuredModels.length} model
-                  {configuredModels.length !== 1 ? 's' : ''} configured
+                  {language === 'zh'
+                    ? `已配置 ${configuredModels.length} 个模型`
+                    : `${configuredModels.length} model${configuredModels.length !== 1 ? 's' : ''} configured`}
                 </p>
                 <button
                   onClick={() => {
@@ -431,13 +449,13 @@ export function SettingsPage() {
                   className="flex items-center gap-1.5 text-xs font-medium bg-nofx-gold/10 hover:bg-nofx-gold/20 text-nofx-gold px-3 py-1.5 rounded-lg transition-colors"
                 >
                   <Plus size={14} />
-                  Add Model
+                  {tt('Add Model', '添加模型')}
                 </button>
               </div>
 
               {configuredModels.length === 0 ? (
                 <div className="text-center py-8 text-nofx-text-muted text-sm">
-                  No AI models configured yet
+                  {tt('No AI models configured yet', '尚未配置 AI 模型')}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -462,9 +480,12 @@ export function SettingsPage() {
                             <p className="text-xs text-nofx-text-muted">
                               {model.provider}
                             </p>
-                            {configBadge('API Key', !!model.has_api_key)}
+                            {configBadge(
+                              tt('API Key', 'API 密钥'),
+                              !!model.has_api_key
+                            )}
                             {model.customModelName
-                              ? configBadge('Custom Model', true)
+                              ? configBadge(tt('Custom Model', '自定义模型'), true)
                               : null}
                             {model.customApiUrl
                               ? configBadge('Base URL', true)
@@ -476,7 +497,9 @@ export function SettingsPage() {
                         <span
                           className={`text-xs px-2 py-0.5 rounded-full ${model.enabled ? 'bg-nofx-success/10 text-nofx-success' : 'bg-nofx-bg-deeper text-nofx-text-muted'}`}
                         >
-                          {model.enabled ? 'Active' : 'Inactive'}
+                          {model.enabled
+                            ? tt('Active', '已启用')
+                            : tt('Inactive', '未启用')}
                         </span>
                         <Pencil
                           size={14}
@@ -495,8 +518,9 @@ export function SettingsPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-nofx-text-muted">
-                  {exchanges.length} account{exchanges.length !== 1 ? 's' : ''}{' '}
-                  connected
+                  {language === 'zh'
+                    ? `已连接 ${exchanges.length} 个账户`
+                    : `${exchanges.length} account${exchanges.length !== 1 ? 's' : ''} connected`}
                 </p>
                 <div className="flex items-center gap-2">
                   <button
@@ -504,7 +528,9 @@ export function SettingsPage() {
                     disabled={exchangeStatesLoading}
                     className="text-xs font-medium bg-nofx-bg-deeper hover:bg-nofx-bg-deeper disabled:opacity-60 text-nofx-text px-3 py-1.5 rounded-lg transition-colors"
                   >
-                    {exchangeStatesLoading ? 'Refreshing…' : 'Refresh Balances'}
+                    {exchangeStatesLoading
+                      ? tt('Refreshing…', '刷新中…')
+                      : tt('Refresh Balances', '刷新余额')}
                   </button>
                   <button
                     onClick={() => {
@@ -514,14 +540,17 @@ export function SettingsPage() {
                     className="flex items-center gap-1.5 text-xs font-medium bg-nofx-gold/10 hover:bg-nofx-gold/20 text-nofx-gold px-3 py-1.5 rounded-lg transition-colors"
                   >
                     <Plus size={14} />
-                    Add Exchange
+                    {tt('Add Exchange', '添加交易所')}
                   </button>
                 </div>
               </div>
 
               {exchanges.length === 0 ? (
                 <div className="text-center py-8 text-nofx-text-muted text-sm">
-                  No exchange accounts connected yet
+                  {tt(
+                    'No exchange accounts connected yet',
+                    '尚未连接交易所账户'
+                  )}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -548,20 +577,29 @@ export function SettingsPage() {
                               <p className="text-xs text-nofx-text-muted capitalize">
                                 {exchange.exchange_type || exchange.type}
                               </p>
-                              {configBadge('API Key', !!exchange.has_api_key)}
-                              {configBadge('Secret', !!exchange.has_secret_key)}
+                              {configBadge(
+                                tt('API Key', 'API 密钥'),
+                                !!exchange.has_api_key
+                              )}
+                              {configBadge(
+                                tt('Secret', '密钥'),
+                                !!exchange.has_secret_key
+                              )}
                               {exchange.has_passphrase
-                                ? configBadge('Passphrase', true)
+                                ? configBadge(tt('Passphrase', '口令'), true)
                                 : null}
                               {exchange.hyperliquidWalletAddr
-                                ? configBadge('Wallet', true)
+                                ? configBadge(tt('Wallet', '钱包'), true)
                                 : null}
                               {exchange.has_aster_private_key
-                                ? configBadge('Aster Key', true)
+                                ? configBadge(tt('Aster Key', 'Aster 密钥'), true)
                                 : null}
                               {exchange.has_lighter_private_key ||
                               exchange.has_lighter_api_key_private_key
-                                ? configBadge('Lighter Key', true)
+                                ? configBadge(
+                                    tt('Lighter Key', 'Lighter 密钥'),
+                                    true
+                                  )
                                 : null}
                             </div>
                             {accountState && (
@@ -569,14 +607,14 @@ export function SettingsPage() {
                                 {accountState.status === 'ok' ? (
                                   <>
                                     <span className="rounded-full bg-nofx-success/10 px-2 py-0.5 font-mono text-nofx-success">
-                                      Balance{' '}
+                                      {tt('Balance', '余额')}{' '}
                                       {accountState.display_balance ||
                                         `${accountState.total_equity?.toFixed(2) ?? '--'} ${accountState.asset || ''}`}
                                     </span>
                                     {typeof accountState.available_balance ===
                                       'number' && (
                                       <span className="text-nofx-text-muted">
-                                        Available{' '}
+                                        {tt('Available', '可用')}{' '}
                                         {accountState.available_balance.toFixed(
                                           2
                                         )}{' '}
@@ -586,7 +624,8 @@ export function SettingsPage() {
                                   </>
                                 ) : (
                                   <span className="rounded-full bg-nofx-gold/10 px-2 py-0.5 text-nofx-gold">
-                                    Balance unavailable:{' '}
+                                    {tt('Balance unavailable:', '余额不可用：')}
+                                    {' '}
                                     {accountState.error_message ||
                                       accountState.status}
                                   </span>

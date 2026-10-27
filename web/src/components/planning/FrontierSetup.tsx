@@ -14,6 +14,15 @@ import type { AccountCheck } from '../../lib/frontierWorkspace'
 import { HyperliquidWalletConnect } from '../common/HyperliquidWalletConnect'
 import { ExchangeConfigModal } from '../trader/ExchangeConfigModal'
 import { ModelConfigModal } from '../trader/ModelConfigModal'
+import { useLanguage } from '../../contexts/LanguageContext'
+
+function useSafeLanguage() {
+  try {
+    return useLanguage().language
+  } catch {
+    return 'en' as const
+  }
+}
 
 export type FeeWalletState =
   | 'checking'
@@ -76,6 +85,8 @@ export function FrontierSetup({
   onWalletState: (state: FeeWalletState) => void
   onComplete?: (step: 'ai' | 'exchange') => void
 }) {
+  const language = useSafeLanguage()
+  const zh = language === 'zh'
   const [wallet, setWallet] = useState<Wallet | null>(null)
   const [working, setWorking] = useState(false)
   const [error, setError] = useState('')
@@ -120,13 +131,15 @@ export function FrontierSetup({
         onWalletState('unknown')
         setWallet(null)
         setError(
-          'Could not check your AI balance. Retry the balance check before creating another wallet.'
+          zh
+            ? '无法检查你的 AI 余额。创建另一个钱包前，请先重试余额检查。'
+            : 'Could not check your AI balance. Retry the balance check before creating another wallet.'
         )
       }
     } finally {
       if (revision === request.current) pending.current = false
     }
-  }, [onWalletState, selectedModel?.provider, modelID])
+  }, [onWalletState, selectedModel?.provider, modelID, zh])
   const verifyAccount = useCallback(
     async (background = false) => {
       const revision = ++accountRequest.current
@@ -159,7 +172,9 @@ export function FrontierSetup({
           String(next.available).trim() === ''
         )
           throw new Error(
-            'The exchange did not return a complete balance. Retry verification.'
+            zh
+              ? '交易所没有返回完整余额。请重试核实。'
+              : 'The exchange did not return a complete balance. Retry verification.'
           )
         if (mounted.current && revision === accountRequest.current)
           setCheck({
@@ -174,11 +189,15 @@ export function FrontierSetup({
             accountID,
             status: 'unavailable',
             error:
-              e instanceof Error ? e.message : 'Could not verify the account.',
+              e instanceof Error
+                ? e.message
+                : zh
+                  ? '无法核实该账户。'
+                  : 'Could not verify the account.',
           })
       }
     },
-    [accountID, venue]
+    [accountID, venue, zh]
   )
   useEffect(() => {
     mounted.current = true
@@ -298,7 +317,9 @@ export function FrontierSetup({
     } catch {
       if (mounted.current)
         setError(
-          'AI setup could not be confirmed. Check the wallet status before retrying.'
+          zh
+            ? '无法确认 AI 设置。重试前请先查看钱包状态。'
+            : 'AI setup could not be confirmed. Check the wallet status before retrying.'
         )
     } finally {
       if (mounted.current) setWorking(false)
@@ -323,44 +344,67 @@ export function FrontierSetup({
   return (
     <>
       {loaded && (
-        <section className="frontier-connections" aria-label="Your connections">
+        <section
+          className="frontier-connections"
+          aria-label={zh ? '你的连接' : 'Your connections'}
+        >
           <button onClick={() => onOpen('ai')}>
-            <span>AI & data</span>
+            <span>{zh ? 'AI 与数据' : 'AI & data'}</span>
             <b>
               {selectedModel?.provider !== 'claw402' && selectedModel
-                ? 'Your API provider'
+                ? zh
+                  ? '你的 API 提供商'
+                  : 'Your API provider'
                 : status === 'ready'
                   ? `${Number(wallet?.balance_usdc).toFixed(2)} USDC`
                   : status === 'empty'
-                    ? 'Add AI funds'
+                    ? zh
+                      ? '添加 AI 资金'
+                      : 'Add AI funds'
                     : status === 'checking'
-                      ? 'Checking balance…'
-                      : 'Set up AI'}
+                      ? zh
+                        ? '正在检查余额…'
+                        : 'Checking balance…'
+                      : zh
+                        ? '设置 AI'
+                        : 'Set up AI'}
             </b>
           </button>
           <button
             className="frontier-account-funds"
             onClick={() => onOpen('exchange')}
           >
-            <span>Trading account</span>
+            <span>{zh ? '交易账户' : 'Trading account'}</span>
             <b>
               {!accountID
-                ? 'Connect to trade'
+                ? zh
+                  ? '连接后交易'
+                  : 'Connect to trade'
                 : exchangeReady
                   ? currentAccount
                     ? accountLabel(currentAccount, accounts)
-                    : 'Account'
+                    : zh
+                      ? '账户'
+                      : 'Account'
                   : checked?.status === 'checking'
-                    ? 'Loading balance…'
-                    : 'Balance unavailable · Check connection'}
+                    ? zh
+                      ? '正在加载余额…'
+                      : 'Loading balance…'
+                    : zh
+                      ? '余额不可用 · 检查连接'
+                      : 'Balance unavailable · Check connection'}
             </b>
             {exchangeReady && (
               <>
                 <span
                   className="frontier-funds-metric"
-                  title="Total account equity, including unrealized profit and loss."
+                  title={
+                    zh
+                      ? '账户总权益，包括未实现盈亏。'
+                      : 'Total account equity, including unrealized profit and loss.'
+                  }
                 >
-                  Account equity{' '}
+                  {zh ? '账户权益' : 'Account equity'}{' '}
                   <b>
                     {formatBalance(checked.equity)}{' '}
                     {venue === 'hyperliquid' ? 'USDC' : 'USDT'}
@@ -368,9 +412,13 @@ export function FrontierSetup({
                 </span>
                 <span
                   className="frontier-funds-metric"
-                  title="Free margin available for new orders, before leverage and execution costs."
+                  title={
+                    zh
+                      ? '可用于新订单的可用保证金，未计杠杆和执行成本。'
+                      : 'Free margin available for new orders, before leverage and execution costs.'
+                  }
                 >
-                  Available to trade{' '}
+                  {zh ? '可用于交易' : 'Available to trade'}{' '}
                   <b>
                     {formatBalance(checked.available)}{' '}
                     {venue === 'hyperliquid' ? 'USDC' : 'USDT'}
@@ -379,7 +427,11 @@ export function FrontierSetup({
               </>
             )}
           </button>
-          <small>AI fees and trading funds are separate.</small>
+          <small>
+            {zh
+              ? 'AI 费用和交易资金是分开的。'
+              : 'AI fees and trading funds are separate.'}
+          </small>
         </section>
       )}
       {open && !cex && !ownAI && (
@@ -394,17 +446,32 @@ export function FrontierSetup({
             <header>
               <div>
                 <small>
-                  {open === 'ai' ? 'ANALYSIS & DATA' : 'YOUR TRADING FUNDS'}
+                  {open === 'ai'
+                    ? zh
+                      ? '分析与数据'
+                      : 'ANALYSIS & DATA'
+                    : zh
+                      ? '你的交易资金'
+                      : 'YOUR TRADING FUNDS'}
                 </small>
                 <h2 id="frontier-setup-title">
                   {open === 'ai'
-                    ? 'Set up your AI'
+                    ? zh
+                      ? '设置你的 AI'
+                      : 'Set up your AI'
                     : currentAccount
-                      ? 'Your trading account'
-                      : 'Connect a trading account'}
+                      ? zh
+                        ? '你的交易账户'
+                        : 'Your trading account'
+                      : zh
+                        ? '连接交易账户'
+                        : 'Connect a trading account'}
                 </h2>
               </div>
-              <button aria-label="Close setup" onClick={() => onOpen(null)}>
+              <button
+                aria-label={zh ? '关闭设置' : 'Close setup'}
+                onClick={() => onOpen(null)}
+              >
                 ×
               </button>
             </header>
@@ -416,24 +483,26 @@ export function FrontierSetup({
             {open === 'ai' ? (
               <>
                 <p>
-                  Generate plans first. You only need a trading account when you
-                  want to place an order.
+                  {zh
+                    ? '先生成计划。只有当你想下单时，才需要交易账户。'
+                    : 'Generate plans first. You only need a trading account when you want to place an order.'}
                 </p>
                 {selectedModel && selectedModel.provider !== 'claw402' && (
                   <div className="frontier-setup-success">
-                    <b>Your AI is configured</b>
+                    <b>{zh ? '你的 AI 已配置' : 'Your AI is configured'}</b>
                     <p>
-                      {selectedModel.name} bills through your provider. The
-                      separate AI balance below is only needed for paid data
-                      such as AI500.
+                      {zh
+                        ? `${selectedModel.name} 通过你的提供商计费。下方的独立 AI 余额仅用于 AI500 等付费数据。`
+                        : `${selectedModel.name} bills through your provider. The separate AI balance below is only needed for paid data such as AI500.`}
                     </p>
                   </div>
                 )}
                 <div className="frontier-ai-options">
-                  <b>Pay as you go</b>
+                  <b>{zh ? '按量付费' : 'Pay as you go'}</b>
                   <p>
-                    AI requests and premium data are charged to a dedicated USDC
-                    wallet. Your trading balance is never used for these fees.
+                    {zh
+                      ? 'AI 请求和高级数据费用从一个专用的 USDC 钱包扣除。你的交易余额永远不会用于这些费用。'
+                      : 'AI requests and premium data are charged to a dedicated USDC wallet. Your trading balance is never used for these fees.'}
                   </p>
                 </div>
                 {wallet?.found ? (
@@ -442,8 +511,9 @@ export function FrontierSetup({
                     <div>
                       <b>USDC on Base</b>
                       <p>
-                        Send only USDC on the Base network to this AI payment
-                        address.
+                        {zh
+                          ? '仅向此 AI 付款地址发送 Base 网络上的 USDC。'
+                          : 'Send only USDC on the Base network to this AI payment address.'}
                       </p>
                       <code>{wallet.address}</code>
                       <button
@@ -455,38 +525,54 @@ export function FrontierSetup({
                             setCopied(true)
                           } catch {
                             setError(
-                              'Copy failed. Select and copy the address instead.'
+                              zh
+                                ? '复制失败。请手动选择并复制地址。'
+                                : 'Copy failed. Select and copy the address instead.'
                             )
                           }
                         }}
                       >
-                        {copied ? 'Address copied' : 'Copy AI payment address'}
+                        {copied
+                          ? zh
+                            ? '地址已复制'
+                            : 'Address copied'
+                          : zh
+                            ? '复制 AI 付款地址'
+                            : 'Copy AI payment address'}
                       </button>
                       <p role="status">
                         <strong>
                           {wallet.balance_status === 'ok'
                             ? `${Number(wallet.balance_usdc).toFixed(2)} USDC`
-                            : 'Balance not verified'}
+                            : zh
+                              ? '余额未核实'
+                              : 'Balance not verified'}
                         </strong>{' '}
                         ·{' '}
                         {status === 'ready'
-                          ? 'Funds received'
+                          ? zh
+                            ? '资金已到账'
+                            : 'Funds received'
                           : status === 'empty'
-                            ? 'Waiting for your deposit · checks every 15 seconds'
-                            : 'Verification needed'}
+                            ? zh
+                              ? '等待你的存款 · 每 15 秒检查一次'
+                              : 'Waiting for your deposit · checks every 15 seconds'
+                            : zh
+                              ? '需要核实'
+                              : 'Verification needed'}
                       </p>
                       <button
                         disabled={working}
                         onClick={() => void refreshWallet()}
                       >
-                        Check balance
+                        {zh ? '检查余额' : 'Check balance'}
                       </button>
                       {!wallet.enabled && (
                         <button
                           disabled={working}
                           onClick={() => void createWallet()}
                         >
-                          Enable existing AI wallet
+                          {zh ? '启用现有 AI 钱包' : 'Enable existing AI wallet'}
                         </button>
                       )}
                     </div>
@@ -494,19 +580,26 @@ export function FrontierSetup({
                 ) : (
                   <div className="frontier-setup-start">
                     <p>
-                      Create your AI payment wallet, then fund it with Base
-                      USDC. Creating it does not charge you.
+                      {zh
+                        ? '创建你的 AI 付款钱包，然后用 Base USDC 为它充值。创建钱包不会收费。'
+                        : 'Create your AI payment wallet, then fund it with Base USDC. Creating it does not charge you.'}
                     </p>
                     <button
                       className="planning-primary"
                       disabled={working || !!error || status === 'checking'}
                       onClick={() => void createWallet()}
                     >
-                      {working ? 'Setting up…' : 'Create AI wallet'}
+                      {working
+                        ? zh
+                          ? '设置中…'
+                          : 'Setting up…'
+                        : zh
+                          ? '创建 AI 钱包'
+                          : 'Create AI wallet'}
                     </button>
                     {error && (
                       <button onClick={() => void refreshWallet()}>
-                        Check wallet status
+                        {zh ? '检查钱包状态' : 'Check wallet status'}
                       </button>
                     )}
                   </div>
@@ -519,11 +612,9 @@ export function FrontierSetup({
                   />
                 )}
                 <p className="frontier-setup-note">
-                  Pay per request; the gateway checks the price before payment.
-                  A positive balance does not guarantee enough funds for every
-                  request. This wallet is encrypted on your NOFX server, not in
-                  your browser. Use Private key backup above to save your key.
-                  Keep a backup of your deployment too.
+                  {zh
+                    ? '按请求付费；网关会在付款前确认价格。余额为正并不保证足够支付每个请求。此钱包加密存储在你的 NOFX 服务器上，而不是浏览器中。使用上方的私钥备份保存你的密钥。也请备份你的部署。'
+                    : 'Pay per request; the gateway checks the price before payment. A positive balance does not guarantee enough funds for every request. This wallet is encrypted on your NOFX server, not in your browser. Use Private key backup above to save your key. Keep a backup of your deployment too.'}
                 </p>
                 {directProviders.length > 0 && (
                   <button
@@ -531,25 +622,28 @@ export function FrontierSetup({
                     className="frontier-own-ai"
                     onClick={() => setOwnAI(directProviders)}
                   >
-                    Use my own API key instead →
+                    {zh ? '改用我自己的 API 密钥 →' : 'Use my own API key instead →'}
                   </button>
                 )}
                 <footer>
-                  <button onClick={() => onOpen(null)}>Keep exploring</button>
+                  <button onClick={() => onOpen(null)}>
+                    {zh ? '继续浏览' : 'Keep exploring'}
+                  </button>
                   <button
                     className="planning-primary"
                     disabled={!aiReady || working}
                     onClick={() => finish('ai')}
                   >
-                    Continue with this AI
+                    {zh ? '使用此 AI 继续' : 'Continue with this AI'}
                   </button>
                 </footer>
               </>
             ) : (
               <>
                 <p>
-                  Choose where your orders will go. Connecting does not place an
-                  order or start Autopilot.
+                  {zh
+                    ? '选择你的订单要发往哪里。连接不会下单，也不会启动 Autopilot。'
+                    : 'Choose where your orders will go. Connecting does not place an order or start Autopilot.'}
                 </p>
                 <div className="frontier-exchange-choices">
                   <button
@@ -557,7 +651,7 @@ export function FrontierSetup({
                     onClick={() => setChoice('hyperliquid')}
                   >
                     <b>Hyperliquid</b>
-                    <span>Connect your wallet</span>
+                    <span>{zh ? '连接你的钱包' : 'Connect your wallet'}</span>
                   </button>
                   {apiKeyVenues.map((exchange) => (
                     <button
@@ -565,9 +659,16 @@ export function FrontierSetup({
                       aria-pressed={choice === exchange}
                       onClick={() => setChoice(exchange)}
                     >
-                      <b>{venueName(exchange)} Futures</b>
+                      <b>
+                        {venueName(exchange)} {zh ? '合约' : 'Futures'}
+                      </b>
                       <span>
-                        API key{exchange !== 'binance' ? ' + passphrase' : ''}
+                        {zh ? 'API 密钥' : 'API key'}
+                        {exchange !== 'binance'
+                          ? zh
+                            ? ' + 口令'
+                            : ' + passphrase'
+                          : ''}
                       </span>
                     </button>
                   ))}
@@ -584,44 +685,54 @@ export function FrontierSetup({
                     <b>
                       {currentAccount.name} ·{' '}
                       {exchangeReady
-                        ? 'Account verified'
+                        ? zh
+                          ? '账户已核实'
+                          : 'Account verified'
                         : checked?.status === 'checking'
-                          ? 'Checking the exchange…'
-                          : 'Verification incomplete'}
+                          ? zh
+                            ? '正在检查交易所…'
+                            : 'Checking the exchange…'
+                          : zh
+                            ? '核实未完成'
+                            : 'Verification incomplete'}
                     </b>
                     {exchangeReady ? (
                       <>
                         <p>
-                          Equity {Number(checked.equity).toFixed(2)} · Available
-                          margin {Number(checked.available).toFixed(2)}{' '}
-                          {venue === 'hyperliquid' ? 'USDC' : 'USDT'}
+                          {zh
+                            ? `权益 ${Number(checked.equity).toFixed(2)} · 可用保证金 ${Number(checked.available).toFixed(2)} ${venue === 'hyperliquid' ? 'USDC' : 'USDT'}`
+                            : `Equity ${Number(checked.equity).toFixed(2)} · Available margin ${Number(checked.available).toFixed(2)} ${venue === 'hyperliquid' ? 'USDC' : 'USDT'}`}
                         </p>
                         {Number(checked.available) <= 0 && (
                           <p>
-                            No free margin right now. You can still generate
-                            plans; add trading funds or free margin before
-                            placing a new order.
+                            {zh
+                              ? '当前没有可用保证金。你仍可以生成计划；下新订单前，请添加交易资金或释放保证金。'
+                              : 'No free margin right now. You can still generate plans; add trading funds or free margin before placing a new order.'}
                           </p>
                         )}
                       </>
                     ) : (
                       <p>
                         {checked?.error ||
-                          'Checking credentials and reading the live account.'}
+                          (zh
+                            ? '正在检查凭据并读取实时账户。'
+                            : 'Checking credentials and reading the live account.')}
                       </p>
                     )}
                     <button
                       onClick={() => void verifyAccount()}
                       disabled={checked?.status === 'checking'}
                     >
-                      Verify account
+                      {zh ? '核实账户' : 'Verify account'}
                     </button>
                   </div>
                 )}
                 {choice === 'hyperliquid' ? (
                   currentAccount?.exchange_type === 'hyperliquid' ? (
                     <details className="frontier-wallet-details">
-                      <summary>Wallet permissions & funding</summary>
+                      <summary>
+                        {zh ? '钱包权限与资金' : 'Wallet permissions & funding'}
+                      </summary>
                       <HyperliquidWalletConnect
                         key={currentAccount.id}
                         account={{
@@ -629,7 +740,7 @@ export function FrontierSetup({
                           walletAddress:
                             currentAccount.hyperliquidWalletAddr || '',
                         }}
-                        language="en"
+                        language={zh ? 'zh' : 'en'}
                         isLoggedIn
                         variant="inline"
                         onSaved={savedExchange}
@@ -637,7 +748,7 @@ export function FrontierSetup({
                     </details>
                   ) : (
                     <HyperliquidWalletConnect
-                      language="en"
+                      language={zh ? 'zh' : 'en'}
                       isLoggedIn
                       variant="inline"
                       onSaved={savedExchange}
@@ -645,14 +756,26 @@ export function FrontierSetup({
                   )
                 ) : (
                   <div className="frontier-setup-start">
-                    <b>Connect {venueName(choice)} USDT Futures</b>
+                    <b>
+                      {zh
+                        ? `连接 ${venueName(choice)} USDT 合约`
+                        : `Connect ${venueName(choice)} USDT Futures`}
+                    </b>
                     <ol>
-                      <li>Create an API key with Futures trading enabled.</li>
                       <li>
-                        Allow this NOFX server IP. Keep withdrawals disabled.
+                        {zh
+                          ? '创建一个已启用合约交易的 API 密钥。'
+                          : 'Create an API key with Futures trading enabled.'}
                       </li>
                       <li>
-                        Save the key here. We then verify the live account.
+                        {zh
+                          ? '允许此 NOFX 服务器 IP。保持提现关闭。'
+                          : 'Allow this NOFX server IP. Keep withdrawals disabled.'}
+                      </li>
+                      <li>
+                        {zh
+                          ? '在此保存密钥。随后我们会核实实时账户。'
+                          : 'Save the key here. We then verify the live account.'}
                       </li>
                     </ol>
                     <button
@@ -663,8 +786,12 @@ export function FrontierSetup({
                       }}
                     >
                       {currentAccount?.exchange_type === choice
-                        ? `Update ${venueName(choice)} connection`
-                        : `Connect ${venueName(choice)}`}
+                        ? zh
+                          ? `更新 ${venueName(choice)} 连接`
+                          : `Update ${venueName(choice)} connection`
+                        : zh
+                          ? `连接 ${venueName(choice)}`
+                          : `Connect ${venueName(choice)}`}
                     </button>
                     {currentAccount?.exchange_type === choice && (
                       <button
@@ -673,25 +800,34 @@ export function FrontierSetup({
                           setCex(true)
                         }}
                       >
-                        Add another {venueName(choice)} account
+                        {zh
+                          ? `再添加一个 ${venueName(choice)} 账户`
+                          : `Add another ${venueName(choice)} account`}
                       </button>
                     )}
                   </div>
                 )}
                 <p className="frontier-setup-note">
-                  Trading permissions, balances and order details are checked
-                  again before execution. Setup does not approve a trade.
+                  {zh
+                    ? '执行前会再次检查交易权限、余额和订单详情。设置本身不会批准任何交易。'
+                    : 'Trading permissions, balances and order details are checked again before execution. Setup does not approve a trade.'}
                 </p>
                 <footer>
                   <button onClick={() => onOpen(null)}>
-                    {currentAccount ? 'Close' : 'Plan without an account'}
+                    {currentAccount
+                      ? zh
+                        ? '关闭'
+                        : 'Close'
+                      : zh
+                        ? '无账户规划'
+                        : 'Plan without an account'}
                   </button>
                   <button
                     className="planning-primary"
                     disabled={!exchangeReady || choice !== venue}
                     onClick={() => finish('exchange')}
                   >
-                    Return to my plan
+                    {zh ? '返回我的计划' : 'Return to my plan'}
                   </button>
                 </footer>
               </>
@@ -709,13 +845,15 @@ export function FrontierSetup({
           }
           initialExchangeType={choice}
           allowedExchangeTypes={[choice]}
-          language="en"
+          language={zh ? 'zh' : 'en'}
           onClose={() => setCex(false)}
           onDelete={() => {}}
           onSave={async (id, type, name, key, secret, passphrase, testnet) => {
             if (!apiKeyVenues.includes(type) || type !== choice || testnet)
               throw new Error(
-                'Frontier requires a supported mainnet USDT futures account'
+                zh
+                  ? 'Frontier 需要受支持的主网 USDT 合约账户'
+                  : 'Frontier requires a supported mainnet USDT futures account'
               )
             if (id) {
               await api.updateExchangeConfigsEncrypted({
@@ -750,7 +888,7 @@ export function FrontierSetup({
           allModels={ownAI}
           configuredModels={models}
           editingModelId={null}
-          language="en"
+          language={zh ? 'zh' : 'en'}
           onClose={() => setOwnAI(null)}
           onDelete={() => {}}
           onSave={async (id, key, url, name) => {
@@ -774,7 +912,9 @@ export function FrontierSetup({
               setOwnAI(null)
               setError('')
             } catch {
-              throw new Error('Could not save the AI provider.')
+              throw new Error(
+                zh ? '无法保存 AI 提供商。' : 'Could not save the AI provider.'
+              )
             }
           }}
         />

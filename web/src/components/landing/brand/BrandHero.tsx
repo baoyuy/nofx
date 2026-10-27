@@ -3,8 +3,39 @@ import { ArrowRight, Github } from 'lucide-react'
 import { Marquee } from './Marquee'
 import { OFFICIAL_LINKS } from '../../../constants/branding'
 import AgentTerminal from './AgentTerminal'
+import { useLanguage } from '../../../contexts/LanguageContext'
+
+const TEXT = {
+    en: {
+        marquee:
+            'NOFX AI TRADING • AUTOMATED WEALTH • DECENTRALIZED INTELLIGENCE • PUNK ETHOS •',
+        titleA: 'AI TRADING',
+        titleB: 'EVOLVED',
+        subA: 'Autonomous trading agents. High-frequency execution.',
+        subB: 'Institutional-grade strategies for the',
+        subHighlight: 'DEGENERATES',
+        startTrading: 'Start Trading',
+        source: 'Source',
+        systemOnline: 'SYSTEM ONLINE',
+    },
+    zh: {
+        marquee:
+            'NOFX AI 交易 • 自动财富 • 去中心化智能 • 朋克精神 •',
+        titleA: 'AI 交易',
+        titleB: '进化',
+        subA: '自主交易智能体。高频执行。',
+        subB: '机构级策略，专为',
+        subHighlight: '狂热玩家',
+        startTrading: '开始交易',
+        source: '源代码',
+        systemOnline: '系统在线',
+    },
+} as const
 
 export default function BrandHero() {
+    const { language } = useLanguage()
+    const tx = language === 'zh' ? TEXT.zh : TEXT.en
+
     const handleScroll = () => {
         const element = document.getElementById('features')
         if (element) {
@@ -18,8 +49,8 @@ export default function BrandHero() {
             {/* Top Marquee */}
             <div className="w-full bg-nofx-gold text-nofx-bg-lighter font-bold py-2 border-y border-nofx-text/20 z-20">
                 <Marquee speed={40}>
-                    <span className="mx-8 text-sm md:text-base uppercase tracking-widest">NOFX AI TRADING • AUTOMATED WEALTH • DECENTRALIZED INTELLIGENCE • PUNK ETHOS •</span>
-                    <span className="mx-8 text-sm md:text-base uppercase tracking-widest">NOFX AI TRADING • AUTOMATED WEALTH • DECENTRALIZED INTELLIGENCE • PUNK ETHOS •</span>
+                    <span className="mx-8 text-sm md:text-base uppercase tracking-widest">{tx.marquee}</span>
+                    <span className="mx-8 text-sm md:text-base uppercase tracking-widest">{tx.marquee}</span>
                 </Marquee>
             </div>
 
@@ -33,15 +64,15 @@ export default function BrandHero() {
                         transition={{ duration: 0.8, ease: "circOut" }}
                     >
                         <h1 className="text-6xl md:text-8xl lg:text-[7rem] font-black leading-[0.9] tracking-tighter mb-6">
-                            AI TRADING<br />
-                            <span className="text-nofx-gold">EVOLVED</span>
+                            {tx.titleA}<br />
+                            <span className="text-nofx-gold">{tx.titleB}</span>
                         </h1>
 
                         <p className="text-xl md:text-2xl text-nofx-text-muted max-w-xl mb-10 font-mono leading-relaxed">
-                            Autonomous trading agents. High-frequency execution.
+                            {tx.subA}
                             <br />
-                            Institutional-grade strategies for the
-                            <span className="text-nofx-bg-lighter font-bold ml-2 bg-nofx-accent px-2 py-0.5">DEGENERATES</span>.
+                            {tx.subB}
+                            <span className="text-nofx-bg-lighter font-bold ml-2 bg-nofx-accent px-2 py-0.5">{tx.subHighlight}</span>.
                         </p>
 
                         <div className="flex flex-wrap gap-4">
@@ -50,7 +81,7 @@ export default function BrandHero() {
                                 className="bg-nofx-gold text-nofx-bg-lighter text-lg font-black px-8 py-4 uppercase tracking-wider hover:bg-nofx-text hover:scale-105 transition-all flex items-center gap-2 clip-path-slant"
                                 style={{ clipPath: 'polygon(0 0, 100% 0, 95% 100%, 0% 100%)' }}
                             >
-                                Start Trading <ArrowRight className="w-6 h-6" />
+                                {tx.startTrading} <ArrowRight className="w-6 h-6" />
                             </button>
 
                             <a
@@ -59,14 +90,14 @@ export default function BrandHero() {
                                 rel="noreferrer"
                                 className="border-2 border-[rgba(25,36,52,0.2)] text-nofx-text text-lg font-bold px-8 py-4 uppercase tracking-wider hover:bg-nofx-text/5 hover:border-nofx-text transition-all flex items-center gap-2"
                             >
-                                <Github className="w-5 h-5" /> Source
+                                <Github className="w-5 h-5" /> {tx.source}
                             </a>
                         </div>
 
                         <div className="mt-12 flex items-center gap-8 text-nofx-text-muted font-mono text-xs md:text-sm">
                             <div className="flex items-center gap-2">
                                 <div className="w-2 h-2 bg-nofx-success rounded-full animate-pulse" />
-                                SYSTEM ONLINE
+                                {tx.systemOnline}
                             </div>
                             <div className="flex items-center gap-2">
                                 <div className="w-2 h-2 bg-nofx-accent rounded-full" />

@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { HistoricalPosition } from '../../types'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 /**
  * EdgeProfile — where the money actually comes from. Aggregates recent closed
@@ -46,6 +47,8 @@ function toEpochMs(value: number | string): number {
 }
 
 export function EdgeProfile({ positions }: EdgeProfileProps) {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
   const { holdBuckets, sideBuckets, sample } = useMemo(() => {
     const holds = [
       newBucket('<15m'),
@@ -79,7 +82,7 @@ export function EdgeProfile({ positions }: EdgeProfileProps) {
   }, [positions])
 
   if (sample === 0) {
-    return <div className="tm-sc">No closed trades yet.</div>
+    return <div className="tm-sc">{isZh ? '暂无已平仓交易。' : 'No closed trades yet.'}</div>
   }
 
   const maxAbsNet = Math.max(0.01, ...holdBuckets.map((b) => Math.abs(b.net)))
@@ -87,12 +90,24 @@ export function EdgeProfile({ positions }: EdgeProfileProps) {
   const row = (bucket: BucketAgg) => {
     const winPct = bucket.n > 0 ? (100 * bucket.wins) / bucket.n : 0
     const up = bucket.net >= 0
+    const displayLabel =
+      bucket.label === 'long'
+        ? isZh
+          ? '做多'
+          : 'long'
+        : bucket.label === 'short'
+          ? isZh
+            ? '做空'
+            : 'short'
+          : bucket.label
     return (
       <div key={bucket.label} style={{ marginBottom: 7 }}>
         <div className="tm-mono" style={{ display: 'flex', alignItems: 'baseline', fontSize: 11, marginBottom: 2 }}>
-          <span style={{ fontWeight: 500, minWidth: 52 }}>{bucket.label}</span>
+          <span style={{ fontWeight: 500, minWidth: 52 }}>{displayLabel}</span>
           <span className="tm-sc">
-            {bucket.n} trades · {bucket.n > 0 ? `${winPct.toFixed(0)}% win` : '—'} · fees ${bucket.fees.toFixed(2)}
+            {isZh
+              ? `${bucket.n} 笔交易 · ${bucket.n > 0 ? `胜率 ${winPct.toFixed(0)}%` : '—'} · 手续费 $${bucket.fees.toFixed(2)}`
+              : `${bucket.n} trades · ${bucket.n > 0 ? `${winPct.toFixed(0)}% win` : '—'} · fees $${bucket.fees.toFixed(2)}`}
           </span>
           <span className={up ? 'tm-up' : 'tm-dn'} style={{ marginLeft: 'auto', fontWeight: 600 }}>
             {bucket.n > 0 ? fmtUsd(bucket.net) : '—'}
@@ -118,8 +133,11 @@ export function EdgeProfile({ positions }: EdgeProfileProps) {
   // one-line takeaway: does patience pay on this book?
   const shortHolds = holdBuckets[0].net + holdBuckets[1].net
   const longHolds = holdBuckets[2].net + holdBuckets[3].net
-  const takeaway =
-    longHolds > shortHolds
+  const takeaway = isZh
+    ? longHolds > shortHolds
+      ? `优势集中在持仓 ≥ 1 小时的交易（${fmtUsd(longHolds)}，1 小时以内为 ${fmtUsd(shortHolds)}）`
+      : `本样本中短持仓表现更好（${fmtUsd(shortHolds)}，≥ 1 小时为 ${fmtUsd(longHolds)}）`
+    : longHolds > shortHolds
       ? `edge concentrates in holds ≥ 1h (${fmtUsd(longHolds)} vs ${fmtUsd(shortHolds)} under 1h)`
       : `short holds outperform on this sample (${fmtUsd(shortHolds)} vs ${fmtUsd(longHolds)} ≥ 1h)`
 
@@ -129,7 +147,7 @@ export function EdgeProfile({ positions }: EdgeProfileProps) {
       <div style={{ borderTop: '1px solid var(--tm-hair)', margin: '8px 0 7px' }} />
       {sideBuckets.map(row)}
       <div className="tm-sc" style={{ marginTop: 6, fontSize: 9 }}>
-        last {sample} closed · {takeaway}
+        {isZh ? `最近 ${sample} 笔已平仓 · ${takeaway}` : `last ${sample} closed · ${takeaway}`}
       </div>
     </div>
   )

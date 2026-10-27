@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef } from 'react'
 import { ExternalLink } from 'lucide-react'
 import type { FAQBlock, FAQCategory } from '../../data/faqData'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 interface FAQContentProps {
   categories: FAQCategory[]
@@ -100,6 +101,8 @@ export function FAQContent({
   categories,
   onActiveItemChange,
 }: FAQContentProps) {
+  const { language } = useLanguage()
+  const zh = language === 'zh'
   const sectionRefs = useRef<Map<string, HTMLElement>>(new Map())
 
   useEffect(() => {
@@ -142,7 +145,11 @@ export function FAQContent({
             </h2>
             <span className="ml-auto font-sans text-[10px] tracking-normal text-nofx-text-muted">
               {category.items.length}{' '}
-              {category.items.length === 1 ? 'entry' : 'entries'}
+              {zh
+                ? '条'
+                : category.items.length === 1
+                  ? 'entry'
+                  : 'entries'}
             </span>
           </div>
 

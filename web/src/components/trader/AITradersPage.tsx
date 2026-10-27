@@ -94,7 +94,7 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
     } catch {
       setExchangeAccountStates({})
       setAccountStateError(
-        'Account verification could not finish. Your connection is saved. Retry the check below.'
+        language === 'zh' ? '账户验证未能完成。你的连接已保存，请在下方重试检查。' : 'Account verification could not finish. Your connection is saved. Retry the check below.'
       )
     } finally {
       setIsExchangeAccountStatesLoading(false)
@@ -124,7 +124,7 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
       setSupportedModels(models)
     } catch (error) {
       setConfigError(
-        'Connections could not be loaded. Saved credentials have not been changed.'
+        language === 'zh' ? '连接加载失败。已保存的凭据未被更改。' : 'Connections could not be loaded. Saved credentials have not been changed.'
       )
       throw error
     } finally {
@@ -564,7 +564,7 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
     } catch (error) {
       toast.error(t('saveConfigFailed', language))
       throw new Error(
-        'Could not save the AI connection. Your wallet backup remains valid.'
+        language === 'zh' ? '无法保存 AI 连接。你的钱包备份仍然有效。' : 'Could not save the AI connection. Your wallet backup remains valid.'
       )
     }
   }
@@ -738,7 +738,7 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
         .getElementById('autopilot-launch-panel')
         ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       toast.info(
-        'Deposit USDC to your Hyperliquid account, the balance check updates automatically.'
+        language === 'zh' ? '将 USDC 存入你的 Hyperliquid 账户，余额检查会自动更新。' : 'Deposit USDC to your Hyperliquid account, the balance check updates automatically.'
       )
     } else {
       return
@@ -781,27 +781,27 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
     <div className="config-page">
       <header className="config-page-heading">
         <div>
-          <span className="config-eyebrow">YOUR WORKSPACE</span>
-          <h1>Configuration</h1>
-          <p>Connect your AI. Link your accounts. Choose how you trade.</p>
+          <span className="config-eyebrow">{language === 'zh' ? '你的工作区' : 'YOUR WORKSPACE'}</span>
+          <h1>{language === 'zh' ? '配置' : 'Configuration'}</h1>
+          <p>{language === 'zh' ? '连接你的 AI，绑定你的账户，选择你的交易方式。' : 'Connect your AI. Link your accounts. Choose how you trade.'}</p>
         </div>
         <button
           className="config-primary"
           onClick={() => navigate(ROUTES.planning)}
         >
-          Open Frontier <ArrowUpRight size={15} />
+          {language === 'zh' ? '打开 Frontier' : 'Open Frontier'} <ArrowUpRight size={15} />
         </button>
       </header>
       <div className="config-layout">
         <aside className="config-sidebar">
-          <span className="config-nav-label">SETUP</span>
+          <span className="config-nav-label">{language === 'zh' ? '设置' : 'SETUP'}</span>
           <button
             aria-current={configView === 'connections' ? 'page' : undefined}
             onClick={() => changeConfigView('connections')}
           >
             <Cable size={17} />
             <span>
-              Connections<small>AI & trading accounts</small>
+              {language === 'zh' ? '连接' : 'Connections'}<small>{language === 'zh' ? 'AI 与交易账户' : 'AI & trading accounts'}</small>
             </span>
           </button>
           <button
@@ -810,22 +810,23 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
           >
             <Bot size={17} />
             <span>
-              Autopilot<small>Optional automated trading</small>
+              Autopilot<small>{language === 'zh' ? '可选的自动交易' : 'Optional automated trading'}</small>
             </span>
             <b>{traders?.length || 0}</b>
           </button>
-          <span className="config-nav-label">PREFERENCES</span>
+          <span className="config-nav-label">{language === 'zh' ? '偏好设置' : 'PREFERENCES'}</span>
           <button onClick={() => navigate(ROUTES.settings)}>
             <Settings2 size={17} />
             <span>
-              Account settings<small>Profile & security</small>
+              {language === 'zh' ? '账户设置' : 'Account settings'}<small>{language === 'zh' ? '个人资料与安全' : 'Profile & security'}</small>
             </span>
           </button>
           <div className="config-sidebar-note">
-            <strong>You’re in control.</strong>
+            <strong>{language === 'zh' ? '一切由你掌控。' : 'You’re in control.'}</strong>
             <p>
-              Frontier requires approval for each trade. Autopilot runs only
-              when you start it.
+              {language === 'zh'
+                ? 'Frontier 的每笔交易都需要你批准。Autopilot 只在你启动后才会运行。'
+                : 'Frontier requires approval for each trade. Autopilot runs only when you start it.'}
             </p>
           </div>
         </aside>
@@ -834,13 +835,19 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
             <div>
               <h2>
                 {configView === 'connections'
-                  ? 'Your connections'
+                  ? language === 'zh'
+                    ? '你的连接'
+                    : 'Your connections'
                   : 'Autopilot'}
               </h2>
               <p>
                 {configView === 'connections'
-                  ? 'Manage the services you use across NOFX.'
-                  : 'Configure and manage your automated traders.'}
+                  ? language === 'zh'
+                    ? '管理你在 NOFX 中使用的各项服务。'
+                    : 'Manage the services you use across NOFX.'
+                  : language === 'zh'
+                    ? '配置和管理你的自动交易员。'
+                    : 'Configure and manage your automated traders.'}
               </p>
             </div>
             <button
@@ -851,7 +858,7 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
               }}
             >
               <RefreshCw size={14} />{' '}
-              {configsLoading ? 'Refreshing…' : 'Refresh'}
+              {configsLoading ? (language === 'zh' ? '刷新中…' : 'Refreshing…') : (language === 'zh' ? '刷新' : 'Refresh')}
             </button>
           </div>
           {configError && (
@@ -888,25 +895,27 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
               )}
 
               <section className="config-next">
-                <span className="config-eyebrow">WHAT’S NEXT?</span>
-                <h3>From connections to your first trade.</h3>
+                <span className="config-eyebrow">{language === 'zh' ? '接下来做什么？' : 'WHAT’S NEXT?'}</span>
+                <h3>{language === 'zh' ? '从连接到你的第一笔交易。' : 'From connections to your first trade.'}</h3>
                 <div>
                   <button onClick={() => navigate(ROUTES.planning)}>
                     <span>
-                      <strong>Explore with Frontier</strong>
+                      <strong>{language === 'zh' ? '用 Frontier 探索' : 'Explore with Frontier'}</strong>
                       <small>
-                        Build plans with AI. Review and approve each trade
-                        yourself.
+                        {language === 'zh'
+                          ? '用 AI 制定计划，每笔交易都由你自己审核和批准。'
+                          : 'Build plans with AI. Review and approve each trade yourself.'}
                       </small>
                     </span>
                     <ArrowUpRight size={18} />
                   </button>
                   <button onClick={() => changeConfigView('autopilot')}>
                     <span>
-                      <strong>Set up Autopilot</strong>
+                      <strong>{language === 'zh' ? '设置 Autopilot' : 'Set up Autopilot'}</strong>
                       <small>
-                        Choose a strategy and explicitly start an automated
-                        trader.
+                        {language === 'zh'
+                          ? '选择一个策略，并明确启动一位自动交易员。'
+                          : 'Choose a strategy and explicitly start an automated trader.'}
                       </small>
                     </span>
                     <ArrowUpRight size={18} />
@@ -921,19 +930,29 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
                 <div>
                   <strong>
                     {isTradersLoading
-                      ? 'Checking Autopilot status…'
+                      ? language === 'zh'
+                        ? '正在检查 Autopilot 状态…'
+                        : 'Checking Autopilot status…'
                       : hasRunningTrader
-                        ? 'Autopilot is running'
-                        : 'No Autopilot is running'}
+                        ? language === 'zh'
+                          ? 'Autopilot 正在运行'
+                          : 'Autopilot is running'
+                        : language === 'zh'
+                          ? '暂无运行中的 Autopilot'
+                          : 'No Autopilot is running'}
                   </strong>
                   <p>
                     {configsLoading
-                      ? 'Checking saved connections…'
-                      : `${configuredModels.length} AI connection${configuredModels.length === 1 ? '' : 's'} · ${configuredExchanges.length} trading account${configuredExchanges.length === 1 ? '' : 's'}`}
+                      ? language === 'zh'
+                        ? '正在检查已保存的连接…'
+                        : 'Checking saved connections…'
+                      : language === 'zh'
+                        ? `${configuredModels.length} 个 AI 连接 · ${configuredExchanges.length} 个交易账户`
+                        : `${configuredModels.length} AI connection${configuredModels.length === 1 ? '' : 's'} · ${configuredExchanges.length} trading account${configuredExchanges.length === 1 ? '' : 's'}`}
                   </p>
                 </div>
                 <button onClick={() => setShowLaunch((v) => !v)}>
-                  {showLaunch ? 'Hide guided setup' : 'Guided setup'}
+                  {showLaunch ? (language === 'zh' ? '隐藏引导设置' : 'Hide guided setup') : (language === 'zh' ? '引导设置' : 'Guided setup')}
                 </button>
                 <button
                   className="config-primary"
@@ -944,7 +963,7 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
                     !configuredExchanges.length
                   }
                 >
-                  <Plus size={14} /> Create Autopilot
+                  <Plus size={14} /> {language === 'zh' ? '创建 Autopilot' : 'Create Autopilot'}
                 </button>
               </div>
               {showLaunch && launchPanel}

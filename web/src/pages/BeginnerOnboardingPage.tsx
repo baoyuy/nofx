@@ -52,7 +52,7 @@ export function BeginnerOnboardingPage() {
         err instanceof Error
           ? err.message
           : isZh
-            ? 'Failed to prepare beginner wallet'
+            ? '准备新手钱包失败'
             : 'Failed to prepare beginner wallet'
       )
     } finally {
@@ -109,7 +109,7 @@ export function BeginnerOnboardingPage() {
   const noticeText = useMemo(
     () =>
       isZh
-        ? 'This wallet only pays for model calls. It does not fund your exchange automatically. Back up your private key below, and only deposit USDC on Base.'
+        ? '此钱包仅用于支付模型调用费用，不会自动为你的交易所账户充值。请在下方备份你的私钥，并且只存入 Base 网络上的 USDC。'
         : 'This wallet only pays for model calls. It does not fund your exchange automatically. Back up your private key below, and only deposit USDC on Base.',
     [isZh]
   )
@@ -117,9 +117,9 @@ export function BeginnerOnboardingPage() {
   const copyText = async (value: string, label: string) => {
     try {
       await navigator.clipboard.writeText(value)
-      toast.success(isZh ? `${label} copied` : `${label} copied`)
+      toast.success(isZh ? `${label}已复制` : `${label} copied`)
     } catch {
-      toast.error(isZh ? 'Copy failed' : 'Copy failed')
+      toast.error(isZh ? '复制失败' : 'Copy failed')
     }
   }
 
@@ -136,7 +136,7 @@ export function BeginnerOnboardingPage() {
           type="button"
           onClick={handleContinue}
           className="absolute right-6 top-6 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(25,36,52,0.14)] bg-nofx-text/5 text-nofx-text-muted transition hover:border-[rgba(25,36,52,0.24)] hover:bg-nofx-text/10 hover:text-nofx-text"
-          aria-label={isZh ? 'Skip' : 'Skip'}
+          aria-label={isZh ? '跳过' : 'Skip'}
         >
           <X className="h-5 w-5" />
         </button>
@@ -154,7 +154,7 @@ export function BeginnerOnboardingPage() {
                       : 'text-[10px] tracking-[0.2em]'
                   }`}
                 >
-                  {isZh ? 'Beginner Guard' : 'Beginner Guard'}
+                  {isZh ? '新手守护' : 'Beginner Guard'}
                 </div>
                 <h1
                   className={`mt-2 font-bold leading-[1.04] text-nofx-text ${
@@ -163,7 +163,7 @@ export function BeginnerOnboardingPage() {
                       : 'max-w-[720px] text-[27px] tracking-[-0.03em] sm:text-[35px] xl:text-[42px]'
                   }`}
                 >
-                  {isZh ? 'Your wallet is ready' : 'Your wallet is ready'}
+                  {isZh ? '你的钱包已准备就绪' : 'Your wallet is ready'}
                 </h1>
               </div>
             </div>
@@ -177,7 +177,7 @@ export function BeginnerOnboardingPage() {
             >
               Claw402 + DeepSeek{' '}
               <span className="mx-2 text-nofx-text-muted">·</span>
-              {isZh ? 'Pay per call' : 'Pay per call'}
+              {isZh ? '按次付费' : 'Pay per call'}
             </div>
           </div>
 
@@ -185,7 +185,7 @@ export function BeginnerOnboardingPage() {
             {loading ? (
               <div className="flex min-h-[390px] items-center justify-center px-6 text-sm text-nofx-text-muted">
                 {isZh
-                  ? 'Preparing your Base wallet...'
+                  ? '正在准备你的 Base 钱包...'
                   : 'Preparing your Base wallet...'}
               </div>
             ) : data ? (
@@ -198,7 +198,7 @@ export function BeginnerOnboardingPage() {
 
                     <div className="mt-4 text-[15px] font-medium text-nofx-text">
                       {isZh
-                        ? 'Deposit address (Base USDC)'
+                        ? '充值地址（Base USDC）'
                         : 'Deposit address (Base USDC)'}
                     </div>
 
@@ -208,7 +208,9 @@ export function BeginnerOnboardingPage() {
                           <span className="text-[22px]">
                             {data.balance_status === 'ok'
                               ? data.balance_usdc
-                              : 'Checking…'}
+                              : isZh
+                                ? '查询中…'
+                                : 'Checking…'}
                           </span>
                           <span className="text-[20px]">USDC</span>
                         </div>
@@ -219,7 +221,7 @@ export function BeginnerOnboardingPage() {
                         disabled={refreshingBalance}
                         className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-nofx-success/20 bg-nofx-bg-deeper text-nofx-success transition hover:bg-nofx-success/10 disabled:cursor-not-allowed disabled:opacity-60"
                         aria-label={
-                          isZh ? 'Refresh balance' : 'Refresh balance'
+                          isZh ? '刷新余额' : 'Refresh balance'
                         }
                       >
                         <RefreshCw
@@ -229,19 +231,31 @@ export function BeginnerOnboardingPage() {
                     </div>
 
                     <div className="mt-4 text-sm text-nofx-text-muted">
-                      $5–$10 usually lasts a long time · balance updates by
-                      itself after you deposit
+                      {isZh
+                        ? '$5–$10 通常可以用很久 · 充值后余额会自动更新'
+                        : '$5–$10 usually lasts a long time · balance updates by itself after you deposit'}
                     </div>
 
                     {/* the wall every true beginner hits: where does USDC come from? */}
                     <div className="mt-5 rounded-2xl border border-nofx-gold/20 bg-nofx-gold/10 px-5 py-4 text-left text-[13px] leading-6 text-nofx-text">
                       <div className="mb-1 font-semibold">
-                        Don&apos;t have USDC yet?
+                        {isZh ? '还没有 USDC？' : "Don't have USDC yet?"}
                       </div>
-                      Buy USDC on Binance, OKX or Coinbase, then withdraw it to
-                      the address above — and pick the <b>Base network</b> when
-                      the exchange asks. It usually arrives in about a minute.
-                      Only send USDC on Base.
+                      {isZh ? (
+                        <>
+                          在 Binance、OKX 或 Coinbase 购买 USDC，然后提现到上方地址——
+                          交易所询问时请选择 <b>Base 网络</b>。通常约一分钟即可到账。
+                          只发送 Base 网络上的 USDC。
+                        </>
+                      ) : (
+                        <>
+                          Buy USDC on Binance, OKX or Coinbase, then withdraw
+                          it to the address above — and pick the{' '}
+                          <b>Base network</b> when the exchange asks. It
+                          usually arrives in about a minute. Only send USDC
+                          on Base.
+                        </>
+                      )}
                     </div>
                   </div>
                 </section>
@@ -252,7 +266,7 @@ export function BeginnerOnboardingPage() {
                       <div className="mb-3 flex items-center gap-2 text-sm font-medium text-nofx-gold">
                         <Wallet className="h-4 w-4" />
                         <span>
-                          {isZh ? 'Wallet address' : 'Wallet address'}
+                          {isZh ? '钱包地址' : 'Wallet address'}
                         </span>
                       </div>
                       <div className="flex items-stretch gap-3">
@@ -262,10 +276,10 @@ export function BeginnerOnboardingPage() {
                         <button
                           type="button"
                           onClick={() =>
-                            copyText(data.address, isZh ? 'Address' : 'Address')
+                            copyText(data.address, isZh ? '地址' : 'Address')
                           }
                           className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-[rgba(25,36,52,0.14)] bg-nofx-text/5 text-nofx-text transition hover:border-[rgba(25,36,52,0.24)] hover:bg-nofx-text/10 hover:text-nofx-text"
-                          aria-label={isZh ? 'Copy address' : 'Copy address'}
+                          aria-label={isZh ? '复制地址' : 'Copy address'}
                         >
                           <Copy className="h-5 w-5" />
                         </button>
@@ -301,7 +315,7 @@ export function BeginnerOnboardingPage() {
                         isZh ? 'text-[20px]' : 'text-[16px] sm:text-[18px]'
                       }`}
                     >
-                      <span>Continue setup</span>
+                      <span>{isZh ? '继续设置' : 'Continue setup'}</span>
                       <ArrowRight className="h-5 w-5" />
                     </button>
                   </div>

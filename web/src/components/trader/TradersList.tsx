@@ -241,7 +241,7 @@ function TraderRow({
             {getModelDisplayName(
               trader.ai_model.split('_').pop() || trader.ai_model
             )}{' '}
-            Model • {getExchangeDisplayName(trader.exchange_id, allExchanges)}
+            {language === 'zh' ? '模型' : 'Model'} • {getExchangeDisplayName(trader.exchange_id, allExchanges, language)}
           </div>
         </div>
       </div>
@@ -266,7 +266,7 @@ function TraderRow({
                 onToggleTraderAddress(trader.trader_id)
               }}
               className="p-0.5 rounded-sm hover:bg-nofx-bg-deeper transition-colors"
-              title={isVisible ? (language === 'zh' ? 'Hide' : 'Hide') : (language === 'zh' ? 'Show' : 'Show')}
+              title={isVisible ? (language === 'zh' ? '隐藏' : 'Hide') : (language === 'zh' ? '显示' : 'Show')}
             >
               {isVisible ? (
                 <EyeOff className="w-3 h-3" style={{ color: '#707e92' }} />
@@ -281,7 +281,7 @@ function TraderRow({
                 onCopyAddress(trader.trader_id, walletAddr)
               }}
               className="p-0.5 rounded-sm hover:bg-nofx-bg-deeper transition-colors"
-              title={language === 'zh' ? 'Copy' : 'Copy'}
+              title={language === 'zh' ? '复制' : 'Copy'}
             >
               {isCopied ? (
                 <Check className="w-3 h-3" style={{ color: '#2E8B57' }} />
@@ -391,7 +391,7 @@ function TraderRow({
                   color: '#707e92',
                 }
             }
-            title={trader.show_in_competition !== false ? 'Shown in arena' : 'Hidden from arena'}
+            title={trader.show_in_competition !== false ? (language === 'zh' ? '在竞技场中显示' : 'Shown in arena') : (language === 'zh' ? '已从竞技场隐藏' : 'Hidden from arena')}
           >
             {trader.show_in_competition !== false ? (
               <Eye className="w-3 h-3 md:w-4 md:h-4" />

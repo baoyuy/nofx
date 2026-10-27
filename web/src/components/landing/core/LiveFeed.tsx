@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
+import { useLanguage } from '../../../contexts/LanguageContext'
+import type { Language } from '../../../i18n/translations'
 
 interface LogEntry {
     id: number
@@ -9,7 +11,8 @@ interface LogEntry {
     color: string
 }
 
-const generateLog = (id: number): LogEntry => {
+const generateLog = (id: number, language: Language): LogEntry => {
+    const zh = language === 'zh'
     const types = ['EXEC', 'SIGNAL', 'RISK', 'MACRO', 'SYS']
     const pairs = ['AAPL-USDC', 'NVDA-USDC', 'GOLD-USDC', 'EURUSD-USDC', 'OPENAI-IPO']
     const actions = ['BUY', 'SELL', 'HEDGE', 'ROTATE']
@@ -24,19 +27,27 @@ const generateLog = (id: number): LogEntry => {
             color = 'text-nofx-success'
             break;
         case 'SIGNAL':
-            msg = `US equities momentum signal confirmed (${(Math.random()).toFixed(3)} z-score)`
+            msg = zh
+                ? `美股动量信号已确认 (${(Math.random()).toFixed(3)} z-score)`
+                : `US equities momentum signal confirmed (${(Math.random()).toFixed(3)} z-score)`
             color = 'text-nofx-gold'
             break;
         case 'RISK':
-            msg = `Risk check passed: ${pairs[Math.floor(Math.random() * pairs.length)]} exposure within limits`
+            msg = zh
+                ? `风险检查通过：${pairs[Math.floor(Math.random() * pairs.length)]} 敞口在限额内`
+                : `Risk check passed: ${pairs[Math.floor(Math.random() * pairs.length)]} exposure within limits`
             color = 'text-nofx-danger'
             break;
         case 'MACRO':
-            msg = `Macro feed latency < ${Math.floor(Math.random() * 10)}ms`
+            msg = zh
+                ? `宏观数据延迟 < ${Math.floor(Math.random() * 10)}ms`
+                : `Macro feed latency < ${Math.floor(Math.random() * 10)}ms`
             color = 'text-nofx-text-muted'
             break;
         default:
-            msg = `System optimization cycle complete. Allocating resources.`
+            msg = zh
+                ? `系统优化周期完成。正在分配资源。`
+                : `System optimization cycle complete. Allocating resources.`
             color = 'text-nofx-accent'
     }
 
@@ -44,22 +55,23 @@ const generateLog = (id: number): LogEntry => {
 }
 
 export default function LiveFeed() {
+    const { language } = useLanguage()
     const [logs, setLogs] = useState<LogEntry[]>([])
 
     useEffect(() => {
         // Initial population
-        const initialLogs = Array.from({ length: 8 }).map((_, i) => generateLog(i))
+        const initialLogs = Array.from({ length: 8 }).map((_, i) => generateLog(i, language))
         setLogs(initialLogs)
 
         const interval = setInterval(() => {
             setLogs(prev => {
-                const newLog = generateLog(Date.now())
+                const newLog = generateLog(Date.now(), language)
                 return [newLog, ...prev.slice(0, 7)]
             })
         }, 800) // Fast 800ms updates for HFT feel
 
         return () => clearInterval(interval)
-    }, [])
+    }, [language])
 
     return (
         <section className="w-full bg-nofx-bg-lighter border-y border-[rgba(25,36,52,0.14)] py-1 overflow-hidden relative">

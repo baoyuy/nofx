@@ -36,7 +36,13 @@ export function GridRiskPanel({
       setRiskInfo(data)
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error')
+      setError(
+        err instanceof Error
+          ? err.message
+          : language === 'zh'
+            ? '未知错误'
+            : 'Unknown error'
+      )
     } finally {
       setLoading(false)
     }

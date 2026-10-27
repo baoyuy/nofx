@@ -2,6 +2,22 @@ import type { Plan } from '../../lib/planning'
 import { validationSummary } from '../../lib/planningPresentation'
 import { structureNames } from './PlanningActivity'
 import { PlanFunding } from './PlanFunding'
+import { useLanguage } from '../../contexts/LanguageContext'
+
+function useSafeLanguage() {
+  try {
+    return useLanguage().language
+  } catch {
+    return 'en' as const
+  }
+}
+
+const structureNamesZh: Record<string, string> = {
+  market: '市价',
+  limit: '单笔限价',
+  ladder: '加权阶梯',
+  twap: 'TWAP',
+}
 export interface PlanCheck {
   id: string
   kind: string
@@ -33,6 +49,9 @@ export function PlanStructures({
   showAllTypes?: boolean
   now?: number
 }) {
+  const language = useSafeLanguage()
+  const zh = language === 'zh'
+  const names = zh ? structureNamesZh : structureNames
   const price = (value: string) =>
     Number(value).toLocaleString('en-US', { maximumFractionDigits: 8 })
   const money = (value: string) =>
@@ -43,7 +62,7 @@ export function PlanStructures({
   return (
     <section
       className="planning-structures"
-      aria-label="Entry structure comparison"
+      aria-label={zh ? '入场结构对比' : 'Entry structure comparison'}
     >
       {['market', 'limit', 'ladder', 'twap']
         .filter(
@@ -63,7 +82,7 @@ export function PlanStructures({
               className={plan?.id === selected ? 'selected' : ''}
             >
               <header>
-                <strong>{structureNames[kind]}</strong>
+                <strong>{names[kind]}</strong>
                 <span
                   className={
                     plan
@@ -77,15 +96,27 @@ export function PlanStructures({
                 >
                   {plan
                     ? stale
-                      ? 'Refresh before trading'
-                      : 'Validated draft'
+                      ? zh
+                        ? '交易前请刷新'
+                        : 'Refresh before trading'
+                      : zh
+                        ? '已验证草稿'
+                        : 'Validated draft'
                     : check?.status === 'deferred'
-                      ? 'Wait for entry'
+                      ? zh
+                        ? '等待入场'
+                        : 'Wait for entry'
                       : check?.status === 'rejected'
-                        ? 'Not feasible'
+                        ? zh
+                          ? '不可行'
+                          : 'Not feasible'
                         : busy
-                          ? 'Evaluating'
-                          : 'Not proposed'}
+                          ? zh
+                            ? '评估中'
+                            : 'Evaluating'
+                          : zh
+                            ? '未提出'
+                            : 'Not proposed'}
                 </span>
               </header>
               {plan ? (
@@ -94,77 +125,129 @@ export function PlanStructures({
                   <span
                     className={`frontier-plan-side ${plan.idea.side === 'long' ? 'target-text' : 'stop-text'}`}
                   >
-                    {plan.idea.side === 'long' ? 'Long' : 'Short'} ·{' '}
-                    {plan.snapshot.symbol}
+                    {plan.idea.side === 'long'
+                      ? zh
+                        ? '做多'
+                        : 'Long'
+                      : zh
+                        ? '做空'
+                        : 'Short'}{' '}
+                    · {plan.snapshot.symbol}
                   </span>
                   <p>
                     {plan.orders.length}{' '}
                     {kind === 'twap'
-                      ? 'timed slices'
+                      ? zh
+                        ? '个定时分片'
+                        : 'timed slices'
                       : kind === 'ladder'
-                        ? 'price levels'
-                        : 'entry'}{' '}
-                    · Net R:R {Number(plan.reward_risk).toFixed(2)} : 1
+                        ? zh
+                          ? '个价格档位'
+                          : 'price levels'
+                        : zh
+                          ? '笔入场'
+                          : 'entry'}{' '}
+                    · {zh ? '净盈亏比' : 'Net R:R'}{' '}
+                    {Number(plan.reward_risk).toFixed(2)} : 1
                   </p>
                   <dl className="frontier-plan-levels">
                     <div>
-                      <dt>{kind === 'market' ? 'Est. entry' : 'Entry'}</dt>
+                      <dt>
+                        {kind === 'market'
+                          ? zh
+                            ? '预计入场'
+                            : 'Est. entry'
+                          : zh
+                            ? '入场'
+                            : 'Entry'}
+                      </dt>
                       <dd>{price(plan.idea.entry)}</dd>
                     </div>
                     <div>
-                      <dt>Stop</dt>
+                      <dt>{zh ? '止损' : 'Stop'}</dt>
                       <dd className="stop-text">{price(plan.idea.stop)}</dd>
                     </div>
                     <div>
-                      <dt>Target</dt>
+                      <dt>{zh ? '目标' : 'Target'}</dt>
                       <dd className="target-text">{price(plan.idea.target)}</dd>
                     </div>
                   </dl>
                   <p>
                     {kind === 'market'
-                      ? 'Enters at market after approval. Actual fill may differ.'
+                      ? zh
+                        ? '批准后以市价入场。实际成交价可能不同。'
+                        : 'Enters at market after approval. Actual fill may differ.'
                       : kind === 'twap'
-                        ? `${plan.orders.length} slices · ${plan.idea.execution.interval_seconds || 0}s apart`
+                        ? zh
+                          ? `${plan.orders.length} 个分片 · 间隔 ${plan.idea.execution.interval_seconds || 0} 秒`
+                          : `${plan.orders.length} slices · ${plan.idea.execution.interval_seconds || 0}s apart`
                         : kind === 'ladder'
-                          ? 'Orders placed together at different prices.'
-                          : 'Waits for your entry price.'}
+                          ? zh
+                            ? '在不同价格一并下单。'
+                            : 'Orders placed together at different prices.'
+                          : zh
+                            ? '等待你的入场价格。'
+                            : 'Waits for your entry price.'}
                   </p>
                   {!connected && (
                     <div className="frontier-illustrative">
-                      Illustrative size · connect an account to size this trade
+                      {zh
+                        ? '示意规模 · 连接账户后为此交易定仓'
+                        : 'Illustrative size · connect an account to size this trade'}
                     </div>
                   )}
                   <PlanFunding plan={plan} compact />
                   <div className="frontier-plan-outcomes">
                     <span>
-                      Planned loss{' '}
+                      {zh ? '计划亏损' : 'Planned loss'}{' '}
                       <b className="stop-text">−{money(plan.risk)}</b>
                     </span>
                     <span>
-                      Target return{' '}
+                      {zh ? '目标收益' : 'Target return'}{' '}
                       <b className="target-text">+{money(plan.reward)}</b>
                     </span>
-                    <small>{plan.snapshot.quote_asset} · costs included</small>
+                    <small>
+                      {plan.snapshot.quote_asset} ·{' '}
+                      {zh ? '已含成本' : 'costs included'}
+                    </small>
                   </div>
                   <div className="frontier-plan-actions">
                     <button
                       onClick={() => onSelect(plan)}
-                      aria-label={`View on chart: ${plan.idea.name}`}
+                      aria-label={
+                        zh
+                          ? `在图表上查看：${plan.idea.name}`
+                          : `View on chart: ${plan.idea.name}`
+                      }
                     >
-                      {plan.id === selected ? 'On chart ✓' : 'View on chart'}
+                      {plan.id === selected
+                        ? zh
+                          ? '已在图表上 ✓'
+                          : 'On chart ✓'
+                        : zh
+                          ? '在图表上查看'
+                          : 'View on chart'}
                     </button>
                     {onReview && (
                       <button
                         className="planning-primary"
                         disabled={reviewDisabled}
                         onClick={() => onReview(plan)}
-                        aria-label={`Review ${structureNames[kind]}`}
+                        aria-label={
+                          zh ? `复核 ${names[kind]}` : `Review ${names[kind]}`
+                        }
                       >
                         {!connected
-                          ? 'Connect to trade'
+                          ? zh
+                            ? '连接后交易'
+                            : 'Connect to trade'
                           : stale
-                            ? 'Refresh & review'
-                            : 'Review order'}
+                            ? zh
+                              ? '刷新并复核'
+                              : 'Refresh & review'
+                            : zh
+                              ? '复核订单'
+                              : 'Review order'}
                       </button>
                     )}
                   </div>
@@ -173,8 +256,12 @@ export function PlanStructures({
                 <p>
                   {(check?.reason ? validationSummary(check.reason) : '') ||
                     (busy
-                      ? 'Reading market context and checking this structure.'
-                      : 'No candidate of this type was proposed.')}
+                      ? zh
+                        ? '正在读取市场背景并检查此结构。'
+                        : 'Reading market context and checking this structure.'
+                      : zh
+                        ? '没有提出此类型的候选方案。'
+                        : 'No candidate of this type was proposed.')}
                 </p>
               )}
             </article>

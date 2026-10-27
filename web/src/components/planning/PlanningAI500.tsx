@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react'
 import { planningAPI } from '../../lib/planning'
 import { formatRequestError } from '../../lib/requestErrors'
+import { useLanguage } from '../../contexts/LanguageContext'
+
+function useSafeLanguage() {
+  try {
+    return useLanguage().language
+  } catch {
+    return 'en' as const
+  }
+}
 
 type Board = {
   coins: { pair: string; score: number }[]
@@ -26,6 +35,8 @@ export function PlanningAI500({
   onSetup?: () => void
   onMarkets?: (symbols: string[]) => void
 }) {
+  const language = useSafeLanguage()
+  const zh = language === 'zh'
   const [board, setBoard] = useState<Board | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -51,7 +62,7 @@ export function PlanningAI500({
         }
       })
       .catch((e) => {
-        if (current) setError(formatRequestError(e, 'en'))
+        if (current) setError(formatRequestError(e, zh ? 'zh' : 'en'))
       })
       .finally(() => {
         if (current) setLoading(false)
@@ -59,21 +70,30 @@ export function PlanningAI500({
     return () => {
       current = false
     }
-  }, [venue, revision, walletReady, onMarkets])
+  }, [venue, revision, walletReady, onMarkets, zh])
   if (venue !== 'binance') return null
   const coins =
     board?.coins.filter((v) =>
       v.pair.toLowerCase().includes(search.toLowerCase())
     ) || []
   return (
-    <section className="planning-ai500" aria-label="Binance AI500 markets">
+    <section
+      className="planning-ai500"
+      aria-label={zh ? '币安 AI500 市场' : 'Binance AI500 markets'}
+    >
       <div>
         <b>AI500</b>
-        <small>Claw402 paid data · cached 5 min</small>
-        <small>Long entries · market or pullback opportunities</small>
+        <small>
+          {zh ? 'Claw402 付费数据 · 缓存 5 分钟' : 'Claw402 paid data · cached 5 min'}
+        </small>
+        <small>
+          {zh
+            ? '做多入场 · 市价或回调机会'
+            : 'Long entries · market or pullback opportunities'}
+        </small>
         <input
-          aria-label="Search AI500"
-          placeholder="Search AI500 markets"
+          aria-label={zh ? '搜索 AI500' : 'Search AI500'}
+          placeholder={zh ? '搜索 AI500 市场' : 'Search AI500 markets'}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -81,22 +101,30 @@ export function PlanningAI500({
           disabled={loading || disabled || !walletReady}
           onClick={() => setRevision((v) => v + 1)}
         >
-          Refresh list
+          {zh ? '刷新列表' : 'Refresh list'}
         </button>
       </div>
       {!walletReady && (
         <div className="planning-ai500-setup">
           <span>
             {walletChecking
-              ? 'Checking AI wallet…'
-              : 'Enable your AI fee wallet to load AI500 shortcuts.'}
+              ? zh
+                ? '正在检查 AI 钱包…'
+                : 'Checking AI wallet…'
+              : zh
+                ? '启用你的 AI 手续费钱包以加载 AI500 快捷入口。'
+                : 'Enable your AI fee wallet to load AI500 shortcuts.'}
           </span>
           {!walletChecking && onSetup && (
-            <button onClick={onSetup}>Set up AI wallet</button>
+            <button onClick={onSetup}>
+              {zh ? '设置 AI 钱包' : 'Set up AI wallet'}
+            </button>
           )}
         </div>
       )}
-      {loading && <p role="status">Loading AI500…</p>}
+      {loading && (
+        <p role="status">{zh ? '正在加载 AI500…' : 'Loading AI500…'}</p>
+      )}
       {error && <p role="alert">{error}</p>}
       {walletReady && !loading && !error && board && (
         <>
@@ -107,17 +135,20 @@ export function PlanningAI500({
                 key={v.pair}
                 aria-pressed={selected === v.pair}
                 onClick={() => onSelect(v.pair)}
-                title={`AI score ${v.score}`}
+                title={`${zh ? 'AI 评分' : 'AI score'} ${v.score}`}
               >
                 {v.pair.replace(/USDT$/, '')}{' '}
                 <small>{Number(v.score).toFixed(0)}</small>
               </button>
             ))}
           </div>
-          {!coins.length && <small>No matching AI500 markets.</small>}
+          {!coins.length && (
+            <small>{zh ? '没有匹配的 AI500 市场。' : 'No matching AI500 markets.'}</small>
+          )}
           <small>
-            As of {new Date(board.fetched_at).toLocaleTimeString('en-US')} ·{' '}
-            {board.coins.length} markets
+            {zh ? '截至' : 'As of'}{' '}
+            {new Date(board.fetched_at).toLocaleTimeString('en-US')} ·{' '}
+            {board.coins.length} {zh ? '个市场' : 'markets'}
           </small>
         </>
       )}

@@ -21,17 +21,17 @@ export function OnboardingModeSelector({
   }> = [
     {
       id: 'beginner',
-      title: isZh ? 'Beginner Mode' : 'Beginner Mode',
-      badge: isZh ? 'Recommended' : 'Recommended',
+      title: isZh ? '新手模式' : 'Beginner Mode',
+      badge: isZh ? '推荐' : 'Recommended',
       description: isZh
-        ? 'Generate a Base wallet automatically and start with Claw402 + GLM by default.'
+        ? '自动生成 Base 钱包，默认使用 Claw402 + GLM 开始。'
         : 'Generate a Base wallet automatically and start with Claw402 + GLM by default.',
     },
     {
       id: 'advanced',
-      title: isZh ? 'Advanced Mode' : 'Advanced Mode',
+      title: isZh ? '高级模式' : 'Advanced Mode',
       description: isZh
-        ? 'Keep the full manual flow and configure models, wallets, and exchanges yourself.'
+        ? '保留完整的手动流程，自行配置模型、钱包和交易所。'
         : 'Keep the full manual flow and configure models, wallets, and exchanges yourself.',
     },
   ]
@@ -39,7 +39,7 @@ export function OnboardingModeSelector({
   return (
     <div className="space-y-2">
       <div className="text-xs font-medium text-nofx-text-muted">
-        {isZh ? 'Experience' : 'Experience'}
+        {isZh ? '体验模式' : 'Experience'}
       </div>
       <div className="grid grid-cols-1 gap-2">
         {options.map((option) => {

@@ -10,6 +10,7 @@ import type {
 import { winrateQualityWarnings } from '../../lib/vergexWinrateQuality'
 import { demoSeedPrice } from '../../lib/demo/demoUniverse'
 import { formatRequestError, isPaymentOutcomeUnknown } from '../../lib/requestErrors'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 /**
  * WinrateMatrix renders the vergex (claw402) holder win-rate matrix — live
@@ -156,6 +157,8 @@ function WinrateMatrixSession({
   marketType = 'hip3_perp',
   demo = false,
 }: WinrateMatrixProps) {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
   const fetcher = () =>
     api.getVergexHolderWinrateMap({
       marketType,
@@ -302,13 +305,17 @@ function WinrateMatrixSession({
       if (serial !== requestSerial.current) return
       if (res.data?.snapshotId !== selection.request.snapshotId) {
         throw new Error(
-          'Data version mismatch. Select a cell again to start a new query.'
+          isZh
+            ? '数据版本不一致。请重新选择单元格以开始新的查询。'
+            : 'Data version mismatch. Select a cell again to start a new query.'
         )
       }
       const next = res.data.nextOffset ?? null
       if (next !== null && (!Number.isInteger(next) || next <= offset)) {
         throw new Error(
-          'Invalid pagination response. No automatic retry was made.'
+          isZh
+            ? '分页响应无效。未自动重试。'
+            : 'Invalid pagination response. No automatic retry was made.'
         )
       }
       setDrill({
@@ -356,18 +363,19 @@ function WinrateMatrixSession({
         }}
       >
         <span className="tm-px" style={{ fontSize: 11 }}>
-          Win-rate matrix
+          {isZh ? '胜率矩阵' : 'Win-rate matrix'}
         </span>
         <span className="tm-sc">{dispSymbol}</span>
         {mark > 0 && (
           <span className="tm-sc" style={{ color: 'var(--tm-red)' }}>
-            mark <b>{fmtPx(mark)}</b>
+            {isZh ? '标记价' : 'mark'} <b>{fmtPx(mark)}</b>
           </span>
         )}
         {included && (
           <span className="tm-sc">
-            {included.count?.toLocaleString()} addrs /{' '}
-            {fmtUsd(+included.notional)}
+            {isZh
+              ? `${included.count?.toLocaleString()} 个地址 / ${fmtUsd(+included.notional)}`
+              : `${included.count?.toLocaleString()} addrs / ${fmtUsd(+included.notional)}`}
           </span>
         )}
         <span
@@ -378,62 +386,105 @@ function WinrateMatrixSession({
           }}
         >
           {demo && hasView
-            ? '● demo'
+            ? isZh
+              ? '● 演示'
+              : '● demo'
             : currentData
-              ? '● current snapshot'
+              ? isZh
+                ? '● 当前快照'
+                : '● current snapshot'
               : hasView
-                ? '○ cached / unverified'
+                ? isZh
+                  ? '○ 缓存 / 未验证'
+                  : '○ cached / unverified'
                 : isLoading
-                  ? '○ sync'
+                  ? isZh
+                    ? '○ 同步中'
+                    : '○ sync'
                   : '○ —'}
         </span>
       </div>
       <div className="tm-sc" style={{ fontSize: 9, marginBottom: 4 }}>
-        Entry-cost rows × win-rate columns · dashed line = current price (cost
-        100%) ·
-        {demo
-          ? 'click a cell for demo addresses'
-          : 'matrix query $0.002 (auto-refresh every 5 min); each cell query / page $0.002; address pages never refresh automatically'}
+        {isZh ? (
+          <>
+            入场成本行 × 胜率列 · 虚线 = 当前价格（成本 100%）·
+            {demo
+              ? '点击单元格查看演示地址'
+              : '矩阵查询 $0.002（每 5 分钟自动刷新）；每次单元格查询/翻页 $0.002；地址页不会自动刷新'}
+          </>
+        ) : (
+          <>
+            Entry-cost rows × win-rate columns · dashed line = current price (cost
+            100%) ·
+            {demo
+              ? 'click a cell for demo addresses'
+              : 'matrix query $0.002 (auto-refresh every 5 min); each cell query / page $0.002; address pages never refresh automatically'}
+          </>
+        )}
       </div>
 
       {!demo && d && (
         <div className="tm-sc" style={{ fontSize: 9, marginBottom: 6 }}>
-          Coverage: {d.coverage ?? 'unknown'} · Snapshot: {d.asOf ?? 'unknown'}{' '}
-          · Positions: {d.positionsAsOf ?? 'unknown'} · Price:{' '}
-          {d.priceAsOf ?? 'unknown'}
-          <br />
-          History: {d.historyMode ?? 'unknown'} · stale histories:{' '}
-          {d.staleHistoryCount ?? 'unknown'} · minimum round trips:{' '}
-          {d.minRoundTrips ?? 'unknown'}
-          {qualityWarnings.length > 0 && (
-            <div role="status">
-              Data warning: {qualityWarnings.join('; ')}. Historical win rate is
-              not a forecast.
-            </div>
+          {isZh ? (
+            <>
+              覆盖范围：{d.coverage ?? '未知'} · 快照：{d.asOf ?? '未知'} · 持仓：
+              {d.positionsAsOf ?? '未知'} · 价格：{d.priceAsOf ?? '未知'}
+              <br />
+              历史：{d.historyMode ?? '未知'} · 过期历史：
+              {d.staleHistoryCount ?? '未知'} · 最少往返次数：
+              {d.minRoundTrips ?? '未知'}
+              {qualityWarnings.length > 0 && (
+                <div role="status">
+                  数据警告：{qualityWarnings.join('; ')}。历史胜率不代表未来表现。
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              Coverage: {d.coverage ?? 'unknown'} · Snapshot: {d.asOf ?? 'unknown'}{' '}
+              · Positions: {d.positionsAsOf ?? 'unknown'} · Price:{' '}
+              {d.priceAsOf ?? 'unknown'}
+              <br />
+              History: {d.historyMode ?? 'unknown'} · stale histories:{' '}
+              {d.staleHistoryCount ?? 'unknown'} · minimum round trips:{' '}
+              {d.minRoundTrips ?? 'unknown'}
+              {qualityWarnings.length > 0 && (
+                <div role="status">
+                  Data warning: {qualityWarnings.join('; ')}. Historical win rate is
+                  not a forecast.
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
       {error && (
         <div role="alert" className="tm-error" style={{ padding: '6px 0' }}>
-          Matrix refresh failed: {formatRequestError(error)}{' '}
-          {hasView ? 'Showing the previous snapshot, not live data. ' : ''}
+          {isZh ? `矩阵刷新失败：${formatRequestError(error)} ` : `Matrix refresh failed: ${formatRequestError(error)} `}
+          {hasView ? (isZh ? '显示的是上一个快照，并非实时数据。' : 'Showing the previous snapshot, not live data. ') : ''}
           <button
             type="button"
             disabled={live.isValidating || isPaymentOutcomeUnknown(error)}
             onClick={() => void live.mutate().catch(() => {})}
           >
-            {isPaymentOutcomeUnknown(error) ? 'Check original payment before retrying' : 'Retry matrix query ($0.002)'}
+            {isPaymentOutcomeUnknown(error)
+              ? isZh
+                ? '重试前请先核对原付款'
+                : 'Check original payment before retrying'
+              : isZh
+                ? '重试矩阵查询（$0.002）'
+                : 'Retry matrix query ($0.002)'}
           </button>
         </div>
       )}
 
       {error && !hasView ? (
         <div className="tm-sc" style={{ padding: '14px 0' }}>
-          No win-rate matrix available for {dispSymbol}.
+          {isZh ? `${dispSymbol} 暂无胜率矩阵数据。` : `No win-rate matrix available for ${dispSymbol}.`}
         </div>
       ) : !hasView ? (
         <div className="tm-sc" style={{ padding: '14px 0' }}>
-          Loading win-rate matrix…
+          {isZh ? '正在加载胜率矩阵…' : 'Loading win-rate matrix…'}
         </div>
       ) : (
         <div
@@ -455,7 +506,7 @@ function WinrateMatrixSession({
                     color: side === 'long' ? 'var(--tm-up)' : 'var(--tm-dn)',
                   }}
                 >
-                  {side === 'long' ? 'Long' : 'Short'}
+                  {side === 'long' ? (isZh ? '做多' : 'Long') : isZh ? '做空' : 'Short'}
                 </div>
                 <div
                   style={{
@@ -494,7 +545,9 @@ function WinrateMatrixSession({
                             side,
                             winIdx,
                             slots: row.slots,
-                            label: `${side === 'long' ? 'Long' : 'Short'} · win ${winIdx * 10}-${(winIdx + 1) * 10}% × cost ${row.label}`,
+                            label: isZh
+                              ? `${side === 'long' ? '做多' : '做空'} · 胜率 ${winIdx * 10}-${(winIdx + 1) * 10}% × 成本 ${row.label}`
+                              : `${side === 'long' ? 'Long' : 'Short'} · win ${winIdx * 10}-${(winIdx + 1) * 10}% × cost ${row.label}`,
                             mark,
                             request: {
                               marketType,
@@ -554,13 +607,17 @@ function WinrateMatrixSession({
             </span>
             {!demo && (
               <span className="tm-sc">
-                Pinned data version: {sel.request.snapshotId}
+                {isZh ? '固定的数据版本：' : 'Pinned data version: '}{sel.request.snapshotId}
               </span>
             )}
             <span className="tm-sc" style={{ marginLeft: 'auto', fontSize: 9 }}>
               {drill.loading
-                ? 'loading…'
-                : `${drill.total.toLocaleString()} addresses`}
+                ? isZh
+                  ? '加载中…'
+                  : 'loading…'
+                : isZh
+                  ? `${drill.total.toLocaleString()} 个地址`
+                  : `${drill.total.toLocaleString()} addresses`}
             </span>
             <button
               className="tm-sc"
@@ -573,25 +630,31 @@ function WinrateMatrixSession({
               }}
               onClick={closeDrilldown}
             >
-              close
+              {isZh ? '关闭' : 'close'}
             </button>
           </div>
           {drill.error ? (
             <div role="alert" className="tm-error" style={{ padding: '8px 0' }}>
-              Drilldown failed: {formatRequestError(drill.error)} No automatic retry or snapshot
-              switch was made. If the snapshot has expired, select a cell in the
-              latest matrix to start over.
+              {isZh
+                ? `下钻查询失败：${formatRequestError(drill.error)} 未自动重试，也未切换快照。若快照已过期，请在最新矩阵中重新选择单元格。`
+                : `Drilldown failed: ${formatRequestError(drill.error)} No automatic retry or snapshot switch was made. If the snapshot has expired, select a cell in the latest matrix to start over.`}
               <button
                 type="button"
                 disabled={isPaymentOutcomeUnknown(drill.error)}
                 onClick={() => void loadPage(sel, drillOffset)}
               >
-                {isPaymentOutcomeUnknown(drill.error) ? 'Check original payment before retrying' : 'Retry this page ($0.002)'}
+                {isPaymentOutcomeUnknown(drill.error)
+                  ? isZh
+                    ? '重试前请先核对原付款'
+                    : 'Check original payment before retrying'
+                  : isZh
+                    ? '重试本页（$0.002）'
+                    : 'Retry this page ($0.002)'}
               </button>
             </div>
           ) : drill.items.length === 0 && !drill.loading ? (
             <div className="tm-sc" style={{ padding: '8px 0' }}>
-              No addresses in this cell.
+              {isZh ? '此单元格暂无地址。' : 'No addresses in this cell.'}
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
@@ -604,16 +667,10 @@ function WinrateMatrixSession({
               >
                 <thead>
                   <tr>
-                    {[
-                      'address',
-                      'side',
-                      'size',
-                      'entry',
-                      'notional',
-                      'cost/mark',
-                      'win rate',
-                      'rounds',
-                    ].map((h) => (
+                    {(isZh
+                      ? ['地址', '方向', '规模', '入场价', '名义价值', '成本/标记价', '胜率', '往返次数']
+                      : ['address', 'side', 'size', 'entry', 'notional', 'cost/mark', 'win rate', 'rounds']
+                    ).map((h) => (
                       <th
                         key={h}
                         className="tm-sc"
@@ -644,7 +701,7 @@ function WinrateMatrixSession({
                               : 'var(--tm-dn)',
                         }}
                       >
-                        {it.side === 'long' ? 'long' : 'short'}
+                        {it.side === 'long' ? (isZh ? '做多' : 'long') : isZh ? '做空' : 'short'}
                       </td>
                       <td style={{ textAlign: 'right', padding: '2px 6px' }}>
                         {(+it.size).toLocaleString()}
@@ -696,7 +753,7 @@ function WinrateMatrixSession({
                     void loadPage(sel, Math.max(0, drillOffset - DRILL_LIMIT))
                   }
                 >
-                  ← prev
+                  {isZh ? '← 上一页' : '← prev'}
                 </button>
                 <span>
                   {drillOffset + 1}–{drillOffset + drill.items.length} /{' '}
@@ -716,7 +773,7 @@ function WinrateMatrixSession({
                       void loadPage(sel, drill.nextOffset)
                   }}
                 >
-                  next →
+                  {isZh ? '下一页 →' : 'next →'}
                 </button>
               </div>
             </div>
@@ -740,6 +797,8 @@ function MatrixRow({
   sel: DrillSel | null
   onPick: (winIdx: number, cell: MatrixCell) => void
 }) {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
   const active = (winIdx: number) =>
     !!sel &&
     sel.side === side &&
@@ -759,7 +818,7 @@ function MatrixRow({
           borderTop: row.boundary ? '1.5px dashed var(--tm-red)' : undefined,
           color: row.boundary ? 'var(--tm-red)' : undefined,
         }}
-        title={row.boundary ? 'current price (cost = 100%)' : undefined}
+        title={row.boundary ? (isZh ? '当前价格（成本 = 100%）' : 'current price (cost = 100%)') : undefined}
       >
         {row.label}
       </div>

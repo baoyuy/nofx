@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { ShieldAlert, ArrowLeft, Twitter, Send, Lock } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { OFFICIAL_LINKS } from '../../constants/branding'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 interface WhitelistFullPageProps {
   onBack?: () => void
@@ -9,6 +10,8 @@ interface WhitelistFullPageProps {
 
 export function WhitelistFullPage({ onBack }: WhitelistFullPageProps) {
   const navigate = useNavigate()
+  const { language } = useLanguage()
+  const zh = language === 'zh'
 
   const handleBackToLogin = () => {
     if (onBack) {
@@ -52,20 +55,40 @@ export function WhitelistFullPage({ onBack }: WhitelistFullPageProps) {
 
             {/* Title */}
             <h1 className="text-2xl font-bold mb-2 tracking-widest text-nofx-text uppercase">
-              <span className="text-nofx-danger">RESTRICTED</span> ACCESS
+              {zh ? (
+                <>
+                  <span className="text-nofx-danger">受限</span>访问
+                </>
+              ) : (
+                <>
+                  <span className="text-nofx-danger">RESTRICTED</span> ACCESS
+                </>
+              )}
             </h1>
 
             <div className="h-px w-full bg-linear-to-r from-transparent via-[#D6433A]/40 to-transparent my-4"></div>
 
             {/* Description */}
             <p className="text-xs text-nofx-text-muted mb-8 leading-relaxed font-mono px-4">
-              <span className="text-nofx-danger">[SYSTEM_MESSAGE]:</span> YOUR
-              IDENTIFIER IS NOT ON THE ACTIVE WHITELIST.
-              <br />
-              <br />
-              Platform capacity limits have been reached for the current beta
-              phase. Prioritized access is currently reserved for authorized
-              operators only.
+              {zh ? (
+                <>
+                  <span className="text-nofx-danger">[系统消息]:</span>
+                  你的标识不在当前启用的白名单中。
+                  <br />
+                  <br />
+                  当前测试阶段的平台容量已达上限，优先访问权限目前仅保留给已授权的操作者。
+                </>
+              ) : (
+                <>
+                  <span className="text-nofx-danger">[SYSTEM_MESSAGE]:</span>{' '}
+                  YOUR IDENTIFIER IS NOT ON THE ACTIVE WHITELIST.
+                  <br />
+                  <br />
+                  Platform capacity limits have been reached for the current
+                  beta phase. Prioritized access is currently reserved for
+                  authorized operators only.
+                </>
+              )}
             </p>
 
             {/* Info Box */}
@@ -74,12 +97,12 @@ export function WhitelistFullPage({ onBack }: WhitelistFullPageProps) {
                 <Lock className="w-4 h-4 text-nofx-danger mt-0.5" />
                 <div>
                   <h3 className="text-xs font-bold text-nofx-danger uppercase mb-1">
-                    Authorization Protocol
+                    {zh ? '授权协议' : 'Authorization Protocol'}
                   </h3>
                   <p className="text-[10px] text-nofx-text-muted leading-tight">
-                    Access is rolled out in batches. If you believe this is an
-                    error, please verify your credentials or contact system
-                    administrators.
+                    {zh
+                      ? '访问权限分批开放。如果你认为这是误判，请核对你的凭据或联系系统管理员。'
+                      : 'Access is rolled out in batches. If you believe this is an error, please verify your credentials or contact system administrators.'}
                   </p>
                 </div>
               </div>
@@ -92,7 +115,7 @@ export function WhitelistFullPage({ onBack }: WhitelistFullPageProps) {
                 className="w-full flex items-center justify-center gap-2 py-3 border border-[rgba(25,36,52,0.14)] bg-nofx-bg hover:bg-nofx-bg-deeper hover:border-nofx-danger hover:text-nofx-danger text-nofx-text-muted transition-all text-xs font-bold tracking-widest uppercase group"
               >
                 <ArrowLeft className="w-3 h-3 group-hover:-translate-x-1 transition-transform" />
-                RETURN TO LOGIN
+                {zh ? '返回登录' : 'RETURN TO LOGIN'}
               </button>
 
               <div className="grid grid-cols-2 gap-3 mt-4">
@@ -103,7 +126,7 @@ export function WhitelistFullPage({ onBack }: WhitelistFullPageProps) {
                   className="flex items-center justify-center gap-2 py-2 border border-[rgba(25,36,52,0.14)] bg-nofx-bg hover:bg-nofx-bg-deeper text-nofx-text-muted hover:text-nofx-text transition-colors text-[10px] uppercase"
                 >
                   <Twitter className="w-3 h-3" />
-                  Updates
+                  {zh ? '动态' : 'Updates'}
                 </a>
                 <a
                   href={OFFICIAL_LINKS.telegram}
@@ -112,7 +135,7 @@ export function WhitelistFullPage({ onBack }: WhitelistFullPageProps) {
                   className="flex items-center justify-center gap-2 py-2 border border-[rgba(25,36,52,0.14)] bg-nofx-bg hover:bg-nofx-bg-deeper text-nofx-text-muted hover:text-nofx-text transition-colors text-[10px] uppercase"
                 >
                   <Send className="w-3 h-3" />
-                  Support
+                  {zh ? '支持' : 'Support'}
                 </a>
               </div>
             </div>

@@ -170,7 +170,7 @@ export function ChartTabs({ traderId, selectedSymbol, updateKey, exchangeId }: C
           >
             <BarChart3 className="w-3.5 h-3.5" />
             <span className="hidden md:inline">{t('accountEquityCurve', language)}</span>
-            <span className="md:hidden">Eq</span>
+            <span className="md:hidden">{language === 'zh' ? '权益' : 'Eq'}</span>
           </button>
 
           <button
@@ -182,7 +182,7 @@ export function ChartTabs({ traderId, selectedSymbol, updateKey, exchangeId }: C
           >
             <CandlestickChart className="w-3.5 h-3.5" />
             <span className="hidden md:inline">{t('marketChart', language)}</span>
-            <span className="md:hidden">Kline</span>
+            <span className="md:hidden">{language === 'zh' ? 'K线' : 'Kline'}</span>
           </button>
 
           {/* Market Type Pills - Only when kline active, HIDDEN on mobile to save space */}
@@ -232,7 +232,7 @@ export function ChartTabs({ traderId, selectedSymbol, updateKey, exchangeId }: C
                             type="text"
                             value={searchFilter}
                             onChange={(e) => setSearchFilter(e.target.value)}
-                            placeholder="Search symbol..."
+                            placeholder={language === 'zh' ? '搜索交易对...' : 'Search symbol...'}
                             className="flex-1 bg-transparent text-[11px] text-nofx-text placeholder-nofx-text-muted focus:outline-hidden font-mono"
                             autoFocus
                           />
@@ -242,7 +242,9 @@ export function ChartTabs({ traderId, selectedSymbol, updateKey, exchangeId }: C
                         {['stock', 'commodity', 'index', 'forex', 'pre_ipo', 'crypto'].map(category => {
                           const categorySymbols = filteredSymbols.filter(s => s.category === category)
                           if (categorySymbols.length === 0) return null
-                          const labels: Record<string, string> = { crypto: 'Crypto', stock: 'Stocks', forex: 'Forex', commodity: 'Commodities', index: 'Indices', pre_ipo: 'Pre-IPO' }
+                          const labels: Record<string, string> = language === 'zh'
+                            ? { crypto: '加密货币', stock: '股票', forex: '外汇', commodity: '大宗商品', index: '指数', pre_ipo: '上市前' }
+                            : { crypto: 'Crypto', stock: 'Stocks', forex: 'Forex', commodity: 'Commodities', index: 'Indices', pre_ipo: 'Pre-IPO' }
                           return (
                             <div key={category}>
                               <div className="px-3 py-1.5 text-[9px] font-bold text-nofx-text-muted/60 bg-black/5 uppercase tracking-wider">{labels[category]}</div>
@@ -290,11 +292,11 @@ export function ChartTabs({ traderId, selectedSymbol, updateKey, exchangeId }: C
                 type="text"
                 value={symbolInput}
                 onChange={(e) => setSymbolInput(e.target.value)}
-                placeholder="Sym"
+                placeholder={language === 'zh' ? '币种' : 'Sym'}
                 className="w-16 px-2 py-1 bg-nofx-bg-deeper border border-[rgba(25,36,52,0.14)] rounded-l text-[10px] text-nofx-text placeholder-nofx-text-muted focus:outline-hidden focus:border-nofx-gold/50 font-mono transition-colors"
               />
               <button type="submit" className="px-2 py-1 bg-black/5 border border-[rgba(25,36,52,0.14)] border-l-0 rounded-r text-[10px] text-nofx-text-muted hover:text-nofx-text hover:bg-black/10 transition-all">
-                Go
+                {language === 'zh' ? '确定' : 'Go'}
               </button>
             </form>
           </div>

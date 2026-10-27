@@ -736,7 +736,7 @@ export function AdvancedChart({
         setLoading(false)
       } catch (err: any) {
         console.error('[AdvancedChart] Error loading data:', err)
-        setError(err.message || 'Failed to load chart data')
+        setError(language === 'zh' ? '加载图表数据失败' : (err.message || 'Failed to load chart data'))
         setLoading(false)
       }
     }
@@ -746,7 +746,7 @@ export function AdvancedChart({
     // Real-time auto-refresh (every 5 seconds)
     const refreshInterval = setInterval(() => loadData(true), 5000)
     return () => clearInterval(refreshInterval)
-  }, [symbol, interval, traderID, exchange])
+  }, [symbol, interval, traderID, exchange, language])
 
   // Refresh open order price lines separately (every 60s, avoid frequent exchange API calls)
   useEffect(() => {
@@ -786,13 +786,13 @@ export function AdvancedChart({
 
             if (isStopLoss) {
               lineColor = '#D6433A' // red - stop loss
-              title = `SL ${order.quantity}`
+              title = language === 'zh' ? `止损 ${order.quantity}` : `SL ${order.quantity}`
             } else if (isTakeProfit) {
               lineColor = '#2E8B57' // green - take profit
-              title = `TP ${order.quantity}`
+              title = language === 'zh' ? `止盈 ${order.quantity}` : `TP ${order.quantity}`
             } else if (isLimit) {
               lineColor = '#295be8' // vermilion - limit order
-              title = `Limit ${order.side} ${order.quantity}`
+              title = language === 'zh' ? `限价 ${order.side} ${order.quantity}` : `Limit ${order.side} ${order.quantity}`
             } else {
               title = `${order.type} ${order.quantity}`
             }
@@ -827,7 +827,7 @@ export function AdvancedChart({
       clearTimeout(initialTimeout)
       clearInterval(openOrdersInterval)
     }
-  }, [symbol, traderID])
+  }, [symbol, traderID, language])
 
   // Handle order marker show/hide separately to avoid reloading data
   useEffect(() => {
@@ -881,7 +881,7 @@ export function AdvancedChart({
         const upperSeries = chartRef.current.addSeries(LineSeries, {
           color: indicator.color,
           lineWidth: 1,
-          title: 'BB Upper',
+          title: language === 'zh' ? '布林带上轨' : 'BB Upper',
         })
         upperSeries.setData(bbData.map(d => ({ time: d.time as any, value: d.upper })))
 
@@ -889,14 +889,14 @@ export function AdvancedChart({
           color: indicator.color,
           lineWidth: 1,
           lineStyle: 2,
-          title: 'BB Middle',
+          title: language === 'zh' ? '布林带中轨' : 'BB Middle',
         })
         middleSeries.setData(bbData.map(d => ({ time: d.time as any, value: d.middle })))
 
         const lowerSeries = chartRef.current.addSeries(LineSeries, {
           color: indicator.color,
           lineWidth: 1,
-          title: 'BB Lower',
+          title: language === 'zh' ? '布林带下轨' : 'BB Lower',
         })
         lowerSeries.setData(bbData.map(d => ({ time: d.time as any, value: d.lower })))
 
@@ -976,7 +976,7 @@ export function AdvancedChart({
                 <span>H <span className="text-nofx-text">{marketStats.high.toFixed(2)}</span></span>
                 <span>L <span className="text-nofx-text">{marketStats.low.toFixed(2)}</span></span>
                 {marketStats.volume > 0 && baseUnit && (
-                  <span>Vol <span className="text-nofx-text">{formatVolume(marketStats.volume)}</span></span>
+                  <span>{language === 'zh' ? '成交量' : 'Vol'} <span className="text-nofx-text">{formatVolume(marketStats.volume)}</span></span>
                 )}
               </div>
             </div>
@@ -1067,7 +1067,13 @@ export function AdvancedChart({
                   style={{ backgroundColor: indicator.color }}
                 ></div>
                 <span className="text-sm text-nofx-text-muted group-hover:text-nofx-text transition-colors flex-1">
-                  {indicator.name}
+                  {language === 'zh'
+                    ? indicator.id === 'volume'
+                      ? '成交量'
+                      : indicator.id === 'bb'
+                        ? '布林带'
+                        : indicator.name
+                    : indicator.name}
                 </span>
                 {indicator.enabled && (
                   <span className="text-xs text-nofx-gold">●</span>

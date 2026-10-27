@@ -298,7 +298,7 @@ export function ChartWithOrders({
       }
     } catch (err) {
       console.error('[ChartWithOrders] Failed to initialize chart:', err)
-      setError('Failed to initialize chart')
+      setError(language === 'zh' ? '图表初始化失败' : 'Failed to initialize chart')
     }
   }, [height])
 

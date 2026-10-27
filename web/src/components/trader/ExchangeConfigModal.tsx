@@ -410,7 +410,7 @@ export function ExchangeConfigModal({
       } else if (currentExchangeType === 'hyperliquid') {
         toast.error(
           language === 'zh'
-            ? 'Use the wallet authorization flow to connect Hyperliquid.'
+            ? '请使用钱包授权流程连接 Hyperliquid。'
             : 'Use the wallet authorization flow to connect Hyperliquid.'
         )
         return
@@ -794,19 +794,32 @@ export function ExchangeConfigModal({
                         color: '#2E8B57',
                       }}
                     >
-                      Saved credential status: API Key{' '}
+                      {language === 'zh'
+                        ? '已保存的凭据状态'
+                        : 'Saved credential status'}
+                      : API Key{' '}
                       {selectedExchange.has_api_key
-                        ? 'configured'
-                        : 'not configured'}
+                        ? language === 'zh'
+                          ? '已配置'
+                          : 'configured'
+                        : language === 'zh'
+                          ? '未配置'
+                          : 'not configured'}
                       {' · '}
-                      Secret{' '}
+                      {language === 'zh' ? '密钥' : 'Secret'}{' '}
                       {selectedExchange.has_secret_key
-                        ? 'configured'
-                        : 'not configured'}
+                        ? language === 'zh'
+                          ? '已配置'
+                          : 'configured'
+                        : language === 'zh'
+                          ? '未配置'
+                          : 'not configured'}
                       {currentExchangeType === 'okx' ||
                       currentExchangeType === 'bitget' ||
                       currentExchangeType === 'kucoin'
-                        ? ` · Passphrase ${selectedExchange.has_passphrase ? 'configured' : 'not configured'}`
+                        ? language === 'zh'
+                          ? ` · 密码短语 ${selectedExchange.has_passphrase ? '已配置' : '未配置'}`
+                          : ` · Passphrase ${selectedExchange.has_passphrase ? 'configured' : 'not configured'}`
                         : ''}
                     </div>
                   )}
@@ -825,7 +838,9 @@ export function ExchangeConfigModal({
                       onChange={(e) => setApiKey(e.target.value)}
                       placeholder={
                         editingExchangeId && selectedExchange?.has_api_key
-                          ? 'Saved. Re-enter to replace.'
+                          ? language === 'zh'
+                          ? '已保存。如需更换请重新输入。'
+                          : 'Saved. Re-enter to replace.'
                           : t('enterAPIKey', language)
                       }
                       className="w-full px-4 py-3 rounded-xl"
@@ -855,7 +870,9 @@ export function ExchangeConfigModal({
                       onChange={(e) => setSecretKey(e.target.value)}
                       placeholder={
                         editingExchangeId && selectedExchange?.has_secret_key
-                          ? 'Saved. Re-enter to replace.'
+                          ? language === 'zh'
+                          ? '已保存。如需更换请重新输入。'
+                          : 'Saved. Re-enter to replace.'
                           : t('enterSecretKey', language)
                       }
                       className="w-full px-4 py-3 rounded-xl"
@@ -885,7 +902,9 @@ export function ExchangeConfigModal({
                         onChange={(e) => setPassphrase(e.target.value)}
                         placeholder={
                           editingExchangeId && selectedExchange?.has_passphrase
-                            ? 'Saved. Re-enter to replace.'
+                            ? language === 'zh'
+                          ? '已保存。如需更换请重新输入。'
+                          : 'Saved. Re-enter to replace.'
                             : t('enterPassphrase', language)
                         }
                         className="w-full px-4 py-3 rounded-xl"
@@ -1082,7 +1101,7 @@ export function ExchangeConfigModal({
                           style={{ color: '#295be8' }}
                         >
                           {language === 'zh'
-                            ? 'Hyperliquid requires wallet authorization'
+                            ? 'Hyperliquid 需要钱包授权'
                             : 'Hyperliquid requires wallet authorization'}
                         </div>
                         <div
@@ -1090,7 +1109,7 @@ export function ExchangeConfigModal({
                           style={{ color: '#707e92' }}
                         >
                           {language === 'zh'
-                            ? 'Manual private-key/API-key entry is disabled. Use MetaMask, Rabby, OKX, Coinbase Wallet or another EVM wallet to connect, authorize the agent, and approve the builder fee.'
+                            ? '手动输入私钥/API 密钥已禁用。请使用 MetaMask、Rabby、OKX、Coinbase Wallet 或其他 EVM 钱包连接、授权代理并批准 Builder 费用。'
                             : 'Manual private-key/API-key entry is disabled. Use MetaMask, Rabby, OKX, Coinbase Wallet or another EVM wallet to connect, authorize the agent, and approve the builder fee.'}
                         </div>
                       </div>

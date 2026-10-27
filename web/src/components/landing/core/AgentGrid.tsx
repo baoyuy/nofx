@@ -2,6 +2,15 @@ import { motion } from 'framer-motion'
 import { TrendingUp, Layers, Zap, Hexagon, Crosshair } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../contexts/AuthContext'
+import { useLanguage } from '../../../contexts/LanguageContext'
+
+const RISK_ZH: Record<string, string> = { HIGH: '高', MED: '中', LOW: '低' }
+
+const DESC_ZH: Record<string, string> = {
+  'Large-cap momentum and breakout trading.': '大盘动量与突破交易。',
+  'FX trend and macro regime allocation.': '外汇趋势与宏观周期配置。',
+  'Private-market momentum basket engine.': '私募市场动量篮子引擎。',
+}
 
 const traderPresets = [
   {
@@ -45,6 +54,8 @@ const traderPresets = [
 ]
 
 export default function AgentGrid() {
+  const { language } = useLanguage()
+  const zh = language === 'zh'
   const { user } = useAuth()
   const navigate = useNavigate()
 
@@ -70,18 +81,25 @@ export default function AgentGrid() {
         <div className="flex flex-col md:flex-row justify-between items-end mb-10 md:mb-16 gap-6">
           <div>
             <div className="flex items-center gap-2 text-nofx-gold font-mono text-xs mb-2 tracking-widest uppercase">
-              <Crosshair className="w-4 h-4" /> ASSET CLASS SELECT
+              <Crosshair className="w-4 h-4" /> {zh ? '资产类别选择' : 'ASSET CLASS SELECT'}
             </div>
             <h2 className="text-4xl md:text-5xl font-black text-nofx-text uppercase tracking-tighter">
-              PROFESSIONAL{' '}
-              <span className="text-nofx-gold">
-                TRADERS
-              </span>
+              {zh ? (
+                <>
+                  专业 <span className="text-nofx-gold">交易员</span>
+                </>
+              ) : (
+                <>
+                  PROFESSIONAL{' '}
+                  <span className="text-nofx-gold">TRADERS</span>
+                </>
+              )}
             </h2>
           </div>
           <div className="font-mono text-right text-xs text-nofx-text-muted max-w-xs">
-            CREATE TRADERS FOR US STOCKS, COMMODITIES, FX AND PRE-IPO MARKETS.
-            DESCRIBE THE STRATEGY IN ONE SENTENCE.
+            {zh
+              ? '为美股、大宗商品、外汇和上市前市场创建交易员。用一句话描述你的策略。'
+              : 'CREATE TRADERS FOR US STOCKS, COMMODITIES, FX AND PRE-IPO MARKETS. DESCRIBE THE STRATEGY IN ONE SENTENCE.'}
           </div>
         </div>
 
@@ -109,7 +127,7 @@ export default function AgentGrid() {
                     </div>
                     <div className="text-right">
                       <div className="text-[10px] font-mono text-nofx-text-muted uppercase">
-                        Class
+                        {zh ? '类别' : 'Class'}
                       </div>
                       <div
                         className={`font-bold font-mono tracking-wider ${preset.color}`}
@@ -124,7 +142,7 @@ export default function AgentGrid() {
                     {preset.name}
                   </h3>
                   <p className="text-nofx-text-muted text-sm mb-8 leading-relaxed h-10">
-                    {preset.desc}
+                    {zh ? (DESC_ZH[preset.desc] ?? preset.desc) : preset.desc}
                   </p>
 
                   {/* Stats Grid */}
@@ -139,7 +157,7 @@ export default function AgentGrid() {
                     </div>
                     <div className="bg-nofx-bg-deeper p-3 text-center group-hover:bg-nofx-bg transition-colors">
                       <div className="text-[10px] text-nofx-text-muted uppercase font-mono mb-1">
-                        Win %
+                        {zh ? '胜率' : 'Win %'}
                       </div>
                       <div className="text-nofx-text font-bold">
                         {preset.winRate}
@@ -147,10 +165,10 @@ export default function AgentGrid() {
                     </div>
                     <div className="bg-nofx-bg-deeper p-3 text-center group-hover:bg-nofx-bg transition-colors">
                       <div className="text-[10px] text-nofx-text-muted uppercase font-mono mb-1">
-                        Risk
+                        {zh ? '风险' : 'Risk'}
                       </div>
                       <div className={`${preset.color} font-bold`}>
-                        {preset.risk}
+                        {zh ? (RISK_ZH[preset.risk] ?? preset.risk) : preset.risk}
                       </div>
                     </div>
                   </div>
@@ -160,7 +178,7 @@ export default function AgentGrid() {
                     onClick={handleInitialize}
                     className={`w-full py-4 text-xs font-bold font-mono uppercase tracking-[0.2em] border border-[rgba(25,36,52,0.14)] hover:border-${preset.color === 'text-nofx-gold' ? 'nofx-gold' : 'nofx-text'} hover:bg-nofx-text/5 transition-all flex items-center justify-center gap-2 group-hover:text-nofx-text cursor-pointer text-nofx-text`}
                   >
-                    <span className={preset.color}>[</span> INITIALIZE{' '}
+                    <span className={preset.color}>[</span> {zh ? '初始化' : 'INITIALIZE'}{' '}
                     <span className={preset.color}>]</span>
                   </button>
                 </div>

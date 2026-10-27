@@ -108,7 +108,9 @@ export function ModelConfigModal({
       )
     } catch {
       setSaveError(
-        'Could not save this AI connection. Check your settings and try again.'
+        language === 'zh'
+          ? '无法保存此 AI 连接。请检查设置后重试。'
+          : 'Could not save this AI connection. Check your settings and try again.'
       )
     } finally {
       savePending.current = false
@@ -134,7 +136,7 @@ export function ModelConfigModal({
         <fieldset disabled={saving} className="min-w-0 border-0 p-0 m-0">
           {saving && (
             <p role="status" className="px-6 pt-4 text-sm">
-              Saving AI connection…
+              {language === 'zh' ? '正在保存 AI 连接…' : 'Saving AI connection…'}
             </p>
           )}
           {saveError && (
@@ -187,7 +189,7 @@ export function ModelConfigModal({
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="Close AI setup"
+                aria-label={language === 'zh' ? '关闭 AI 设置' : 'Close AI setup'}
                 className="p-2 rounded-lg hover:bg-nofx-bg-deeper transition-colors"
                 style={{ color: '#707e92' }}
               >
@@ -238,6 +240,7 @@ export function ModelConfigModal({
                   onModelNameChange={setModelName}
                   onBack={handleBack}
                   onSubmit={handleSubmit}
+                  language={language}
                 />
               )}
 
@@ -492,10 +495,14 @@ function StandardProviderConfigForm({
             color: '#2E8B57',
           }}
         >
-          Current model key status:{' '}
+          {language === 'zh' ? '当前模型密钥状态：' : 'Current model key status:'}{' '}
           {selectedModel.has_api_key
-            ? 'API Key configured'
-            : 'API Key not configured'}
+            ? language === 'zh'
+              ? 'API 密钥已配置'
+              : 'API Key configured'
+            : language === 'zh'
+              ? 'API 密钥未配置'
+              : 'API Key not configured'}
         </div>
       )}
 
@@ -518,7 +525,7 @@ function StandardProviderConfigForm({
               d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
             />
           </svg>
-          {'API Key *'}
+          {language === 'zh' ? 'API 密钥 *' : 'API Key *'}
         </label>
         <input
           type="password"
@@ -526,7 +533,9 @@ function StandardProviderConfigForm({
           onChange={(e) => onApiKeyChange(e.target.value)}
           placeholder={
             editingModelId && selectedModel.has_api_key
-              ? 'Saved. Re-enter to replace.'
+              ? language === 'zh'
+                ? '已保存。如需更换请重新输入。'
+                : 'Saved. Re-enter to replace.'
               : t('enterAPIKey', language)
           }
           className="w-full px-4 py-3 rounded-xl"

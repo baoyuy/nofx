@@ -1,13 +1,24 @@
 import { motion } from 'framer-motion'
+import { useLanguage } from '../../../contexts/LanguageContext'
 
-const stats = [
-    { label: "TRADING VOL", value: "$4.2B+" },
-    { label: "AI AGENTS", value: "850+" },
-    { label: "STRATEGIES", value: "Infinite" },
-    { label: "UPTIME", value: "99.9%" },
-]
+const STATS = {
+    en: [
+        { label: "TRADING VOL", value: "$4.2B+" },
+        { label: "AI AGENTS", value: "850+" },
+        { label: "STRATEGIES", value: "Infinite" },
+        { label: "UPTIME", value: "99.9%" },
+    ],
+    zh: [
+        { label: "交易量", value: "$4.2B+" },
+        { label: "AI 智能体", value: "850+" },
+        { label: "策略", value: "无限" },
+        { label: "在线率", value: "99.9%" },
+    ],
+} as const
 
 export default function BrandStats() {
+    const { language } = useLanguage()
+    const stats = language === 'zh' ? STATS.zh : STATS.en
     return (
         <section className="bg-nofx-accent py-20 relative overflow-hidden">
             {/* Halftone Pattern */}

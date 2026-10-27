@@ -22,6 +22,7 @@ import {
 } from '../lib/planning'
 import { formatRequestError } from '../lib/requestErrors'
 import { preservePlanningPlans } from '../lib/planningPresentation'
+import { useLanguage } from '../contexts/LanguageContext'
 import { PlanningDataPanel } from '../components/planning/PlanningDataPanel'
 import { FrontierMarkets } from '../components/planning/FrontierMarkets'
 import { ExecutionSchedule } from '../components/planning/ExecutionSchedule'
@@ -82,11 +83,38 @@ const orderStates: Record<string, string> = {
   EXPIRED: 'Expired',
   TRIGGERED: 'Triggered · verify fills',
 }
+const statesZh: Record<string, string> = {
+  draft: '待审批',
+  approved: '已批准',
+  running: '运行中',
+  position_open: '持仓中',
+  stopping: '停止继续入场',
+  needs_attention: '需要对账',
+  completed: '已完成',
+  cancelled: '已取消',
+  expired: '已过期',
+}
+const orderStatesZh: Record<string, string> = {
+  scheduled: '已排期',
+  submitting: '提交中',
+  UNKNOWN: '回执未确认',
+  NEW: '未成交',
+  PARTIALLY_FILLED: '部分成交',
+  FILLED: '已成交',
+  CANCELED: '已取消',
+  REJECTED: '已拒绝',
+  EXPIRED: '已过期',
+  TRIGGERED: '已触发 · 请核对成交',
+}
 interface ChatMessage {
   role: 'user' | 'assistant' | 'error'
   content: string
 }
 export function TradingPlanningPage() {
+  const { language } = useLanguage()
+  const isZh = language === 'zh'
+  const planStates = isZh ? statesZh : states
+  const orderStatesL = isZh ? orderStatesZh : orderStates
   const [observation, setObservation] = useState<AccountObservation | null>(
     null
   )
@@ -145,13 +173,15 @@ export function TradingPlanningPage() {
     [extrasOpen, setExtrasOpen] = useState(false),
     [builder, setBuilder] = useState(false),
     [builderIdea, setBuilderIdea] = useState<Idea>({
-      name: 'Custom plan',
+      name: isZh ? '自定义计划' : 'Custom plan',
       side: 'long',
       entry: '',
       stop: '',
       target: '',
       rationale:
-        'User-defined conditional prices, subject to mathematical validation; neither approved nor executed.',
+        isZh
+          ? '用户自定义的条件价格，需通过数学校验；尚未批准，也未执行。'
+          : 'User-defined conditional prices, subject to mathematical validation; neither approved nor executed.',
       execution: { kind: 'limit' },
     }),
     [levels, setLevels] = useState('')
@@ -230,7 +260,9 @@ export function TradingPlanningPage() {
     if (!intent) return
     if (intent.venue !== venue || intent.symbol !== symbol) {
       setOrderNotice(
-        'Connection saved. Choose a plan for the current market to continue.'
+        isZh
+          ? '连接已保存。请选择当前市场的一个计划以继续。'
+          : 'Connection saved. Choose a plan for the current market to continue.'
       )
       return
     }
@@ -527,8 +559,12 @@ export function TradingPlanningPage() {
   }
   function manualEntry(side: 'long' | 'short') {
     setBuilderIdea({
-      name: `Manual ${symbol} ${side}`,
-      rationale: 'User-created manual limit entry',
+      name: isZh
+        ? `手动 ${symbol} ${side === 'long' ? '做多' : '做空'}`
+        : `Manual ${symbol} ${side}`,
+      rationale: isZh
+        ? '用户创建的手动限价入场'
+        : 'User-created manual limit entry',
       side,
       entry: price === '—' ? '' : price,
       stop: '',
@@ -557,7 +593,9 @@ export function TradingPlanningPage() {
     const context = chart.current?.context()
     if (!context || context.venue !== venue || context.symbol !== symbol) {
       setError(
-        'The chart is still switching markets. Try again once it is ready.'
+        isZh
+          ? '图表仍在切换市场，请等它就绪后再试。'
+          : 'The chart is still switching markets. Try again once it is ready.'
       )
       return
     }
@@ -586,7 +624,7 @@ export function TradingPlanningPage() {
     setInstruction('')
     resetTurn()
     chatFollow.current = true
-    setStatus('Reading current market context…')
+    setStatus(isZh ? '正在读取当前市场上下文…' : 'Reading current market context…')
     setMessages((m) => [
       ...(separateDraft ? [] : m),
       { role: 'user', content: text },
@@ -630,17 +668,24 @@ export function TradingPlanningPage() {
               { role: 'assistant', content: String(event.data.message) },
             ])
           if (event.type === 'error') {
-            const message = formatRequestError(String(event.data.message), 'en')
+            const message = formatRequestError(
+              String(event.data.message),
+              isZh ? 'zh' : 'en'
+            )
             setError(message)
           }
           if (event.type === 'status') setStatus(String(event.data.message))
           if (event.type === 'iteration')
             setStatus(
-              `Planning round ${event.data.round} of ${event.data.max_rounds}`
+              isZh
+                ? `规划第 ${event.data.round} 轮，共 ${event.data.max_rounds} 轮`
+                : `Planning round ${event.data.round} of ${event.data.max_rounds}`
             )
           if (event.type === 'outcome' && Number(event.data.drafts) === 0) {
             setStatus(
-              'Planning completed without a validated draft. Review the explanation.'
+              isZh
+                ? '规划已完成，但没有通过校验的草案。请查看说明。'
+                : 'Planning completed without a validated draft. Review the explanation.'
             )
             if (waiting && event.data.stop_reason === 'completed') {
               rememberBatch({ ...generation, waiting: true }, batchKey)
@@ -719,7 +764,7 @@ export function TradingPlanningPage() {
     } catch (e) {
       if (!controller.signal.aborted) {
         if (!streamStarted) setMessages(separateDraft ? [] : messages)
-        const message = formatRequestError(e, 'en')
+        const message = formatRequestError(e, isZh ? 'zh' : 'en')
         setError(message)
         setTrace((items) =>
           recordActivity(items, { type: 'error', data: { message } })
@@ -733,7 +778,13 @@ export function TradingPlanningPage() {
       setBusy(false)
       setPlanningBusy(false)
       setStatus(
-        controller.signal.aborted ? 'Planning stopped' : 'Planning finished'
+        controller.signal.aborted
+          ? isZh
+            ? '规划已停止'
+            : 'Planning stopped'
+          : isZh
+            ? '规划已完成'
+            : 'Planning finished'
       )
       await reload().catch(() => {})
       await refreshHistory().catch(() => {})
@@ -776,7 +827,9 @@ export function TradingPlanningPage() {
           !['completed', 'cancelled', 'expired'].includes(checked.state)
         ) {
           throw new Error(
-            'The previous trade is still active. Review Positions & orders below before placing another.'
+            isZh
+              ? '上一笔交易仍在进行中。请先查看下方的持仓与订单，再下新单。'
+              : 'The previous trade is still active. Review Positions & orders below before placing another.'
           )
         }
         checkingPreviousTrade = false
@@ -854,7 +907,9 @@ export function TradingPlanningPage() {
       await reload()
       setOrderNotice(
         checked.state === 'completed'
-          ? 'Previous trade is closed. Your account is ready for a new order. Review a plan when you are ready.'
+          ? isZh
+            ? '上一笔交易已关闭。你的账户可以下新单了，准备好后请选择一个计划审核。'
+            : 'Previous trade is closed. Your account is ready for a new order. Review a plan when you are ready.'
           : ''
       )
     } catch (e) {
@@ -943,7 +998,7 @@ export function TradingPlanningPage() {
       : (currentBatch?.deferred || []).map((entry) => ({
           id: `deferred_${entry.kind}`,
           kind: entry.kind,
-          name: 'Wait for entry conditions',
+          name: isZh ? '等待入场条件' : 'Wait for entry conditions',
           status: 'deferred',
           reason: entry.reason,
         }))
@@ -964,31 +1019,51 @@ export function TradingPlanningPage() {
         {compare.includes(r.plan.id)
           ? String.fromCharCode(65 + compare.indexOf(r.plan.id)) + ' · '
           : ''}
-        {r.plan.idea.side === 'long' ? '↗ Long' : '↘ Short'} ·{' '}
+        {r.plan.idea.side === 'long'
+          ? isZh
+            ? '↗ 做多'
+            : '↗ Long'
+          : isZh
+            ? '↘ 做空'
+            : '↘ Short'}{' '}
+        ·{' '}
         {r.plan.idea.execution.kind === 'market'
-          ? 'Market'
+          ? isZh
+            ? '市价'
+            : 'Market'
           : r.plan.idea.execution.kind === 'ladder'
-            ? 'Price ladder'
+            ? isZh
+              ? '价格阶梯'
+              : 'Price ladder'
             : r.plan.idea.execution.kind === 'twap'
               ? 'TWAP'
-              : 'Single limit'}
+              : isZh
+                ? '单笔限价'
+                : 'Single limit'}
       </span>
       <strong>{r.plan.idea.name}</strong>
-      <span>Entry {format(r.plan.idea.entry)}</span>
+      <span>
+        {isZh ? '入场' : 'Entry'} {format(r.plan.idea.entry)}
+      </span>
       <div>
         <span>
-          Planned loss <b>{format(r.plan.risk)}</b>
+          {isZh ? '计划亏损' : 'Planned loss'} <b>{format(r.plan.risk)}</b>
         </span>
         <span>
-          Net reward/risk <b>{Number(r.plan.reward_risk).toFixed(2)} : 1</b>
+          {isZh ? '净收益/风险' : 'Net reward/risk'}{' '}
+          <b>{Number(r.plan.reward_risk).toFixed(2)} : 1</b>
         </span>
       </div>
       <small>
         {r.state === 'draft' && outsideEntryPolicy(r.plan)
-          ? 'Outside AI500 long-only policy · generate a new plan'
+          ? isZh
+            ? '超出 AI500 仅做多策略范围 · 请生成新计划'
+            : 'Outside AI500 long-only policy · generate a new plan'
           : expired(r.plan, clock) && r.state === 'draft'
-            ? 'Expired · replan'
-            : states[r.state] || r.state}
+            ? isZh
+              ? '已过期 · 重新规划'
+              : 'Expired · replan'
+            : planStates[r.state] || r.state}
       </small>
     </button>
   )
@@ -997,17 +1072,17 @@ export function TradingPlanningPage() {
       <div className="planning-heading">
         <div>
           <h1>Frontier</h1>
-          <p>Your market. Your next move.</p>
+          <p>{isZh ? '你的市场，你的下一步。' : 'Your market. Your next move.'}</p>
         </div>
-        <nav className="frontier-workflow" aria-label="How Frontier works">
+        <nav className="frontier-workflow" aria-label={isZh ? 'Frontier 如何运作' : 'How Frontier works'}>
           <span data-active={!current && !turnPlanIDs.length}>
-            <b>1</b> Explore the market
+            <b>1</b> {isZh ? '探索市场' : 'Explore the market'}
           </span>
           <span data-active={!current && turnPlanIDs.length > 0}>
-            <b>2</b> Compare plans
+            <b>2</b> {isZh ? '比较计划' : 'Compare plans'}
           </span>
           <span data-active={Boolean(current)}>
-            <b>3</b> Review & trade
+            <b>3</b> {isZh ? '审核并交易' : 'Review & trade'}
           </span>
         </nav>
         <a
@@ -1018,15 +1093,15 @@ export function TradingPlanningPage() {
             showSection('account')
           }}
         >
-          Positions & orders ↓
+          {isZh ? '持仓与订单 ↓' : 'Positions & orders ↓'}
         </a>
-        <Link to={ROUTES.settings}>Settings ↗</Link>
+        <Link to={ROUTES.settings}>{isZh ? '设置 ↗' : 'Settings ↗'}</Link>
       </div>
       <div className="planning-toolbar">
         <div className="frontier-toolbar-field">
-          <span>Exchange</span>
+          <span>{isZh ? '交易所' : 'Exchange'}</span>
           <select
-            aria-label="Market venue"
+            aria-label={isZh ? '交易场所' : 'Market venue'}
             value={venue}
             disabled={busy}
             onChange={(e) =>
@@ -1036,16 +1111,16 @@ export function TradingPlanningPage() {
               )
             }
           >
-            <option value="binance">Binance · USDT perpetual</option>
-            <option value="hyperliquid">Hyperliquid · perpetual</option>
-            <option value="okx">OKX · USDT perpetual</option>
-            <option value="bitget">Bitget · USDT perpetual</option>
+            <option value="binance">{isZh ? 'Binance · USDT 永续合约' : 'Binance · USDT perpetual'}</option>
+            <option value="hyperliquid">{isZh ? 'Hyperliquid · 永续合约' : 'Hyperliquid · perpetual'}</option>
+            <option value="okx">{isZh ? 'OKX · USDT 永续合约' : 'OKX · USDT perpetual'}</option>
+            <option value="bitget">{isZh ? 'Bitget · USDT 永续合约' : 'Bitget · USDT perpetual'}</option>
           </select>
         </div>
         <div className="frontier-toolbar-field">
-          <span>Account</span>
+          <span>{isZh ? '账户' : 'Account'}</span>
           <select
-            aria-label="Trading account"
+            aria-label={isZh ? '交易账户' : 'Trading account'}
             value={exchangeID}
             onChange={(e) => {
               if (e.target.value === '__add_account__') {
@@ -1056,7 +1131,7 @@ export function TradingPlanningPage() {
             }}
             disabled={busy}
           >
-            <option value="">Explore without an account</option>
+            <option value="">{isZh ? '不使用账户，先探索' : 'Explore without an account'}</option>
             {accounts
               .filter((a) => a.exchange_type === venue)
               .map((a) => (
@@ -1064,11 +1139,11 @@ export function TradingPlanningPage() {
                   {accountLabel(a, accounts)} · {a.exchange_type}
                 </option>
               ))}
-            <option value="__add_account__">+ Add another account…</option>
+            <option value="__add_account__">{isZh ? '+ 添加另一个账户…' : '+ Add another account…'}</option>
           </select>
         </div>
         <div className="frontier-toolbar-field">
-          <span>Market</span>
+          <span>{isZh ? '市场' : 'Market'}</span>
           <form
             onSubmit={(e) => {
               e.preventDefault()
@@ -1080,16 +1155,16 @@ export function TradingPlanningPage() {
             }}
           >
             <input
-              aria-label="Symbol"
+              aria-label={isZh ? '币种' : 'Symbol'}
               value={symbolInput}
               onChange={(e) => setSymbolInput(e.target.value)}
               disabled={busy}
             />
-            <button disabled={busy}>Open market</button>
+            <button disabled={busy}>{isZh ? '打开市场' : 'Open market'}</button>
           </form>
         </div>
         <span className="planning-live">
-          <i /> Live trading · You’re in control
+          <i /> {isZh ? '实盘交易 · 由你掌控' : 'Live trading · You’re in control'}
         </span>
       </div>
       <FrontierSetup
@@ -1152,8 +1227,8 @@ export function TradingPlanningPage() {
           (item) => item.state === 'failed' && item.detail === error
         ) && (
           <div className="planning-error" role="alert">
-            {formatRequestError(error, 'en')}
-            <button onClick={() => setError('')} aria-label="Dismiss">
+            {formatRequestError(error, isZh ? 'zh' : 'en')}
+            <button onClick={() => setError('')} aria-label={isZh ? '关闭' : 'Dismiss'}>
               ×
             </button>
           </div>
@@ -1165,7 +1240,7 @@ export function TradingPlanningPage() {
               <b>{symbol}</b>
               <strong>{price === '—' ? price : format(price)}</strong>
               <small>
-                <i className="frontier-live-dot" /> Live market · {interval}
+                <i className="frontier-live-dot" /> {isZh ? '实时市场' : 'Live market'} · {interval}
               </small>
             </div>
             <div>
@@ -1173,7 +1248,7 @@ export function TradingPlanningPage() {
                 disabled={!current}
                 onClick={() => chart.current?.focusPlan()}
               >
-                Fit selected plan
+                {isZh ? '适配所选计划' : 'Fit selected plan'}
               </button>
               <button
                 disabled={busy || comparisonPlans.length < 2}
@@ -1181,15 +1256,15 @@ export function TradingPlanningPage() {
                   setCompare(comparisonPlans.slice(0, 4).map((p) => p.id))
                 }}
               >
-                Compare plans
+                {isZh ? '比较计划' : 'Compare plans'}
               </button>
             </div>
           </div>
           <div className="frontier-sizing">
             <label>
-              Leverage{' '}
+              {isZh ? '杠杆' : 'Leverage'}{' '}
               <select
-                aria-label="Planning leverage"
+                aria-label={isZh ? '规划杠杆' : 'Planning leverage'}
                 value={leverage}
                 disabled={busy}
                 onChange={(e) => setLeverage(Number(e.target.value))}
@@ -1203,8 +1278,12 @@ export function TradingPlanningPage() {
             </label>
             <span>
               {exchangeID
-                ? `Available margin × ${leverage}x · execution costs reserved`
-                : 'Connect an account for automatic sizing'}
+                ? isZh
+                  ? `可用保证金 × ${leverage}x · 已预留执行成本`
+                  : `Available margin × ${leverage}x · execution costs reserved`
+                : isZh
+                  ? '连接账户以自动计算仓位'
+                  : 'Connect an account for automatic sizing'}
             </span>
           </div>
           <div className="planning-chart-frame">
@@ -1214,46 +1293,59 @@ export function TradingPlanningPage() {
             )}
           </div>
           <div className="planning-legend">
-            Entry <i className="entry" /> Stop loss <i className="stop" /> Take
-            profit <i className="target" />
+            {isZh ? '入场' : 'Entry'} <i className="entry" /> {isZh ? '止损' : 'Stop loss'} <i className="stop" /> {isZh ? '止盈' : 'Take profit'} <i className="target" />
             {compare.length > 1 && (
               <button onClick={() => setCompare([])}>
-                Exit comparison · select one plan to focus
+                {isZh ? '退出比较 · 选择一个计划聚焦' : 'Exit comparison · select one plan to focus'}
               </button>
             )}
           </div>
           <section
             className="frontier-plan-deck"
             id="frontier-plans"
-            aria-label="Entry plans"
+            aria-label={isZh ? '入场计划' : 'Entry plans'}
           >
             <div className="frontier-deck-heading">
               <div>
                 <h2>
                   {waitingForEntry
-                    ? 'Waiting for an entry'
+                    ? isZh
+                      ? '等待入场'
+                      : 'Waiting for an entry'
                     : currentBatch
-                      ? 'Your latest plans'
+                      ? isZh
+                        ? '你的最新计划'
+                        : 'Your latest plans'
                       : deckPlans.length
-                        ? 'Saved idea'
-                        : 'Choose your entry'}
+                        ? isZh
+                          ? '已保存的想法'
+                          : 'Saved idea'
+                        : isZh
+                          ? '选择你的入场'
+                          : 'Choose your entry'}
                 </h2>
                 <p>
                   {waitingForEntry ? (
-                    'No new entry selected. See the assistant’s explanation and conditions to watch.'
+                    isZh
+                      ? '尚未选择新的入场。请查看助手的说明和需要关注的条件。'
+                      : 'No new entry selected. See the assistant’s explanation and conditions to watch.'
                   ) : (
                     <>
                       {currentBatch
-                        ? `Generated together · ${new Date(currentBatch.created).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}. `
-                        : 'Older drafts are in history below. '}
-                      Review updates the selected plan with current prices and
-                      funds.
+                        ? isZh
+                          ? `同批生成 · ${new Date(currentBatch.created).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}。 `
+                          : `Generated together · ${new Date(currentBatch.created).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}. `
+                        : isZh
+                          ? '较旧的草案在下方的历史记录中。 '
+                          : 'Older drafts are in history below. '}
+                      {isZh ? '审核会用当前价格和资金更新所选计划。' : 'Review updates the selected plan with current prices and funds.'}
                     </>
                   )}
                 </p>
               </div>
               <span>
-                {deckPlans.length} {deckPlans.length === 1 ? 'plan' : 'plans'}
+                {deckPlans.length}{' '}
+                {isZh ? '个计划' : deckPlans.length === 1 ? 'plan' : 'plans'}
               </span>
             </div>
             <PlanStructures
@@ -1273,13 +1365,12 @@ export function TradingPlanningPage() {
               !entryChecks.length &&
               !waitingForEntry && (
                 <p className="frontier-deck-empty">
-                  Generate plans to compare market, limit, ladder and TWAP
-                  entries here.
+                  {isZh ? '在此生成计划，比较市价、限价、阶梯和 TWAP 入场。' : 'Generate plans to compare market, limit, ladder and TWAP entries here.'}
                 </p>
               )}
             {archivedRecords.length > 0 && (
               <details className="planning-all-plans">
-                <summary>Plan history · {archivedRecords.length}</summary>
+                <summary>{isZh ? '计划历史' : 'Plan history'} · {archivedRecords.length}</summary>
                 <div className="planning-card-list">
                   {archivedRecords.map(renderPlanCard)}
                 </div>
@@ -1290,32 +1381,46 @@ export function TradingPlanningPage() {
             <div className="planning-selected">
               <b>
                 {current.state === 'draft'
-                  ? 'Draft · not submitted · '
-                  : 'Trade · '}
+                  ? isZh
+                    ? '草案 · 未提交 · '
+                    : 'Draft · not submitted · '
+                  : isZh
+                    ? '交易 · '
+                    : 'Trade · '}
                 {current.plan.idea.name} ·{' '}
-                {current.plan.idea.side === 'long' ? 'Long' : 'Short'}
+                {current.plan.idea.side === 'long'
+                  ? isZh
+                    ? '做多'
+                    : 'Long'
+                  : isZh
+                    ? '做空'
+                    : 'Short'}
               </b>
               <div className="planning-price-row">
                 <span>
                   {current.plan.idea.execution.kind === 'market'
-                    ? 'Est. market entry'
-                    : 'Entry'}{' '}
+                    ? isZh
+                      ? '预计市价入场'
+                      : 'Est. market entry'
+                    : isZh
+                      ? '入场'
+                      : 'Entry'}{' '}
                   <strong>{format(current.plan.idea.entry)}</strong>
                 </span>
                 <span>
-                  Stop loss{' '}
+                  {isZh ? '止损' : 'Stop loss'}{' '}
                   <strong className="stop-text">
                     {format(current.plan.idea.stop)}
                   </strong>
                 </span>
                 <span>
-                  Target{' '}
+                  {isZh ? '目标' : 'Target'}{' '}
                   <strong className="target-text">
                     {format(current.plan.idea.target)}
                   </strong>
                 </span>
                 <span>
-                  Planned loss{' '}
+                  {isZh ? '计划亏损' : 'Planned loss'}{' '}
                   <strong>
                     {format(current.plan.risk)}{' '}
                     {current.plan.snapshot.quote_asset}
@@ -1325,20 +1430,24 @@ export function TradingPlanningPage() {
               <PlanFunding plan={current.plan} />
               <details>
                 <summary>
-                  {current.plan.orders.length || 1} child orders · Inspect
-                  prices, quantities and release times
+                  {current.plan.orders.length || 1}{' '}
+                  {isZh ? '个子订单 · 查看价格、数量和释放时间' : 'child orders · Inspect prices, quantities and release times'}
                 </summary>
                 <table>
                   <thead>
                     <tr>
-                      <th>Child order</th>
+                      <th>{isZh ? '子订单' : 'Child order'}</th>
                       <th>
                         {current?.plan.idea.execution.kind === 'market'
-                          ? 'Execution estimate'
-                          : 'Limit price'}
+                          ? isZh
+                            ? '执行预估价'
+                            : 'Execution estimate'
+                          : isZh
+                            ? '限价'
+                            : 'Limit price'}
                       </th>
-                      <th>Quantity</th>
-                      <th>Release time</th>
+                      <th>{isZh ? '数量' : 'Quantity'}</th>
+                      <th>{isZh ? '释放时间' : 'Release time'}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1352,8 +1461,11 @@ export function TradingPlanningPage() {
                         </td>
                         <td>
                           {o.offset_seconds === 0
-                            ? 'At start'
-                            : o.offset_seconds + ' seconds later'}
+                            ? isZh
+                              ? '开始时'
+                              : 'At start'
+                            : o.offset_seconds +
+                              (isZh ? ' 秒后' : ' seconds later')}
                         </td>
                       </tr>
                     ))}
@@ -1364,13 +1476,13 @@ export function TradingPlanningPage() {
             </div>
           )}
           <details className="frontier-advanced">
-            <summary>Chart data & advanced tools</summary>
+            <summary>{isZh ? '图表数据与高级工具' : 'Chart data & advanced tools'}</summary>
             <div>
               <details
                 className="planning-tools"
                 onToggle={(e) => setExtrasOpen(e.currentTarget.open)}
               >
-                <summary>Market data and indicators</summary>
+                <summary>{isZh ? '市场数据与指标' : 'Market data and indicators'}</summary>
                 {extrasOpen && (
                   <PlanningDataPanel
                     exchangeID={exchangeID}
@@ -1381,7 +1493,7 @@ export function TradingPlanningPage() {
                 )}
               </details>
               <details className="planning-tools">
-                <summary>Risk budget, entry orders and advanced tools</summary>
+                <summary>{isZh ? '风险预算、入场订单与高级工具' : 'Risk budget, entry orders and advanced tools'}</summary>
                 <div className="planning-limit-grid">
                   {(
                     Object.keys(defaultLimits) as Exclude<
@@ -1402,13 +1514,16 @@ export function TradingPlanningPage() {
                       <label key={key}>
                         {
                           {
-                            equity: 'Equity budget',
-                            max_risk: 'Maximum planned loss',
-                            max_notional: 'Maximum notional',
-                            min_reward_risk:
-                              'Minimum net reward/risk (0 = no minimum)',
-                            fee_bps: 'Fee assumption / bps',
-                            slippage_bps: 'Slippage assumption / bps',
+                            equity: isZh ? '净值预算' : 'Equity budget',
+                            max_risk: isZh ? '最大计划亏损' : 'Maximum planned loss',
+                            max_notional: isZh ? '最大名义价值' : 'Maximum notional',
+                            min_reward_risk: isZh
+                              ? '最低净收益/风险（0 = 无最低要求）'
+                              : 'Minimum net reward/risk (0 = no minimum)',
+                            fee_bps: isZh ? '手续费假设 / bps' : 'Fee assumption / bps',
+                            slippage_bps: isZh
+                              ? '滑点假设 / bps'
+                              : 'Slippage assumption / bps',
                           }[key]
                         }
                         <input
@@ -1429,18 +1544,13 @@ export function TradingPlanningPage() {
                     ))}
                 </div>
                 <p>
-                  Live sizing refreshes before planning and review. Leverage is
-                  applied to current available margin, with execution costs
-                  reserved. Quantities are rounded to exchange steps. Market
-                  orders require enough depth within the approved price bound.
-                  Hyperliquid costs must include Builder fees. Gaps, failed
-                  protection and slippage may cause losses beyond the estimate.
+                  {isZh ? '实盘仓位计算会在规划和审核前刷新。杠杆应用于当前可用保证金，并预留执行成本。数量会按交易所步进取整。市价订单需要在批准的价格范围内有足够深度。Hyperliquid 成本必须包含 Builder 费用。跳空、保护失败和滑点可能导致亏损超过预估。' : 'Live sizing refreshes before planning and review. Leverage is applied to current available margin, with execution costs reserved. Quantities are rounded to exchange steps. Market orders require enough depth within the approved price bound. Hyperliquid costs must include Builder fees. Gaps, failed protection and slippage may cause losses beyond the estimate.'}
                 </p>
                 <button disabled={busy} onClick={() => setBuilder(true)}>
-                  Custom market / limit / ladder / TWAP
+                  {isZh ? '自定义市价 / 限价 / 阶梯 / TWAP' : 'Custom market / limit / ladder / TWAP'}
                 </button>
                 <label>
-                  Discussion preferences
+                  {isZh ? '讨论偏好' : 'Discussion preferences'}
                   <textarea
                     value={preferences}
                     onChange={(e) => setPreferences(e.target.value)}
@@ -1457,14 +1567,16 @@ export function TradingPlanningPage() {
                       })
                       await handleJSONResponse(r)
                       setStatus(
-                        'Preferences saved; hard risk constraints are unchanged'
+                        isZh
+                          ? '偏好已保存；硬性风险约束未变'
+                          : 'Preferences saved; hard risk constraints are unchanged'
                       )
                     } catch (e) {
                       setError(String(e))
                     }
                   }}
                 >
-                  Save preferences
+                  {isZh ? '保存偏好' : 'Save preferences'}
                 </button>
                 <button
                   onClick={async () => {
@@ -1479,7 +1591,7 @@ export function TradingPlanningPage() {
                     }
                   }}
                 >
-                  Inspect entry calculators
+                  {isZh ? '查看入场计算器' : 'Inspect entry calculators'}
                 </button>
                 {tools.length > 0 && (
                   <pre>{JSON.stringify(tools, null, 2)}</pre>
@@ -1491,28 +1603,28 @@ export function TradingPlanningPage() {
         <aside className="planning-assistant" id="frontier-assistant">
           <div className="planning-assistant-title">
             <div>
-              <span className="frontier-eyebrow">YOUR TRADING COPILOT</span>
-              <b>Trade assistant</b>
+              <span className="frontier-eyebrow">{isZh ? '你的交易副驾驶' : 'YOUR TRADING COPILOT'}</span>
+              <b>{isZh ? '交易助手' : 'Trade assistant'}</b>
             </div>
             <button onClick={newSession} disabled={busy}>
-              New idea
+              {isZh ? '新想法' : 'New idea'}
             </button>
           </div>
           <details className="frontier-model-settings">
             <summary>
               {models.find((m) => m.id === modelID)?.customModelName ||
                 models.find((m) => m.id === modelID)?.name ||
-                'Choose AI'}{' '}
-              <span>Change model</span>
+                isZh ? '选择 AI' : 'Choose AI'}{' '}
+              <span>{isZh ? '更换模型' : 'Change model'}</span>
             </summary>
             <select
-              aria-label="NOFX AI model"
+              aria-label={isZh ? 'NOFX AI 模型' : 'NOFX AI model'}
               value={modelID}
               onChange={(e) => setModelID(e.target.value)}
               disabled={busy}
             >
               {models.length === 0 && (
-                <option>Enable AI in NOFX settings first</option>
+                <option>{isZh ? '请先在 NOFX 设置中启用 AI' : 'Enable AI in NOFX settings first'}</option>
               )}
               {models.map((m) => (
                 <option value={m.id} key={m.id}>
@@ -1528,12 +1640,14 @@ export function TradingPlanningPage() {
               onClick={() =>
                 send(
                   instruction.trim() ||
-                    'Compare four plans in this order: market entry, single limit, weighted ladder and TWAP for this market.',
+                    isZh
+                      ? '按以下顺序比较四个计划：本市场的市价入场、单笔限价、加权阶梯和 TWAP。'
+                      : 'Compare four plans in this order: market entry, single limit, weighted ladder and TWAP for this market.',
                   true
                 )
               }
             >
-              Generate plans
+              {isZh ? '生成计划' : 'Generate plans'}
             </button>
           </div>
           <a
@@ -1544,17 +1658,25 @@ export function TradingPlanningPage() {
               showSection('plans')
             }}
           >
-            {waitingForEntry ? 'View entry conditions' : 'View entry plans'}{' '}
+            {waitingForEntry
+              ? isZh
+                ? '查看入场条件'
+                : 'View entry conditions'
+              : isZh
+                ? '查看入场计划'
+                : 'View entry plans'}{' '}
             <span>{waitingForEntry ? '→' : `${deckPlans.length} →`}</span>
           </a>
           {busy && (
             <div className="planning-progress" role="status" aria-live="polite">
               <span className="planning-spinner" />
               {planningBusy
-                ? status || 'Preparing plans…'
-                : 'Validating account and order details…'}
+                ? status || (isZh ? '正在准备计划…' : 'Preparing plans…')
+                : isZh
+                  ? '正在验证账户和订单详情…'
+                  : 'Validating account and order details…'}
               {planningBusy && (
-                <button onClick={() => abort.current?.abort()}>Stop</button>
+                <button onClick={() => abort.current?.abort()}>{isZh ? '停止' : 'Stop'}</button>
               )}
             </div>
           )}
@@ -1575,57 +1697,61 @@ export function TradingPlanningPage() {
                     <img src="/icons/nofx-flow.svg" alt="" />
                   </span>
                   <h2>
-                    Your next move,
+                    {isZh ? '你的下一步，' : 'Your next move,'}
                     <br />
-                    made clear.
+                    {isZh ? '清晰呈现。' : 'made clear.'}
                   </h2>
                   <p>
-                    Tell me what you’re considering. I’ll map out entries, risk
-                    and exits for you to review.
+                    {isZh ? '告诉我你在考虑什么。我会为你梳理入场、风险和退出，供你审核。' : 'Tell me what you’re considering. I’ll map out entries, risk and exits for you to review.'}
                   </p>
                   <div className="frontier-welcome-note">
-                    <span>01 Explore</span>
-                    <span>02 Compare</span>
-                    <span>03 Review & trade</span>
+                    <span>{isZh ? '01 探索' : '01 Explore'}</span>
+                    <span>{isZh ? '02 比较' : '02 Compare'}</span>
+                    <span>{isZh ? '03 审核并交易' : '03 Review & trade'}</span>
                   </div>
                   <div
                     className="frontier-starters"
-                    aria-label="Trade idea suggestions"
+                    aria-label={isZh ? '交易想法建议' : 'Trade idea suggestions'}
                   >
                     <button
                       onClick={() =>
                         setInstruction(
-                          'Find a pullback entry with clear risk and exits.'
+                          isZh
+                            ? '寻找一个风险和退出都清晰的回调入场。'
+                            : 'Find a pullback entry with clear risk and exits.'
                         )
                       }
                     >
-                      Find a pullback entry <span>↗</span>
+                      {isZh ? '寻找回调入场' : 'Find a pullback entry'} <span>↗</span>
                     </button>
                     <button
                       onClick={() =>
                         setInstruction(
-                          'Compare market, single-limit, price-ladder and TWAP entries for this market.'
+                          isZh
+                            ? '比较本市场的市价、单笔限价、价格阶梯和 TWAP 入场。'
+                            : 'Compare market, single-limit, price-ladder and TWAP entries for this market.'
                         )
                       }
                     >
-                      Compare ways to enter <span>↗</span>
+                      {isZh ? '比较入场方式' : 'Compare ways to enter'} <span>↗</span>
                     </button>
                     <button
                       onClick={() =>
                         setInstruction(
-                          'Mark support and resistance, without creating orders.'
+                          isZh
+                            ? '标出支撑位和阻力位，不要创建订单。'
+                            : 'Mark support and resistance, without creating orders.'
                         )
                       }
                     >
-                      Explore key price levels <span>↗</span>
+                      {isZh ? '探索关键价格位' : 'Explore key price levels'} <span>↗</span>
                     </button>
                   </div>
                 </div>
               )}
               {messages.length === 0 && current && (
                 <p className="frontier-plan-hint">
-                  This plan is on the chart. Ask me to explain or revise it,
-                  then review the order when you are ready.
+                  {isZh ? '这个计划已显示在图表上。让我解释或修改它，准备好后审核订单。' : 'This plan is on the chart. Ask me to explain or revise it, then review the order when you are ready.'}
                 </p>
               )}
               {messages
@@ -1655,10 +1781,10 @@ export function TradingPlanningPage() {
             }}
           >
             <textarea
-              aria-label="Trade idea"
+              aria-label={isZh ? '交易想法' : 'Trade idea'}
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
-              placeholder="Ask about this market, or describe a trade…"
+              placeholder={isZh ? '询问这个市场，或描述一笔交易…' : 'Ask about this market, or describe a trade…'}
               maxLength={8000}
               disabled={busy}
             />
@@ -1668,19 +1794,21 @@ export function TradingPlanningPage() {
                 disabled={busy}
                 onClick={() =>
                   send(
-                    'Mark potential support and resistance on the current chart. Explain assumptions without generating trade plans yet.'
+                    isZh
+                      ? '在当前图表上标出潜在的支撑位和阻力位。解释假设，先不要生成交易计划。'
+                      : 'Mark potential support and resistance on the current chart. Explain assumptions without generating trade plans yet.'
                   )
                 }
               >
-                Support / resistance
+                {isZh ? '支撑 / 阻力' : 'Support / resistance'}
               </button>
               {planningBusy ? (
                 <button type="button" onClick={() => abort.current?.abort()}>
-                  Stop planning
+                  {isZh ? '停止规划' : 'Stop planning'}
                 </button>
               ) : (
                 <button type="submit" disabled={busy || !instruction.trim()}>
-                  Send
+                  {isZh ? '发送' : 'Send'}
                 </button>
               )}
             </div>
@@ -1690,8 +1818,8 @@ export function TradingPlanningPage() {
               <>
                 <b>{current.plan.idea.name}</b>
                 <p>
-                  {states[run?.state || current.state] || current.state} · Live
-                  trading ·{' '}
+                  {planStates[run?.state || current.state] || current.state} ·{' '}
+                  {isZh ? '实盘交易' : 'Live trading'} ·{' '}
                   {accounts.find((a) => a.id === data.accounts[selected])?.name}
                 </p>
                 {run?.error && <p className="stop-text">{run.error}</p>}
@@ -1708,10 +1836,16 @@ export function TradingPlanningPage() {
                     }}
                   >
                     {!exchangeID
-                      ? 'Connect account to trade'
+                      ? isZh
+                        ? '连接账户以交易'
+                        : 'Connect account to trade'
                       : expired(current.plan, clock)
-                        ? 'Refresh & review order'
-                        : 'Review order'}
+                        ? isZh
+                          ? '刷新并审核订单'
+                          : 'Refresh & review order'
+                        : isZh
+                          ? '审核订单'
+                          : 'Review order'}
                   </button>
                 ) : run?.state === 'approved' ? (
                   <>
@@ -1719,13 +1853,13 @@ export function TradingPlanningPage() {
                       disabled={busy}
                       onClick={() => runAction('execute', run)}
                     >
-                      Place approved orders
+                      {isZh ? '下已批准的订单' : 'Place approved orders'}
                     </button>
                     <button
                       disabled={busy}
                       onClick={() => runAction('stop', run)}
                     >
-                      Revoke approval
+                      {isZh ? '撤销批准' : 'Revoke approval'}
                     </button>
                   </>
                 ) : (
@@ -1737,25 +1871,23 @@ export function TradingPlanningPage() {
                       disabled={busy}
                       onClick={() => runAction('stop', run)}
                     >
-                      Stop remaining entries
+                      {isZh ? '停止剩余入场' : 'Stop remaining entries'}
                     </button>
                   )
                 )}
                 <small>
-                  AI Revisions are not approval. Unknown orders are not
-                  resubmitted. Check live positions immediately if protection
-                  fails.
+                  {isZh ? 'AI 的修改不等于批准。未知订单不会重新提交。保护失败时请立即检查实盘持仓。' : 'AI Revisions are not approval. Unknown orders are not resubmitted. Check live positions immediately if protection fails.'}
                 </small>
               </>
             ) : (
               <p className="frontier-no-orders">
-                <span aria-hidden="true">○</span> Plans are drafts. You approve
-                every trade.
+                <span aria-hidden="true">○</span>{' '}
+                {isZh ? '计划都是草案。每一笔交易都由你批准。' : 'Plans are drafts. You approve every trade.'}
               </p>
             )}
           </div>
           <details className="planning-history">
-            <summary>Planning conversations {history.length}</summary>
+            <summary>{isZh ? '规划对话' : 'Planning conversations'} {history.length}</summary>
             {history.map((h) => (
               <button
                 key={h.id}
@@ -1795,7 +1927,7 @@ export function TradingPlanningPage() {
         />
         <details className="planning-tools">
           <summary>
-            Previous executions ·{' '}
+            {isZh ? '历史执行' : 'Previous executions'} ·{' '}
             {
               data.runs.filter(
                 (r) =>
@@ -1813,24 +1945,24 @@ export function TradingPlanningPage() {
             .map((r) => (
               <div className="planning-run" key={r.id}>
                 <b>
-                  {r.plan.idea.name} · {states[r.state] || r.state}
+                  {r.plan.idea.name} · {planStates[r.state] || r.state}
                 </b>
                 {r.error && <p className="stop-text">{r.error}</p>}
                 <table>
                   <thead>
                     <tr>
-                      <th>Type</th>
-                      <th>Native order ID</th>
-                      <th>State</th>
-                      <th>Filled quantity</th>
+                      <th>{isZh ? '类型' : 'Type'}</th>
+                      <th>{isZh ? '原生订单 ID' : 'Native order ID'}</th>
+                      <th>{isZh ? '状态' : 'State'}</th>
+                      <th>{isZh ? '已成交数量' : 'Filled quantity'}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {r.orders.map((o) => (
                       <tr key={o.client_id}>
                         <td>{o.role}</td>
-                        <td>{o.order_id || 'Unconfirmed'}</td>
-                        <td>{orderStates[o.status] || o.status}</td>
+                        <td>{o.order_id || (isZh ? '未确认' : 'Unconfirmed')}</td>
+                        <td>{orderStatesL[o.status] || o.status}</td>
                         <td>{format(o.filled)}</td>
                       </tr>
                     ))}
@@ -1849,53 +1981,70 @@ export function TradingPlanningPage() {
             className="planning-modal"
           >
             <h2 id="planning-approval-title">
-              Place {review.idea.side === 'long' ? 'Long' : 'Short'} ·{' '}
+              {isZh ? '下单' : 'Place'}{' '}
+              {review.idea.side === 'long'
+                ? isZh
+                  ? '做多'
+                  : 'Long'
+                : isZh
+                  ? '做空'
+                  : 'Short'}{' '}
+              ·{' '}
               {review.snapshot.symbol}
             </h2>
             <p>
               {account?.name} · {review.snapshot.venue} ·{' '}
               {review.snapshot.symbol} ·{' '}
-              {review.idea.side === 'long' ? 'Long' : 'Short'}
+              {review.idea.side === 'long'
+                ? isZh
+                  ? '做多'
+                  : 'Long'
+                : isZh
+                  ? '做空'
+                  : 'Short'}
             </p>
             <div className="planning-price-row">
               <span>
                 {review.idea.execution.kind === 'market'
-                  ? 'Est. market entry'
-                  : 'Entry'}{' '}
+                  ? isZh
+                    ? '预计市价入场'
+                    : 'Est. market entry'
+                  : isZh
+                    ? '入场'
+                    : 'Entry'}{' '}
                 {format(review.idea.entry)}
               </span>
-              <span>Stop loss {format(review.idea.stop)}</span>
-              <span>Target {format(review.idea.target)}</span>
+              <span>{isZh ? '止损' : 'Stop loss'} {format(review.idea.stop)}</span>
+              <span>{isZh ? '目标' : 'Target'} {format(review.idea.target)}</span>
             </div>
             <p>
-              Total quantity {format(review.quantity)} · Planned loss{' '}
+              {isZh ? '总数量' : 'Total quantity'} {format(review.quantity)} ·{' '}
+              {isZh ? '计划亏损' : 'Planned loss'}{' '}
               {format(review.risk)} {review.snapshot.quote_asset} ·{' '}
-              {review.orders.length || 1} child orders ·{' '}
-              {review.constraints.leverage || 1}x leverage
+              {review.orders.length || 1}{' '}
+              {isZh ? '个子订单' : 'child orders'} ·{' '}
+              {review.constraints.leverage || 1}x{isZh ? ' 杠杆' : ' leverage'}
             </p>
             <PlanFunding plan={review} />
             {reviewReplacement && (
               <p role="note">
-                Confirming this order replaces your earlier unsubmitted{' '}
-                {reviewReplacement.plan.snapshot.symbol} approval. Existing
-                exchange orders and positions are unchanged by the replacement.
+                {isZh ? (<>确认此订单将替换你先前未提交的{' '}{reviewReplacement.plan.snapshot.symbol} 批准。现有的交易所订单和持仓不会因替换而改变。</>) : (<>Confirming this order replaces your earlier unsubmitted{' '}{reviewReplacement.plan.snapshot.symbol} approval. Existing exchange orders and positions are unchanged by the replacement.</>)}
               </p>
             )}
             <p>
-              Quantity is locked at this review; balance changes require a new
-              review.
+              {isZh ? '数量在此次审核时锁定；余额变化需要重新审核。' : 'Quantity is locked at this review; balance changes require a new review.'}
             </p>
             <details>
-              <summary>Execution and protection details</summary>
+              <summary>{isZh ? '执行与保护详情' : 'Execution and protection details'}</summary>
               <p>
                 {review.idea.execution.kind === 'market'
-                  ? 'Market entry is sent immediately after approval. Binance, OKX and Bitget use market orders; Hyperliquid uses an IOC order within the approved slippage bound. Actual fill may differ and any unfilled IOC quantity is canceled. '
-                  : 'Only the locked, fixed-limit basket will be submitted. '}
-                Ladder entries are released immediately; TWAP slices follow the
-                schedule. Partial fills receive matching reduce-only protection.
-                Protection failures stop further entries and require manual
-                review. Stopping entries does not close filled positions. Actual
-                loss can exceed the estimate.
+                  ? isZh
+                    ? '市价入场会在批准后立即发送。Binance、OKX 和 Bitget 使用市价订单；Hyperliquid 使用在批准滑点范围内的 IOC 订单。实际成交可能不同，未成交的 IOC 数量将被取消。'
+                    : 'Market entry is sent immediately after approval. Binance, OKX and Bitget use market orders; Hyperliquid uses an IOC order within the approved slippage bound. Actual fill may differ and any unfilled IOC quantity is canceled. '
+                  : isZh
+                    ? '只会提交已锁定的固定限价组合。'
+                    : 'Only the locked, fixed-limit basket will be submitted. '}
+                {isZh ? '阶梯入场会立即释放；TWAP 分片按计划执行。部分成交会获得匹配的只减仓保护。保护失败会停止后续入场，并需要人工审核。停止入场不会关闭已成交的持仓。实际亏损可能超过预估。' : 'Ladder entries are released immediately; TWAP slices follow the schedule. Partial fills receive matching reduce-only protection. Protection failures stop further entries and require manual review. Stopping entries does not close filled positions. Actual loss can exceed the estimate.'}
               </p>
             </details>
             <table>
@@ -1903,11 +2052,15 @@ export function TradingPlanningPage() {
                 <tr>
                   <th>
                     {review.idea.execution.kind === 'market'
-                      ? 'Execution estimate'
-                      : 'Limit price'}
+                      ? isZh
+                        ? '执行预估价'
+                        : 'Execution estimate'
+                      : isZh
+                        ? '限价'
+                        : 'Limit price'}
                   </th>
-                  <th>Quantity</th>
-                  <th>Release time</th>
+                  <th>{isZh ? '数量' : 'Quantity'}</th>
+                  <th>{isZh ? '释放时间' : 'Release time'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1915,25 +2068,25 @@ export function TradingPlanningPage() {
                   <tr key={o.index}>
                     <td>{format(o.price)}</td>
                     <td>{format(o.quantity)}</td>
-                    <td>{o.offset_seconds} seconds</td>
+                    <td>{o.offset_seconds} {isZh ? '秒' : 'seconds'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <details>
-              <summary>Locked order reference</summary>
+              <summary>{isZh ? '锁定的订单参考' : 'Locked order reference'}</summary>
               <code>{review.hash}</code>
             </details>
             <div>
               <button disabled={busy} onClick={() => setReview(null)}>
-                Back to review
+                {isZh ? '返回审核' : 'Back to review'}
               </button>
               <button
                 className="planning-primary"
                 disabled={busy || expired(review, clock)}
                 onClick={approveAndExecute}
               >
-                Confirm and place live order
+                {isZh ? '确认并下实盘订单' : 'Confirm and place live order'}
               </button>
             </div>
           </section>
@@ -1942,15 +2095,14 @@ export function TradingPlanningPage() {
       {builder && (
         <div className="planning-modal-backdrop">
           <section role="dialog" aria-modal="true" className="planning-modal">
-            <h2>Manual entry · {symbol}</h2>
+            <h2>{isZh ? '手动入场' : 'Manual entry'} · {symbol}</h2>
             <p>
-              {account?.name} · {venue} · {leverage}x · automatically sized from
-              free margin. Review before submitting.
+              {account?.name} · {venue} · {leverage}x · {isZh ? '根据可用保证金自动计算仓位。提交前请审核。' : 'automatically sized from free margin. Review before submitting.'}
             </p>
             <label>
-              Leverage
+              {isZh ? '杠杆' : 'Leverage'}
               <select
-                aria-label="Manual leverage"
+                aria-label={isZh ? '手动杠杆' : 'Manual leverage'}
                 value={leverage}
                 onChange={(e) => setLeverage(Number(e.target.value))}
               >
@@ -1962,7 +2114,7 @@ export function TradingPlanningPage() {
               </select>
             </label>
             <select
-              aria-label="Custom entry method"
+              aria-label={isZh ? '自定义入场方式' : 'Custom entry method'}
               value={builderIdea.execution.kind}
               onChange={(e) =>
                 setBuilderIdea({
@@ -1976,13 +2128,13 @@ export function TradingPlanningPage() {
                 })
               }
             >
-              <option value="market">Market</option>
-              <option value="limit">Single limit</option>
-              <option value="ladder">Price ladder</option>
-              <option value="twap">TWAP fixed limit</option>
+              <option value="market">{isZh ? '市价' : 'Market'}</option>
+              <option value="limit">{isZh ? '单笔限价' : 'Single limit'}</option>
+              <option value="ladder">{isZh ? '价格阶梯' : 'Price ladder'}</option>
+              <option value="twap">{isZh ? 'TWAP 固定限价' : 'TWAP fixed limit'}</option>
             </select>
             <select
-              aria-label="Custom direction"
+              aria-label={isZh ? '自定义方向' : 'Custom direction'}
               value={builderIdea.side}
               onChange={(e) =>
                 setBuilderIdea({
@@ -1991,13 +2143,12 @@ export function TradingPlanningPage() {
                 })
               }
             >
-              <option value="long">Long</option>
-              <option value="short">Short</option>
+              <option value="long">{isZh ? '做多' : 'Long'}</option>
+              <option value="short">{isZh ? '做空' : 'Short'}</option>
             </select>
             {builderIdea.execution.kind === 'market' && (
               <p>
-                Entry uses the current market quote when you create the draft.
-                Actual fill may differ.
+                {isZh ? '创建草案时，入场使用当前市场报价。实际成交可能不同。' : 'Entry uses the current market quote when you create the draft. Actual fill may differ.'}
               </p>
             )}
             {(['entry', 'stop', 'target'] as const)
@@ -2008,10 +2159,10 @@ export function TradingPlanningPage() {
                 <label key={k}>
                   {
                     {
-                      name: 'Name',
-                      entry: 'Limit price',
-                      stop: 'Stop loss',
-                      target: 'Take profit',
+                      name: isZh ? '名称' : 'Name',
+                      entry: isZh ? '限价' : 'Limit price',
+                      stop: isZh ? '止损' : 'Stop loss',
+                      target: isZh ? '止盈' : 'Take profit',
                     }[k]
                   }
                   <input
@@ -2024,8 +2175,7 @@ export function TradingPlanningPage() {
               ))}
             {builderIdea.execution.kind === 'ladder' && (
               <label>
-                Enter one price and quantity weight per line; weights must sum
-                to 1
+                {isZh ? '每行输入一个价格和数量权重；权重总和必须为 1' : 'Enter one price and quantity weight per line; weights must sum to 1'}
                 <textarea
                   placeholder={'82000 0.3\n81500 0.3\n81000 0.4'}
                   value={levels}
@@ -2036,7 +2186,7 @@ export function TradingPlanningPage() {
             {builderIdea.execution.kind === 'twap' && (
               <>
                 <label>
-                  Slices
+                  {isZh ? '分片数' : 'Slices'}
                   <input
                     value={builderIdea.execution.slices}
                     onChange={(e) =>
@@ -2051,7 +2201,7 @@ export function TradingPlanningPage() {
                   />
                 </label>
                 <label>
-                  Interval / seconds
+                  {isZh ? '间隔 / 秒' : 'Interval / seconds'}
                   <input
                     value={builderIdea.execution.interval_seconds}
                     onChange={(e) =>
@@ -2067,12 +2217,12 @@ export function TradingPlanningPage() {
                 </label>
               </>
             )}
-            <p>This creates an unapproved draft only. No orders are sent.</p>
+            <p>{isZh ? '这只会创建一个未批准的草案，不会发送任何订单。' : 'This creates an unapproved draft only. No orders are sent.'}</p>
             <button disabled={busy} onClick={() => setBuilder(false)}>
-              Cancel
+              {isZh ? '取消' : 'Cancel'}
             </button>
             <button disabled={busy} onClick={saveBuilder}>
-              Review order
+              {isZh ? '审核订单' : 'Review order'}
             </button>
           </section>
         </div>
