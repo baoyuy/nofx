@@ -334,7 +334,7 @@ func (c *Controller) Execute(ctx context.Context, user, id, hash string) (out Vi
 		return v, e
 	}
 	if cmp(account.FeeBPS, v.Plan.Constraints.FeeBPS) > 0 {
-		return v, errors.New("Actual fees including Builder fees exceed the plan assumption; generate a new plan")
+		return v, errors.New("Actual fees exceed the plan assumption; generate a new plan")
 	}
 	book, e := c.Market.Snapshot(ctx, v.Plan.Snapshot.Venue, v.Plan.Snapshot.Symbol)
 	if e != nil {

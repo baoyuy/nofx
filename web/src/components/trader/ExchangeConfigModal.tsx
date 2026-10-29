@@ -1160,8 +1160,8 @@ export function ExchangeConfigModal({
                           style={{ color: '#707e92' }}
                         >
                           {language === 'zh'
-                            ? '手动输入私钥/API 密钥已禁用。请使用 MetaMask、Rabby、OKX、Coinbase Wallet 或其他 EVM 钱包连接、授权代理并批准 Builder 费用。'
-                            : 'Manual private-key/API-key entry is disabled. Use MetaMask, Rabby, OKX, Coinbase Wallet or another EVM wallet to connect, authorize the agent, and approve the builder fee.'}
+                            ? '手动输入私钥/API 密钥已禁用。请使用 MetaMask、Rabby、OKX、Coinbase Wallet 或其他 EVM 钱包连接并授权代理。'
+                            : 'Manual private-key/API-key entry is disabled. Use MetaMask, Rabby, OKX, Coinbase Wallet or another EVM wallet to connect and authorize the agent.'}
                         </div>
                       </div>
                     </div>

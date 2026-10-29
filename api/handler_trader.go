@@ -801,14 +801,6 @@ func (s *Server) handleStartTrader(c *gin.Context) {
 		traderName = fullCfg.Trader.Name
 	}
 
-	if fullCfg != nil && fullCfg.Exchange != nil && fullCfg.Exchange.ExchangeType == "hyperliquid" && !fullCfg.Exchange.HyperliquidBuilderApproved {
-		SafeBadRequestWithDetails(c, formatTraderStartError(
-			fmt.Sprintf("The Hyperliquid trading authorization for bot \"%s\" is not yet complete", traderName),
-			"Please reconnect the Hyperliquid wallet and complete the trading authorization, then start the bot",
-		), "trader.start.hyperliquid_builder_not_approved", mapStringPairs("trader_name", traderName, "exchange_name", exchangeDisplayName(fullCfg.Exchange)))
-		return
-	}
-
 	// Check if trader exists in memory and if it's running
 	existingTrader, _ := s.traderManager.GetTrader(traderID)
 	if existingTrader != nil {

@@ -143,8 +143,8 @@ func (s *Server) planningBroker(ctx context.Context, user, id string) (live.Brok
 		}
 		return cache(live.NOFXBroker{Trader: bitget.NewAccountTrader(string(ex.APIKey), string(ex.SecretKey), string(ex.Passphrase))}, key)
 	case "hyperliquid":
-		if ex.APIKey == "" || ex.HyperliquidWalletAddr == "" || !ex.HyperliquidBuilderApproved || ex.Testnet {
-			return nil, "", errors.New("Complete Hyperliquid mainnet wallet, Agent and Builder authorization in NOFX first")
+		if ex.APIKey == "" || ex.HyperliquidWalletAddr == "" || ex.Testnet {
+			return nil, "", errors.New("Complete Hyperliquid mainnet wallet and Agent authorization in NOFX first")
 		}
 		t, e := hyperliquid.NewHyperliquidTrader(string(ex.APIKey), ex.HyperliquidWalletAddr, false, ex.HyperliquidUnifiedAcct)
 		if e != nil {

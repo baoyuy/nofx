@@ -677,10 +677,6 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 		return fmt.Errorf("trader %s has no strategy configured", traderCfg.Name)
 	}
 
-	if exchangeCfg.ExchangeType == "hyperliquid" && !exchangeCfg.HyperliquidBuilderApproved {
-		return fmt.Errorf("Hyperliquid trading authorization is incomplete for exchange %s; reconnect Hyperliquid wallet and complete trading authorization before starting trader %s", exchangeCfg.AccountName, traderCfg.Name)
-	}
-
 	// Build AutoTraderConfig (ai500APIURL/oiTopAPIURL obtained from strategy config, used in StrategyEngine)
 	traderConfig := trader.AutoTraderConfig{
 		ID:                    traderCfg.ID,

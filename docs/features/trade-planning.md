@@ -156,8 +156,8 @@ with planning: missing orders are errors, not presumed fills. The status
 endpoint does not supply weighted average fill price or commission; those
 fields remain zero until filled-trade data supplies them.
 
-Hyperliquid planning entry and protective orders carry the existing NOFX
-`defaultBuilder` address and fee (50 tenths of a basis point = 0.05%). Binance
+Hyperliquid planning entry and protective orders carry no builder info, so no
+builder fee is charged. Binance
 entry and protective orders use the same `x-KzrpZaP9` prefix as NOFX automatic
 orders. The prefix is shared as a constant, and a lossless base64url encoding of
 the durable 128-bit ID keeps the complete client ID within 32 characters. Native

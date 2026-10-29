@@ -190,7 +190,6 @@ export const faqCategories: FAQCategory[] = [
             items: [
               'Connect your EVM wallet (Rabby, MetaMask, OKX, Coinbase Wallet).',
               'Approve a freshly generated NOFX agent wallet — valid for 180 days, trading only.',
-              'Approve the builder fee (a small per-order fee that funds the platform).',
               'Save the agent key to your NOFX server (stored encrypted).',
             ],
           },
@@ -213,7 +212,7 @@ export const faqCategories: FAQCategory[] = [
             items: [
               'AI model is enabled and has a credential.',
               'AI fee wallet key is valid and the Base USDC balance is at least `1 USDC` (queried on-chain).',
-              'Hyperliquid account is authorized (agent + builder fee) and reachable.',
+              'Hyperliquid account is authorized (agent wallet) and reachable.',
               'Trading funds: at least `12 USDC` counting equity in open positions.',
             ],
           },
@@ -379,7 +378,7 @@ export const faqCategories: FAQCategory[] = [
           {
             type: 'list',
             items: [
-              'Hyperliquid trading fees on every order, plus the approved builder fee.',
+              'Hyperliquid trading fees on every order (no builder fee).',
               'AI/data costs paid per call from the fee wallet (cents per cycle).',
             ],
           },
@@ -834,7 +833,6 @@ export const faqCategoriesZh: FAQCategory[] = [
             items: [
               '连接你的 EVM 钱包（Rabby、MetaMask、OKX、Coinbase Wallet）。',
               '批准一个新生成的 NOFX 代理钱包——有效期 180 天，仅可用于交易。',
-              '批准 builder 费（每笔订单收取的小额费用，用于支持平台运营）。',
               '把代理密钥保存到你的 NOFX 服务器（加密存储）。',
             ],
           },
@@ -857,7 +855,7 @@ export const faqCategoriesZh: FAQCategory[] = [
             items: [
               'AI 模型已启用且配有凭据。',
               'AI 手续费钱包密钥有效，且 Base USDC 余额至少 `1 USDC`（链上查询）。',
-              'Hyperliquid 账户已完成授权（代理钱包 + builder 费）且可正常连接。',
+              'Hyperliquid 账户已完成授权（代理钱包）且可正常连接。',
               '交易资金：至少 `12 USDC`，未平仓仓位中的权益也计入。',
             ],
           },
@@ -1023,7 +1021,7 @@ export const faqCategoriesZh: FAQCategory[] = [
           {
             type: 'list',
             items: [
-              '每笔订单的 Hyperliquid 交易手续费，外加已批准的 builder 费。',
+              '每笔订单的 Hyperliquid 交易手续费（不收取 builder 费）。',
               '从手续费钱包按次支付的 AI/数据成本（每个周期几美分）。',
             ],
           },

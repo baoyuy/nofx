@@ -1544,7 +1544,7 @@ export function TradingPlanningPage() {
                     ))}
                 </div>
                 <p>
-                  {isZh ? '实盘仓位计算会在规划和审核前刷新。杠杆应用于当前可用保证金，并预留执行成本。数量会按交易所步进取整。市价订单需要在批准的价格范围内有足够深度。Hyperliquid 成本必须包含 Builder 费用。跳空、保护失败和滑点可能导致亏损超过预估。' : 'Live sizing refreshes before planning and review. Leverage is applied to current available margin, with execution costs reserved. Quantities are rounded to exchange steps. Market orders require enough depth within the approved price bound. Hyperliquid costs must include Builder fees. Gaps, failed protection and slippage may cause losses beyond the estimate.'}
+                  {isZh ? '实盘仓位计算会在规划和审核前刷新。杠杆应用于当前可用保证金，并预留执行成本。数量会按交易所步进取整。市价订单需要在批准的价格范围内有足够深度。Hyperliquid 不收取 Builder 费用。跳空、保护失败和滑点可能导致亏损超过预估。' : 'Live sizing refreshes before planning and review. Leverage is applied to current available margin, with execution costs reserved. Quantities are rounded to exchange steps. Market orders require enough depth within the approved price bound. No Hyperliquid builder fee is charged. Gaps, failed protection and slippage may cause losses beyond the estimate.'}
                 </p>
                 <button disabled={busy} onClick={() => setBuilder(true)}>
                   {isZh ? '自定义市价 / 限价 / 阶梯 / TWAP' : 'Custom market / limit / ladder / TWAP'}

@@ -142,31 +142,26 @@ func TestDescribeExchangeConfigIssue(t *testing.T) {
 		t.Fatalf("missing fields: expected EXCHANGE_MISSING_FIELDS, got %s", code)
 	}
 
-	unapproved := &store.Exchange{
+	// No builder fee is charged, so the legacy builder-approved flag is not required.
+	ready := &store.Exchange{
 		ID:                    "ex",
 		ExchangeType:          "hyperliquid",
 		Enabled:               true,
 		APIKey:                crypto.EncryptedString(testClaw402Key),
 		HyperliquidWalletAddr: "0x1111111111111111111111111111111111111111",
 	}
-	if _, code := describeExchangeConfigIssue(unapproved); code != "HYPERLIQUID_BUILDER_NOT_APPROVED" {
-		t.Fatalf("builder unapproved: expected HYPERLIQUID_BUILDER_NOT_APPROVED, got %s", code)
-	}
-
-	unapproved.HyperliquidBuilderApproved = true
-	if _, code := describeExchangeConfigIssue(unapproved); code != "" {
+	if _, code := describeExchangeConfigIssue(ready); code != "" {
 		t.Fatalf("ready exchange: expected no issue, got %s", code)
 	}
 }
 
 func readyHyperliquidExchange() *store.Exchange {
 	return &store.Exchange{
-		ID:                         "ex-hl",
-		ExchangeType:               "hyperliquid",
-		Enabled:                    true,
-		APIKey:                     crypto.EncryptedString(testClaw402Key),
-		HyperliquidWalletAddr:      "0x1111111111111111111111111111111111111111",
-		HyperliquidBuilderApproved: true,
+		ID:                    "ex-hl",
+		ExchangeType:          "hyperliquid",
+		Enabled:               true,
+		APIKey:                crypto.EncryptedString(testClaw402Key),
+		HyperliquidWalletAddr: "0x1111111111111111111111111111111111111111",
 	}
 }
 

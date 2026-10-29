@@ -368,8 +368,5 @@ func describeExchangeConfigIssue(exchange *store.Exchange) (string, string) {
 			exchangeDisplayName(exchange), strings.Join(missing, ", "),
 		), "EXCHANGE_MISSING_FIELDS"
 	}
-	if exchange.ExchangeType == "hyperliquid" && !exchange.HyperliquidBuilderApproved {
-		return "Hyperliquid builder authorization is not complete. Reconnect the wallet and finish the authorization.", "HYPERLIQUID_BUILDER_NOT_APPROVED"
-	}
 	return "", ""
 }

@@ -45,7 +45,6 @@ interface FlowState {
   agentAddress?: string
   agentPrivateKey?: string
   agentApproved?: boolean
-  builderApproved?: boolean
   savedExchangeId?: string
   reusedSavedExchange?: boolean
 }
@@ -68,11 +67,6 @@ const AGENT_VALIDITY_MS = 180 * 24 * 60 * 60 * 1000 - 60 * 1000
 function buildAgentName(nowMs: number) {
   return `${AGENT_NAME} valid_until ${nowMs + AGENT_VALIDITY_MS}`
 }
-const HYPERLIQUID_BUILDER_ADDRESS = '0x891dc6f05ad47a3c1a05da55e7a7517971faaf0d'
-// 0.05% (5 bps). Must match the server's defaultHyperliquidBuilderMaxFee and
-// the BuilderInfo.Fee=50 (= 5 bps) used at order placement. The user signs
-// this exact string when approving the builder during wallet connect.
-const HYPERLIQUID_BUILDER_MAX_FEE = '0.05%'
 
 function copy(text: string, label: string, language: Language = 'en') {
   navigator.clipboard?.writeText(text).then(
@@ -156,7 +150,7 @@ export function HyperliquidWalletConnect({
   const [walletProviders, setWalletProviders] = useState<WalletProvider[]>([])
   const [selectedWalletProvider, setSelectedWalletProvider] =
     useState<WalletProvider>()
-  // Exact server config whose saved agent and builder authorization were
+  // Exact server config whose saved agent authorization was
   // verified live. Readiness must bind all three identities, not just wallet.
   const [serverReadyProof, setServerReadyProof] =
     useState<ServerReadyProof | null>(null)
@@ -176,10 +170,6 @@ export function HyperliquidWalletConnect({
         language === 'zh'
           ? '在你的钱包中批准（仅可交易，无法提款）'
           : 'Approve it in your wallet (trade-only, cannot withdraw)',
-      approveBuilder:
-        language === 'zh'
-          ? '批准每笔交易的小额构建者费用'
-          : 'Approve the small per-trade builder fee',
       save: language === 'zh' ? '保存到 NOFX — 完成' : 'Save to NOFX — done',
       done:
         language === 'zh'
@@ -262,7 +252,6 @@ export function HyperliquidWalletConnect({
           (exchange) =>
             exchange.exchange_type === 'hyperliquid' &&
             exchange.enabled &&
-            Boolean(exchange.hyperliquidBuilderApproved) &&
             Boolean(exchange.hyperliquidAgentAddress) &&
             (exchange.hyperliquidWalletAddr || '').trim() !== '' &&
             (!currentWallet ||
@@ -289,7 +278,7 @@ export function HyperliquidWalletConnect({
                 normalizeAddress(agent.address) === savedAgentAddress &&
                 agent.validUntil > Date.now()
             )
-            if (approved && response.builderApproved) {
+            if (approved) {
               if (
                 !cancelled &&
                 serverProofGenerationRef.current === generation
@@ -353,7 +342,6 @@ export function HyperliquidWalletConnect({
                   agentAddress: undefined,
                   agentPrivateKey: undefined,
                   agentApproved: false,
-                  builderApproved: false,
                   savedExchangeId: undefined,
                   reusedSavedExchange: false,
                 }
@@ -384,10 +372,6 @@ export function HyperliquidWalletConnect({
             agentAddress: savedAgentAddress || undefined,
             agentPrivateKey: undefined,
             agentApproved: Boolean(approvedAgent),
-            builderApproved: Boolean(
-              existing.hyperliquidBuilderApproved &&
-              agentResponse.builderApproved
-            ),
             savedExchangeId: existing.id,
             reusedSavedExchange: true,
           }
@@ -457,7 +441,6 @@ export function HyperliquidWalletConnect({
   async function refreshAgentInfo(
     address = state.mainWallet,
     expectedAgentAddress = state.agentAddress,
-    expectedBuilderApproved = state.builderApproved,
     expectedExchangeId = state.savedExchangeId
   ): Promise<boolean> {
     if (!address) return false
@@ -486,10 +469,7 @@ export function HyperliquidWalletConnect({
           ) || null
         : null
       const agentApproved = Boolean(approvedAgent)
-      const builderApproved = Boolean(
-        expectedBuilderApproved && res.builderApproved
-      )
-      const liveReady = agentApproved && builderApproved
+      const liveReady = agentApproved
       if (
         normalizeAddress(currentMainWalletRef.current || '') ===
         requestedAddress
@@ -505,7 +485,6 @@ export function HyperliquidWalletConnect({
           return {
             ...prev,
             agentApproved,
-            builderApproved,
           }
         })
         setServerReadyProof(
@@ -528,7 +507,7 @@ export function HyperliquidWalletConnect({
         setServerReadyProof(null)
         setState((prev) =>
           normalizeAddress(prev.mainWallet || '') === requestedAddress
-            ? { ...prev, agentApproved: false, builderApproved: false }
+            ? { ...prev, agentApproved: false }
             : prev
         )
       }
@@ -608,11 +587,6 @@ export function HyperliquidWalletConnect({
           agentAddress: savedAgentAddress || undefined,
           agentPrivateKey: undefined,
           agentApproved: Boolean(approvedAgent),
-          // Existing configs default to false in the backend unless the exact
-          // approveBuilderFee flow has already persisted a successful approval.
-          builderApproved: Boolean(
-            existing.hyperliquidBuilderApproved && agentResponse.builderApproved
-          ),
           savedExchangeId: existing.id,
           reusedSavedExchange: true,
         }
@@ -625,13 +599,11 @@ export function HyperliquidWalletConnect({
 
   const agentReady = Boolean(state.agentAddress)
   const agentApprovedReady = Boolean(state.agentApproved)
-  const builderReady = Boolean(state.builderApproved)
 
   const complete = Boolean(
     state.mainWallet &&
     state.savedExchangeId &&
     state.agentApproved &&
-    state.builderApproved &&
     serverReadyProof?.exchangeId === state.savedExchangeId &&
     normalizeAddress(serverReadyProof?.wallet || '') ===
       normalizeAddress(state.mainWallet) &&
@@ -650,7 +622,7 @@ export function HyperliquidWalletConnect({
     },
     {
       label: language === 'zh' ? '授权' : 'Authorize',
-      done: Boolean(agentApprovedReady && builderReady),
+      done: agentApprovedReady,
     },
     { label: language === 'zh' ? '就绪' : 'Ready', done: complete },
   ]
@@ -664,12 +636,12 @@ export function HyperliquidWalletConnect({
         : 'Prepare secure trading access'
       : !agentApprovedReady
         ? language === 'zh'
-          ? '批准仅交易访问权限 · 第 1 步，共 2 步'
-          : 'Approve trade-only access · 1 of 2'
-        : !builderReady
+          ? '批准仅交易访问权限'
+          : 'Approve trade-only access'
+        : !state.savedExchangeId
           ? language === 'zh'
-            ? '完成授权 · 第 2 步，共 2 步'
-            : 'Finish authorization · 2 of 2'
+            ? '保存连接以完成'
+            : 'Save the connection to finish'
           : !complete
             ? language === 'zh'
               ? '验证已保存的连接'
@@ -733,7 +705,6 @@ export function HyperliquidWalletConnect({
           agentAddress: sameWallet ? prev.agentAddress : undefined,
           agentPrivateKey: sameWallet ? prev.agentPrivateKey : undefined,
           agentApproved: sameWallet ? prev.agentApproved : false,
-          builderApproved: sameWallet ? prev.builderApproved : false,
           savedExchangeId: sameWallet ? prev.savedExchangeId : undefined,
           reusedSavedExchange: sameWallet ? prev.reusedSavedExchange : false,
         }
@@ -759,7 +730,6 @@ export function HyperliquidWalletConnect({
             agentAddress: normalizeAddress(wallet.address),
             agentPrivateKey: wallet.private_key,
             agentApproved: false,
-            builderApproved: false,
           }
         })
       }
@@ -791,7 +761,6 @@ export function HyperliquidWalletConnect({
         agentAddress: normalizeAddress(wallet.address),
         agentPrivateKey: wallet.private_key,
         agentApproved: false,
-        builderApproved: false,
         savedExchangeId: undefined,
       }))
       toast.success(
@@ -873,6 +842,7 @@ export function HyperliquidWalletConnect({
     const walletSnapshot = state.mainWallet
     if (!state.agentAddress || !walletSnapshot) return
     setBusy(true)
+    let approvalComplete = false
     try {
       const nonce = Date.now()
       const action = {
@@ -893,22 +863,68 @@ export function HyperliquidWalletConnect({
         ],
         walletSnapshot
       )
+      approvalComplete = true
       setState((prev) =>
         normalizeAddress(prev.mainWallet || '') ===
         normalizeAddress(walletSnapshot)
           ? { ...prev, agentApproved: true, savedExchangeId: undefined }
           : prev
       )
-      toast.success(
-        language === 'zh' ? 'Hyperliquid Agent 已批准' : 'Hyperliquid agent approved'
+      assertCurrentWallet(walletSnapshot)
+      // Agent approval is the only wallet signature; persist the connection
+      // right away so the user does not need a separate save step.
+      let createdExchangeId: string | undefined
+      if (isLoggedIn && state.agentPrivateKey) {
+        const result = await api.createExchangeEncrypted({
+          exchange_type: 'hyperliquid',
+          account_name: `Hyperliquid ${shortAddress(walletSnapshot)}`,
+          enabled: true,
+          api_key: state.agentPrivateKey,
+          hyperliquid_wallet_addr: walletSnapshot,
+          hyperliquid_unified_account: true,
+          testnet: false,
+        })
+        createdExchangeId = result.id
+        setState((prev) =>
+          normalizeAddress(prev.mainWallet || '') ===
+          normalizeAddress(walletSnapshot)
+            ? {
+                ...prev,
+                agentPrivateKey: undefined,
+                savedExchangeId: createdExchangeId,
+              }
+            : prev
+        )
+      }
+      await refreshAgentInfo(
+        walletSnapshot,
+        state.agentAddress,
+        createdExchangeId
       )
-      void refreshAgentInfo()
+      if (createdExchangeId) {
+        await refreshAfterSave(createdExchangeId)
+        toast.success(
+          language === 'zh'
+            ? '交易授权已完成'
+            : 'Trading authorization finalized'
+        )
+      } else {
+        toast.success(
+          language === 'zh'
+            ? 'Hyperliquid Agent 已批准'
+            : 'Hyperliquid agent approved'
+        )
+      }
     } catch (err) {
       setError(
-        getWalletErrorMessage(
-          err,
-          language === 'zh' ? 'Agent 批准失败' : 'Agent approval failed'
-        )
+        approvalComplete
+          ? language === 'zh'
+            ? `钱包授权成功，但 NOFX 无法保存该连接。请使用“保存连接”重试。${err instanceof Error ? err.message : ''}`
+            : `Wallet authorization succeeded, but NOFX could not save the connection. Use “Save connection” to retry. ${err instanceof Error ? err.message : ''}`
+          : getWalletErrorMessage(
+              err,
+              language === 'zh' ? 'Agent 批准失败' : 'Agent approval failed'
+            )
       )
     } finally {
       setBusy(false)
@@ -935,7 +951,6 @@ export function HyperliquidWalletConnect({
     setState((prev) => ({
       ...prev,
       agentApproved: false,
-      builderApproved: false,
     }))
     setBusy(true)
     try {
@@ -988,7 +1003,6 @@ export function HyperliquidWalletConnect({
         agentAddress: newAgentAddress,
         agentPrivateKey: wallet.private_key,
         agentApproved: true,
-        builderApproved: false,
         savedExchangeId: existing.id,
         reusedSavedExchange: true,
       }
@@ -999,9 +1013,6 @@ export function HyperliquidWalletConnect({
           : prev
       )
       assertCurrentWallet(walletSnapshot)
-      const existingBuilderApproved = Boolean(
-        existing.hyperliquidBuilderApproved
-      )
       await api.updateExchangeConfigsEncrypted({
         exchanges: {
           [existing.id]: {
@@ -1011,7 +1022,6 @@ export function HyperliquidWalletConnect({
             passphrase: '',
             hyperliquid_wallet_addr: walletSnapshot,
             hyperliquid_unified_account: true,
-            hyperliquid_builder_approved: existingBuilderApproved,
             testnet: false,
           },
         },
@@ -1024,7 +1034,6 @@ export function HyperliquidWalletConnect({
               agentAddress: newAgentAddress,
               agentPrivateKey: undefined,
               agentApproved: true,
-              builderApproved: existingBuilderApproved,
               savedExchangeId: existing.id,
               reusedSavedExchange: true,
             }
@@ -1035,122 +1044,13 @@ export function HyperliquidWalletConnect({
           ? 'Agent 已续期（新 Agent，有效期 180 天）'
           : 'Agent renewed (new agent, valid 180 days)'
       )
-      await refreshAgentInfo(
-        walletSnapshot,
-        newAgentAddress,
-        existingBuilderApproved,
-        existing.id
-      )
+      await refreshAgentInfo(walletSnapshot, newAgentAddress, existing.id)
     } catch (err) {
       setError(
         getWalletErrorMessage(
           err,
           language === 'zh' ? 'Agent 续期失败' : 'Agent renewal failed'
         )
-      )
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function approveBuilderFee() {
-    setError('')
-    const walletSnapshot = state.mainWallet
-    if (!walletSnapshot) return
-    setBusy(true)
-    let approvalComplete = false
-    try {
-      const nonce = Date.now()
-      const action = {
-        type: 'approveBuilderFee',
-        hyperliquidChain: 'Mainnet',
-        maxFeeRate: HYPERLIQUID_BUILDER_MAX_FEE,
-        builder: normalizeAddress(HYPERLIQUID_BUILDER_ADDRESS),
-        nonce,
-      }
-      await signAndSubmit(
-        action,
-        'HyperliquidTransaction:ApproveBuilderFee',
-        [
-          { name: 'hyperliquidChain', type: 'string' },
-          { name: 'maxFeeRate', type: 'string' },
-          { name: 'builder', type: 'address' },
-          { name: 'nonce', type: 'uint64' },
-        ],
-        walletSnapshot
-      )
-      approvalComplete = true
-      assertCurrentWallet(walletSnapshot)
-      let createdExchangeId: string | undefined
-      if (isLoggedIn && state.savedExchangeId) {
-        await api.updateExchangeConfigsEncrypted({
-          exchanges: {
-            [state.savedExchangeId]: {
-              enabled: true,
-              api_key: '',
-              secret_key: '',
-              passphrase: '',
-              hyperliquid_wallet_addr: walletSnapshot,
-              hyperliquid_unified_account: true,
-              hyperliquid_builder_approved: true,
-              testnet: false,
-            },
-          },
-        })
-      } else if (isLoggedIn && state.agentPrivateKey) {
-        const result = await api.createExchangeEncrypted({
-          exchange_type: 'hyperliquid',
-          account_name: `Hyperliquid ${shortAddress(walletSnapshot)}`,
-          enabled: true,
-          api_key: state.agentPrivateKey,
-          hyperliquid_wallet_addr: walletSnapshot,
-          hyperliquid_unified_account: true,
-          hyperliquid_builder_approved: true,
-          testnet: false,
-        })
-        createdExchangeId = result.id
-      }
-      setState((prev) =>
-        normalizeAddress(prev.mainWallet || '') ===
-        normalizeAddress(walletSnapshot)
-          ? {
-              ...prev,
-              agentPrivateKey: createdExchangeId
-                ? undefined
-                : prev.agentPrivateKey,
-              builderApproved: true,
-              savedExchangeId: createdExchangeId || prev.savedExchangeId,
-            }
-          : prev
-      )
-      await refreshAgentInfo(
-        walletSnapshot,
-        state.agentAddress,
-        true,
-        createdExchangeId || state.savedExchangeId
-      )
-      await refreshAfterSave(createdExchangeId || state.savedExchangeId)
-      toast.success(
-        language === 'zh' ? '交易授权已完成' : 'Trading authorization finalized'
-      )
-    } catch (err) {
-      if (approvalComplete) {
-        setState((prev) =>
-          normalizeAddress(prev.mainWallet || '') ===
-          normalizeAddress(walletSnapshot)
-            ? { ...prev, builderApproved: true }
-            : prev
-        )
-      }
-      setError(
-        approvalComplete
-          ? language === 'zh'
-            ? `钱包授权成功，但 NOFX 无法保存该连接。请使用“保存连接”重试。${err instanceof Error ? err.message : ''}`
-            : `Wallet authorization succeeded, but NOFX could not save the connection. Use “Save connection” to retry. ${err instanceof Error ? err.message : ''}`
-          : getWalletErrorMessage(
-              err,
-              language === 'zh' ? '交易授权失败' : 'Trading authorization failed'
-            )
       )
     } finally {
       setBusy(false)
@@ -1168,7 +1068,7 @@ export function HyperliquidWalletConnect({
       return
     }
     const walletSnapshot = state.mainWallet
-    if (!walletSnapshot || !state.builderApproved) return
+    if (!walletSnapshot || !state.agentApproved) return
     setBusy(true)
     try {
       const configs = await api.getExchangeConfigs()
@@ -1202,7 +1102,6 @@ export function HyperliquidWalletConnect({
               passphrase: '',
               hyperliquid_wallet_addr: walletSnapshot,
               hyperliquid_unified_account: true,
-              hyperliquid_builder_approved: true,
               testnet: false,
             },
           },
@@ -1215,7 +1114,6 @@ export function HyperliquidWalletConnect({
                 agentPrivateKey: undefined,
                 savedExchangeId: existing.id,
                 reusedSavedExchange: !state.agentPrivateKey,
-                builderApproved: true,
               }
             : prev
         )
@@ -1228,12 +1126,7 @@ export function HyperliquidWalletConnect({
               ? '现有 Hyperliquid 账户授权已更新'
               : 'Existing Hyperliquid account authorization updated'
         )
-        await refreshAgentInfo(
-          walletSnapshot,
-          state.agentAddress,
-          state.builderApproved,
-          existing.id
-        )
+        await refreshAgentInfo(walletSnapshot, state.agentAddress, existing.id)
         await refreshAfterSave(existing.id)
         return
       }
@@ -1251,7 +1144,6 @@ export function HyperliquidWalletConnect({
         api_key: state.agentPrivateKey,
         hyperliquid_wallet_addr: walletSnapshot,
         hyperliquid_unified_account: true,
-        hyperliquid_builder_approved: true,
         testnet: false,
       })
       setState((prev) =>
@@ -1270,12 +1162,7 @@ export function HyperliquidWalletConnect({
           ? 'Hyperliquid 账户已保存到 NOFX'
           : 'Hyperliquid account saved to NOFX'
       )
-      await refreshAgentInfo(
-        walletSnapshot,
-        state.agentAddress,
-        state.builderApproved,
-        result.id
-      )
+      await refreshAgentInfo(walletSnapshot, state.agentAddress, result.id)
       await refreshAfterSave(result.id)
     } catch (err) {
       setError(
@@ -1296,8 +1183,7 @@ export function HyperliquidWalletConnect({
     setError('')
     setState((prev) => ({
       ...prev,
-      agentApproved: prev.agentApproved || Boolean(prev.savedExchangeId),
-      builderApproved: false,
+      agentApproved: false,
       reusedSavedExchange:
         Boolean(prev.savedExchangeId) || prev.reusedSavedExchange,
     }))
@@ -1392,8 +1278,8 @@ export function HyperliquidWalletConnect({
                   </p>
                   <p className="mt-1 text-[11px] leading-5 text-nofx-text-muted">
                     {language === 'zh'
-                      ? '需要两次钱包批准：先授权 NOFX Agent，再批准最高 0.05% 的构建者费用。你的主钱包密钥永远不会离开你的钱包。'
-                      : 'Two wallet approvals: authorize the NOFX Agent, then approve a maximum 0.05% builder fee. Your main wallet key never leaves your wallet.'}
+                      ? '只需一次钱包批准：授权 NOFX Agent。不收取 builder 费用，你的主钱包密钥永远不会离开你的钱包。'
+                      : 'One wallet approval: authorize the NOFX Agent. No builder fee is charged, and your main wallet key never leaves your wallet.'}
                   </p>
                 </div>
               </div>
@@ -1521,14 +1407,7 @@ export function HyperliquidWalletConnect({
                     }
                   />
                 )}
-                {agentApprovedReady && !builderReady && (
-                  <ActionButton
-                    busy={busy}
-                    onClick={approveBuilderFee}
-                    label={language === 'zh' ? '批准费用并完成' : 'Approve fee & finish'}
-                  />
-                )}
-                {builderReady && !state.savedExchangeId && (
+                {agentApprovedReady && !state.savedExchangeId && (
                   <ActionButton
                     busy={busy}
                     onClick={saveExchange}

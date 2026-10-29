@@ -98,7 +98,6 @@ describe('Hyperliquid guided connection', () => {
           enabled: true,
           hyperliquidWalletAddr: payload.hyperliquid_wallet_addr,
           hyperliquidAgentAddress: '0xagent',
-          hyperliquidBuilderApproved: true,
         },
       ])
       return { id: 'hyperliquid-1' }
@@ -112,7 +111,6 @@ describe('Hyperliquid guided connection', () => {
         address: '0xagent',
         validUntil: Date.now() + 60_000,
       },
-      builderApproved: true,
       agents: [
         {
           name: 'NOFX Agent',
@@ -156,10 +154,11 @@ describe('Hyperliquid guided connection', () => {
     expect(
       screen.getByText(/trade-only access; it can never withdraw your funds/i)
     ).toBeTruthy()
-    expect(screen.getByText(/two wallet approvals/i)).toBeTruthy()
+    expect(screen.getByText(/one wallet approval/i)).toBeTruthy()
+    expect(screen.getByText(/no builder fee is charged/i)).toBeTruthy()
   })
 
-  it('prepares the agent after wallet connect and saves automatically after both approvals', async () => {
+  it('prepares the agent after wallet connect and saves automatically after the agent approval', async () => {
     const provider = {
       request: vi.fn(async ({ method }: { method: string }) => {
         if (method === 'eth_requestAccounts') return ['0xMAIN']
@@ -194,19 +193,18 @@ describe('Hyperliquid guided connection', () => {
       screen.getByRole('button', { name: 'Approve trade-only access' })
     )
     await waitFor(() =>
-      expect(
-        screen.getByRole('button', { name: 'Approve fee & finish' })
-      ).toBeTruthy()
-    )
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Approve fee & finish' })
-    )
-    await waitFor(() =>
       expect(screen.getByText('Hyperliquid is ready')).toBeTruthy()
     )
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith('hyperliquid-1'))
     expect(mocks.createExchangeEncrypted).toHaveBeenCalledOnce()
+    // The only signed wallet action is the agent approval; no builder fee.
+    const submittedTypes = mocks.submitHyperliquidApproval.mock.calls.map(
+      ([action]) => action.type
+    )
+    expect(submittedTypes).toEqual(['approveAgent'])
+    expect(mocks.createExchangeEncrypted.mock.calls[0][0]).not.toHaveProperty(
+      'hyperliquid_builder_approved'
+    )
     expect(screen.queryByRole('button', { name: 'Save connection' })).toBeNull()
   })
 
@@ -223,7 +221,6 @@ describe('Hyperliquid guided connection', () => {
         enabled: true,
         hyperliquidWalletAddr: '0xselected',
         hyperliquidAgentAddress: '0xagent',
-        hyperliquidBuilderApproved: true,
       },
     ])
     render(
@@ -249,7 +246,6 @@ describe('Hyperliquid guided connection', () => {
         mainWallet: '0xmain',
         agentAddress: '0xagent',
         agentApproved: true,
-        builderApproved: true,
         savedExchangeId: 'hyperliquid-1',
       })
     )
@@ -260,7 +256,6 @@ describe('Hyperliquid guided connection', () => {
         enabled: true,
         hyperliquidWalletAddr: '0xmain',
         hyperliquidAgentAddress: '0xagent',
-        hyperliquidBuilderApproved: true,
       },
     ])
     let accountsChanged: ((accounts: unknown) => void) | undefined
@@ -294,7 +289,6 @@ describe('Hyperliquid guided connection', () => {
         mainWallet: '0xmain',
         agentAddress: '0xsaved-agent',
         agentApproved: true,
-        builderApproved: true,
         savedExchangeId: 'hyperliquid-1',
       })
     )
@@ -305,7 +299,6 @@ describe('Hyperliquid guided connection', () => {
         enabled: true,
         hyperliquidWalletAddr: '0xmain',
         hyperliquidAgentAddress: '0xsaved-agent',
-        hyperliquidBuilderApproved: true,
       },
     ])
     mocks.getHyperliquidAgent.mockResolvedValue({
@@ -314,7 +307,6 @@ describe('Hyperliquid guided connection', () => {
         address: '0xold-agent',
         validUntil: Date.now() + 60_000,
       },
-      builderApproved: true,
       agents: [
         {
           name: 'NOFX Agent',
@@ -336,14 +328,13 @@ describe('Hyperliquid guided connection', () => {
     ).toBeTruthy()
   })
 
-  it('does not report Ready after the on-chain builder fee is revoked', async () => {
+  it('reports Ready from the approved agent alone without any builder approval', async () => {
     localStorage.setItem(
       'nofx.hyperliquid.connection.v6',
       JSON.stringify({
         mainWallet: '0xmain',
         agentAddress: '0xagent',
         agentApproved: true,
-        builderApproved: true,
         savedExchangeId: 'hyperliquid-1',
       })
     )
@@ -354,33 +345,18 @@ describe('Hyperliquid guided connection', () => {
         enabled: true,
         hyperliquidWalletAddr: '0xmain',
         hyperliquidAgentAddress: '0xagent',
-        hyperliquidBuilderApproved: true,
+        hyperliquidBuilderApproved: false,
       },
     ])
-    mocks.getHyperliquidAgent.mockResolvedValue({
-      agent: {
-        name: 'NOFX Agent',
-        address: '0xagent',
-        validUntil: Date.now() + 60_000,
-      },
-      builderApproved: false,
-      agents: [
-        {
-          name: 'NOFX Agent',
-          address: '0xagent',
-          validUntil: Date.now() + 60_000,
-        },
-      ],
-    })
 
     render(
       <HyperliquidWalletConnect language="en" isLoggedIn variant="inline" />
     )
 
-    await waitFor(() =>
-      expect(screen.queryByText('Hyperliquid is ready')).toBeNull()
-    )
-    expect(screen.getByText('Finish authorization · 2 of 2')).toBeTruthy()
+    await screen.findByText('Hyperliquid is ready')
+    expect(
+      screen.queryByRole('button', { name: 'Approve fee & finish' })
+    ).toBeNull()
   })
 
   it('shows the wallet provider error instead of a generic connection failure', async () => {
@@ -507,11 +483,6 @@ describe('Hyperliquid guided connection', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Approve trade-only access' })
     )
-    await screen.findByRole('button', { name: 'Approve fee & finish' })
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Approve fee & finish' })
-    )
-
     await screen.findByText('Hyperliquid is ready')
     expect(screen.queryByRole('button', { name: 'Save connection' })).toBeNull()
   })
@@ -523,7 +494,6 @@ describe('Hyperliquid guided connection', () => {
         mainWallet: '0xmain',
         agentAddress: '0xexact-agent',
         agentApproved: true,
-        builderApproved: true,
         savedExchangeId: 'exact',
       })
     )
@@ -534,7 +504,6 @@ describe('Hyperliquid guided connection', () => {
         enabled: true,
         hyperliquidWalletAddr: '0xmain',
         hyperliquidAgentAddress: '0xwrong-agent',
-        hyperliquidBuilderApproved: true,
       },
       {
         id: 'exact',
@@ -542,7 +511,6 @@ describe('Hyperliquid guided connection', () => {
         enabled: true,
         hyperliquidWalletAddr: '0xmain',
         hyperliquidAgentAddress: '0xexact-agent',
-        hyperliquidBuilderApproved: true,
       },
     ])
     mocks.getHyperliquidAgent.mockResolvedValue({
@@ -551,7 +519,6 @@ describe('Hyperliquid guided connection', () => {
         address: '0xexact-agent',
         validUntil: Date.now() + 60_000,
       },
-      builderApproved: true,
       agents: [
         {
           name: 'NOFX Agent',
@@ -580,7 +547,6 @@ describe('Hyperliquid guided connection', () => {
         mainWallet: '0xmain',
         agentAddress: '0xdisabled-agent',
         agentApproved: true,
-        builderApproved: true,
         savedExchangeId: 'disabled',
       })
     )
@@ -591,7 +557,6 @@ describe('Hyperliquid guided connection', () => {
         enabled: true,
         hyperliquidWalletAddr: '0xmain',
         hyperliquidAgentAddress: '0xother-agent',
-        hyperliquidBuilderApproved: true,
       },
       {
         id: 'disabled',
@@ -599,7 +564,6 @@ describe('Hyperliquid guided connection', () => {
         enabled: false,
         hyperliquidWalletAddr: '0xmain',
         hyperliquidAgentAddress: '0xdisabled-agent',
-        hyperliquidBuilderApproved: true,
       },
     ])
 

@@ -120,22 +120,21 @@ describe('pickTradingModel', () => {
 describe('pickTradingExchange', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('requires enabled + key + builder approval + wallet address', () => {
+  it('requires enabled + key + wallet address, but not builder approval', () => {
     const ready = {
       id: 'hl',
       exchange_type: 'hyperliquid',
       enabled: true,
       has_api_key: true,
-      hyperliquidBuilderApproved: true,
       hyperliquidWalletAddr: '0x1',
     } as unknown as Exchange
     expect(pickTradingExchange([ready])?.id).toBe('hl')
 
-    const unapproved = {
+    const legacyUnapproved = {
       ...ready,
       hyperliquidBuilderApproved: false,
     } as unknown as Exchange
-    expect(pickTradingExchange([unapproved])).toBeNull()
+    expect(pickTradingExchange([legacyUnapproved])?.id).toBe('hl')
 
     const noAddr = {
       ...ready,

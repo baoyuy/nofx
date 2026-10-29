@@ -35,7 +35,7 @@ function getSetupSteps(isZh: boolean) {
   {
     title: isZh ? '授权 Hyperliquid' : 'Authorize Hyperliquid',
     detail:
-      isZh ? '连接你的交易钱包，批准 NOFX Agent，并批准 builder 费用。资金保留在你的 Hyperliquid 账户中。' : 'Connect your trading wallet, approve the NOFX Agent, and approve the builder fee. Funds remain in your Hyperliquid account.',
+      isZh ? '连接你的交易钱包并批准 NOFX Agent。资金保留在你的 Hyperliquid 账户中。' : 'Connect your trading wallet and approve the NOFX Agent. Funds remain in your Hyperliquid account.',
     icon: Wallet,
     action: isZh ? '连接交易所' : 'Connect exchange',
     to: ROUTES.login,

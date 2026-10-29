@@ -38,7 +38,6 @@ export function pickTradingExchange(exchanges: Exchange[]) {
         isHyperliquidExchange(exchange) &&
         exchange.enabled &&
         exchangeHasKey(exchange) &&
-        Boolean(exchange.hyperliquidBuilderApproved) &&
         (exchange.hyperliquidWalletAddr || '').trim() !== ''
     ) || null
   )
@@ -98,13 +97,6 @@ export async function resolveLaunchExchange(): Promise<
       exchange: null,
       reason:
         'The Hyperliquid agent key is missing. Reconnect Hyperliquid and save the agent wallet.',
-    }
-  }
-  if (!hyperliquid.hyperliquidBuilderApproved) {
-    return {
-      exchange: null,
-      reason:
-        'Hyperliquid builder authorization is not complete. Finish wallet authorization first.',
     }
   }
   return {

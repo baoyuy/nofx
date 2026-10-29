@@ -15,13 +15,8 @@ import (
 )
 
 const (
-	defaultHyperliquidBuilderAddress = "0x891dc6f05ad47a3c1a05da55e7a7517971faaf0d"
-	// 0.05% (5 bps) — matches BuilderInfo.Fee=50 charged at order placement.
-	// New wallet approvals sign this exact value; existing approvals at the
-	// prior 0.1% cap remain valid because 0.05% is within their approved max.
-	defaultHyperliquidBuilderMaxFee = "0.05%"
-	hyperliquidExchangeURL          = "https://api.hyperliquid.xyz/exchange"
-	hyperliquidInfoURL              = "https://api.hyperliquid.xyz/info"
+	hyperliquidExchangeURL = "https://api.hyperliquid.xyz/exchange"
+	hyperliquidInfoURL     = "https://api.hyperliquid.xyz/info"
 	// nofxHyperliquidAgentName must match AGENT_NAME used by the frontend
 	// approveAgent flow so we can locate the NOFX-managed agent on-chain.
 	nofxHyperliquidAgentName = "NOFX Agent"
@@ -38,8 +33,6 @@ type hyperliquidSubmitRequest struct {
 }
 
 type hyperliquidConfigResponse struct {
-	BuilderAddress string `json:"builderAddress"`
-	BuilderMaxFee  string `json:"builderMaxFee"`
 	Chain          string `json:"chain"`
 	SignatureChain string `json:"signatureChainId"`
 }
@@ -76,8 +69,6 @@ type hyperliquidAgentResponse struct {
 	Agent *hyperliquidAgentInfo `json:"agent"`
 	// Agents lists every approved agent for the wallet (for visibility/cleanup).
 	Agents []hyperliquidAgentInfo `json:"agents"`
-	// BuilderApproved is live on-chain state for the configured NOFX builder.
-	BuilderApproved bool `json:"builderApproved"`
 }
 
 type hyperliquidClearinghouseState struct {
@@ -110,18 +101,8 @@ func baseAgentName(name string) string {
 	return strings.TrimSpace(agentValidUntilSuffix.ReplaceAllString(name, ""))
 }
 
-func hyperliquidBuilderAddress() string {
-	return defaultHyperliquidBuilderAddress
-}
-
-func hyperliquidBuilderMaxFee() string {
-	return defaultHyperliquidBuilderMaxFee
-}
-
 func (s *Server) handleHyperliquidConnectConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, hyperliquidConfigResponse{
-		BuilderAddress: hyperliquidBuilderAddress(),
-		BuilderMaxFee:  hyperliquidBuilderMaxFee(),
 		Chain:          "Mainnet",
 		SignatureChain: "0x66eee",
 	})
@@ -265,13 +246,6 @@ func (s *Server) handleHyperliquidAgent(c *gin.Context) {
 	}
 
 	out := hyperliquidAgentResponse{Agents: agents}
-	var maxBuilderFee json.RawMessage
-	if err := postHyperliquidInfo(c, map[string]any{
-		"type": "maxBuilderFee", "user": address, "builder": hyperliquidBuilderAddress(),
-	}, &maxBuilderFee); err == nil {
-		fee, parseErr := strconv.ParseFloat(strings.Trim(string(maxBuilderFee), "\""), 64)
-		out.BuilderApproved = parseErr == nil && fee >= 50
-	}
 	for i := range agents {
 		if strings.EqualFold(baseAgentName(agents[i].Name), nofxHyperliquidAgentName) {
 			agent := agents[i]
@@ -299,11 +273,6 @@ func (s *Server) handleHyperliquidSubmitExchange(c *gin.Context) {
 	switch actionType {
 	case "approveAgent":
 		if err := validateApproveAgentAction(req.Action); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-	case "approveBuilderFee":
-		if err := validateApproveBuilderFeeAction(req.Action); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -379,17 +348,6 @@ func validateApproveAgentAction(action map[string]any) error {
 	}
 	if strings.TrimSpace(fmt.Sprint(action["agentName"])) == "" {
 		return fmt.Errorf("missing agentName")
-	}
-	return validateCommonHyperliquidSignedAction(action)
-}
-
-func validateApproveBuilderFeeAction(action map[string]any) error {
-	builder := strings.ToLower(strings.TrimSpace(fmt.Sprint(action["builder"])))
-	if builder != hyperliquidBuilderAddress() {
-		return fmt.Errorf("builder address mismatch")
-	}
-	if strings.TrimSpace(fmt.Sprint(action["maxFeeRate"])) != hyperliquidBuilderMaxFee() {
-		return fmt.Errorf("builder max fee mismatch")
 	}
 	return validateCommonHyperliquidSignedAction(action)
 }

@@ -113,8 +113,7 @@ export function AutopilotLaunchPanel({
         (exchange) =>
           exchange.exchange_type === 'hyperliquid' &&
           exchange.enabled &&
-          Boolean(exchange.hyperliquidWalletAddr) &&
-          Boolean(exchange.hyperliquidBuilderApproved)
+          Boolean(exchange.hyperliquidWalletAddr)
       ) || null,
     [exchanges]
   )
@@ -178,7 +177,7 @@ export function AutopilotLaunchPanel({
     ? feeFundsCheck.status !== 'failed' && Boolean(feeWalletAddress)
     : Boolean(feeWalletAddress) && feeWalletBalance >= minAIFeeUSDC
 
-  // A stored builder-approved flag is not proof that this saved signing agent
+  // A saved exchange config is not proof that this saved signing agent
   // is still approved. A different NOFX installation can replace the agent.
   const [verifiedExchangeId, setVerifiedExchangeId] = useState<string | null>(null)
   useEffect(() => {
@@ -188,7 +187,7 @@ export function AutopilotLaunchPanel({
     const check = async () => {
       try {
         const proof = await api.getHyperliquidAgent(hyperliquidExchange.hyperliquidWalletAddr!)
-        const approved = proof.builderApproved && proof.agents?.some((agent) =>
+        const approved = proof.agents?.some((agent) =>
           agent.address.toLowerCase() === hyperliquidExchange.hyperliquidAgentAddress!.toLowerCase() && agent.validUntil > Date.now())
         if (!cancelled) setVerifiedExchangeId(approved ? hyperliquidExchange.id : null)
       } catch {

@@ -26,11 +26,12 @@ const (
 )
 
 // submitNativeOrder is the single SDK submission point used by NOFX's
-// legacy trading methods and the exact order API. Both retain Builder routing.
+// legacy trading methods and the exact order API. Orders carry no builder
+// info, so no builder fee is charged.
 func (t *HyperliquidTrader) submitNativeOrder(ctx context.Context, ex *hyperliquid.Exchange, order hyperliquid.CreateOrderRequest) (hyperliquid.OrderStatus, error) {
-	receipt, err := ex.Order(ctx, order, defaultBuilder)
+	receipt, err := ex.Order(ctx, order, nil)
 	if err != nil {
-		return receipt, wrapBuilderFeeNotApproved(err)
+		return receipt, err
 	}
 	if receipt.Error != nil {
 		return receipt, fmt.Errorf("Hyperliquid rejected order")
@@ -40,22 +41,8 @@ func (t *HyperliquidTrader) submitNativeOrder(ctx context.Context, ex *hyperliqu
 	}
 	return receipt, nil
 }
-func (t *HyperliquidTrader) placeOrderWithBuilderFee(order hyperliquid.CreateOrderRequest) error {
+func (t *HyperliquidTrader) placeOrder(order hyperliquid.CreateOrderRequest) error {
 	_, err := t.submitNativeOrder(t.ctx, t.exchange, order)
-	return err
-}
-
-func isBuilderFeeNotApprovedError(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(strings.ToLower(err.Error()), "builder fee has not been approved")
-}
-
-func wrapBuilderFeeNotApproved(err error) error {
-	if isBuilderFeeNotApprovedError(err) {
-		return fmt.Errorf("Hyperliquid builder fee is not approved for NOFX; reconnect Hyperliquid wallet and complete trading authorization: %w", err)
-	}
 	return err
 }
 
@@ -116,7 +103,7 @@ func (t *HyperliquidTrader) OpenLong(symbol string, quantity float64, leverage i
 			ReduceOnly: false,
 		}
 
-		err = t.placeOrderWithBuilderFee(order)
+		err = t.placeOrder(order)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open long position: %w", err)
 		}
@@ -188,7 +175,7 @@ func (t *HyperliquidTrader) OpenShort(symbol string, quantity float64, leverage 
 			ReduceOnly: false,
 		}
 
-		err = t.placeOrderWithBuilderFee(order)
+		err = t.placeOrder(order)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open short position: %w", err)
 		}
@@ -276,7 +263,7 @@ func (t *HyperliquidTrader) CloseLong(symbol string, quantity float64) (map[stri
 			ReduceOnly: true,
 		}
 
-		err = t.placeOrderWithBuilderFee(order)
+		err = t.placeOrder(order)
 		if err != nil {
 			return nil, fmt.Errorf("failed to close long position: %w", err)
 		}
@@ -369,7 +356,7 @@ func (t *HyperliquidTrader) CloseShort(symbol string, quantity float64) (map[str
 			ReduceOnly: true,
 		}
 
-		err = t.placeOrderWithBuilderFee(order)
+		err = t.placeOrder(order)
 		if err != nil {
 			return nil, fmt.Errorf("failed to close short position: %w", err)
 		}
@@ -810,13 +797,11 @@ func (t *HyperliquidTrader) placeXyzOrder(coin string, isBuy bool, size float64,
 		},
 	}
 
-	// Create OrderAction with NOFX builder fee. Trader startup requires a persisted
-	// builder approval flag before this live path can run.
+	// Create OrderAction without builder info (no builder fee).
 	action := hyperliquid.OrderAction{
 		Type:     "order",
 		Orders:   []hyperliquid.OrderWire{orderWire},
 		Grouping: "na",
-		Builder:  defaultBuilder,
 	}
 
 	// Sign the action
@@ -904,7 +889,7 @@ func (t *HyperliquidTrader) placeXyzOrder(coin string, isBuy bool, size float64,
 	if len(result.Response.Data.Statuses) > 0 {
 		status := result.Response.Data.Statuses[0]
 		if status.Error != nil {
-			return wrapBuilderFeeNotApproved(fmt.Errorf("xyz dex order error (coin=%s, assetIndex=%d, size=%.4f, price=%.4f): %s", coin, assetIndex, roundedSize, roundedPrice, *status.Error))
+			return fmt.Errorf("xyz dex order error (coin=%s, assetIndex=%d, size=%.4f, price=%.4f): %s", coin, assetIndex, roundedSize, roundedPrice, *status.Error)
 		}
 		if status.Filled != nil {
 			logger.Infof("✅ xyz dex order filled: totalSz=%s avgPx=%s oid=%d",
@@ -978,13 +963,11 @@ func (t *HyperliquidTrader) placeXyzTriggerOrder(coin string, isBuy bool, size f
 		},
 	}
 
-	// Create OrderAction with NOFX builder fee. Trader startup requires a persisted
-	// builder approval flag before this live path can run.
+	// Create OrderAction without builder info (no builder fee).
 	action := hyperliquid.OrderAction{
 		Type:     "order",
 		Orders:   []hyperliquid.OrderWire{orderWire},
 		Grouping: "na",
-		Builder:  defaultBuilder,
 	}
 
 	// Sign the action
@@ -1066,7 +1049,7 @@ func (t *HyperliquidTrader) placeXyzTriggerOrder(coin string, isBuy bool, size f
 	if len(result.Response.Data.Statuses) > 0 {
 		status := result.Response.Data.Statuses[0]
 		if status.Error != nil {
-			return wrapBuilderFeeNotApproved(fmt.Errorf("xyz dex %s order error: %s", tpsl, *status.Error))
+			return fmt.Errorf("xyz dex %s order error: %s", tpsl, *status.Error)
 		}
 		if status.Resting != nil {
 			logger.Infof("✅ xyz dex %s order placed: oid=%d", tpsl, status.Resting.Oid)
@@ -1118,7 +1101,7 @@ func (t *HyperliquidTrader) SetStopLoss(symbol string, positionSide string, quan
 			ReduceOnly: true,
 		}
 
-		err := t.placeOrderWithBuilderFee(order)
+		err := t.placeOrder(order)
 		if err != nil {
 			return fmt.Errorf("failed to set stop loss: %w", err)
 		}
@@ -1169,7 +1152,7 @@ func (t *HyperliquidTrader) SetTakeProfit(symbol string, positionSide string, qu
 			ReduceOnly: true,
 		}
 
-		err := t.placeOrderWithBuilderFee(order)
+		err := t.placeOrder(order)
 		if err != nil {
 			return fmt.Errorf("failed to set take profit: %w", err)
 		}
