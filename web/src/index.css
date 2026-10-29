@@ -1069,3 +1069,9 @@ tr:hover {
   mix-blend-mode: overlay;
   background-blend-mode: overlay, normal;
 }
+/* A stray wide element must never make the whole page scroll sideways
+   on phones. `clip` (unlike `hidden`) keeps position: sticky working. */
+html,
+body {
+  overflow-x: clip;
+}

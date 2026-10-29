@@ -1532,3 +1532,110 @@ html {
 .nofx-shell .config-next small {
   color: var(--muted);
 }
+
+/* ── Mobile adaptation (2026-10-29): stack desktop grids instead of
+      squeezing them into vertical-text columns on phone widths. ── */
+@media (max-width: 900px) {
+  /* Public landing: hero, preview, features and closing band go single-column. */
+  .nofx-flow-landing {
+    padding-top: 60px;
+  }
+  .flow-hero {
+    grid-template-columns: 1fr;
+    padding: 44px 20px 36px;
+    gap: 34px;
+  }
+  .flow-hero h1 {
+    font-size: 40px;
+    letter-spacing: -1.2px;
+    margin: 20px 0;
+  }
+  .flow-hero-copy > p {
+    font-size: 15px;
+  }
+  .flow-hero-actions {
+    flex-wrap: wrap;
+    gap: 12px 18px;
+    margin-top: 26px;
+  }
+  .flow-hero-actions > a.flow-primary {
+    white-space: nowrap;
+  }
+  .flow-hero-trust {
+    flex-wrap: wrap;
+    gap: 8px 16px;
+  }
+  .flow-product-preview {
+    transform: none;
+  }
+  .flow-preview-header {
+    gap: 12px;
+    padding: 13px 16px;
+  }
+  .flow-preview-content {
+    padding: 16px;
+  }
+  .flow-preview-plans {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .flow-preview-bottom {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .flow-exchanges {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 10px 22px;
+    padding: 22px 20px;
+  }
+  .flow-features {
+    grid-template-columns: 1fr;
+    padding: 48px 20px;
+    gap: 16px;
+  }
+  .flow-section-heading p {
+    max-width: none;
+  }
+  .flow-section-heading h2,
+  .flow-local h2 {
+    font-size: 28px;
+  }
+  .flow-local {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 22px;
+    padding: 44px 20px;
+  }
+
+  /* Frontier: connection cards wrap; their labels never squeeze vertical. */
+  .nofx-shell .frontier-connections {
+    flex-wrap: wrap;
+  }
+  .nofx-shell .frontier-connections > button {
+    flex: 1 1 150px;
+  }
+  .nofx-shell .frontier-connections > button b {
+    white-space: nowrap;
+  }
+  .nofx-shell .frontier-connections > small {
+    margin-left: 0;
+    flex: 1 1 100%;
+  }
+
+  /* Terminal dashboard: metrics go 2-up, panel rows stack full-width. */
+  .nofx-shell .nofx-dashboard-metrics {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .nofx-shell .nofx-dashboard-metrics > div {
+    padding: 14px 16px !important;
+  }
+  .nofx-shell .nofx-dashboard-metrics .tm-mono {
+    font-size: 20px !important;
+  }
+  .nofx-shell .tm-grid-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .nofx-shell .tm-grid-row > div {
+    border-right: none !important;
+  }
+}

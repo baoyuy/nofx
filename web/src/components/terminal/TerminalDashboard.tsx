@@ -517,7 +517,7 @@ export function TerminalDashboard({
         {/* ── row 1: cost/liq map · live L2 order book · signal matrix (instrument selector)
               all three columns are locked to one fixed height so the row is always
               balanced; the K-line flexes to fill any remaining space ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,0.95fr) minmax(0,1.05fr)' }}>
+        <div className="tm-grid-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,0.95fr) minmax(0,1.05fr)' }}>
           <div style={{ ...sc, borderRight: cellBorder, height: ROW1_H, overflow: 'hidden' }}>
             {/* cost/liq heatmap works for both synthetic (hip3_perp) and crypto
                 (perp) markets — pass the likely marketType; the component falls
@@ -615,7 +615,7 @@ export function TerminalDashboard({
         <div className="tm-rule" />
 
         {/* ── row 3: execution log · risk radar · recent trades ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr)' }}>
+        <div className="tm-grid-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr)' }}>
           <div style={{ ...sc, borderRight: cellBorder }}>
             <ExecutionLog decisions={decisions} height={432} />
           </div>
@@ -743,7 +743,7 @@ export function TerminalDashboard({
         <div className="tm-rule" />
 
         {/* market net inflow (Vergex) · by-symbol history · edge profile — footer */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,0.9fr) minmax(0,0.9fr)' }}>
+        <div className="tm-grid-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,0.9fr) minmax(0,0.9fr)' }}>
           <div style={{ ...sc, borderRight: cellBorder }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
               <span className="tm-px" style={{ fontSize: 12 }}>{isZh ? '市场净流入' : 'Market net inflow'}</span>
