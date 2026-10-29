@@ -2,19 +2,29 @@ package binance
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/adshao/go-binance/v2/futures"
 )
 
-// Public Binance USDT-M market data. No API key; used by the market page,
+// Public Binance market data. No API key; used by the market page,
 // AI analysis and the paper simulator's chart.
+//
+// Data source: Binance's public spot data domain (data-api.binance.vision).
+// The futures API host (fapi.binance.com) geo-blocks many hosting/VPS IP
+// ranges with HTTP 451 ("Service unavailable from a restricted location"),
+// even when the server itself sits in an allowed country — which made the
+// market page return 502 from the deployment server. The vision domain is
+// Binance's official public-data endpoint and is not geo-restricted.
+// Spot candles/prices track the USDT-M perpetuals closely enough for
+// charting and indicator analysis; funding rate / mark price are not
+// available from this source and are reported as last price / zero.
 
 type MarketKline struct {
 	Time   int64   `json:"time"` // open time, unix seconds
@@ -39,22 +49,16 @@ type MarketTicker struct {
 	NextFundingTime int64   `json:"next_funding_time"`
 }
 
-var (
-	publicClientOnce sync.Once
-	publicClient     *futures.Client
+// publicBaseURL is a var so tests can point it at a stub server.
+var publicBaseURL = "https://data-api.binance.vision"
 
+var publicHTTPClient = &http.Client{Timeout: 15 * time.Second}
+
+var (
 	symbolsMu       sync.Mutex
 	symbolsCache    []string
 	symbolsCachedAt time.Time
 )
-
-func marketClient() *futures.Client {
-	publicClientOnce.Do(func() {
-		publicClient = futures.NewClient("", "")
-		publicClient.HTTPClient = &http.Client{Timeout: 15 * time.Second}
-	})
-	return publicClient
-}
 
 // ValidMarketIntervals are the chart periods the market page offers.
 var ValidMarketIntervals = map[string]bool{
@@ -68,6 +72,26 @@ func parseF(s string) float64 {
 	return v
 }
 
+func publicGet(ctx context.Context, path string, out interface{}) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, publicBaseURL+path, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := publicHTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("binance public data %s: HTTP %d: %s", path, resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return json.Unmarshal(body, out)
+}
+
 // GetPublicKlines returns up to limit candles, oldest first.
 func GetPublicKlines(ctx context.Context, symbol, interval string, limit int) ([]MarketKline, error) {
 	if !ValidMarketIntervals[interval] {
@@ -76,61 +100,104 @@ func GetPublicKlines(ctx context.Context, symbol, interval string, limit int) ([
 	if limit <= 0 || limit > 1500 {
 		limit = 500
 	}
-	rows, err := marketClient().NewKlinesService().
-		Symbol(symbol).Interval(interval).Limit(limit).Do(ctx)
-	if err != nil {
+	path := fmt.Sprintf("/api/v3/klines?symbol=%s&interval=%s&limit=%d", symbol, interval, limit)
+	var rows [][]json.RawMessage
+	if err := publicGet(ctx, path, &rows); err != nil {
 		return nil, fmt.Errorf("binance klines: %w", err)
 	}
 	out := make([]MarketKline, 0, len(rows))
-	for _, k := range rows {
+	for _, r := range rows {
+		if len(r) < 6 {
+			continue
+		}
+		var openTime int64
+		var o, h, l, c, v string
+		if err := json.Unmarshal(r[0], &openTime); err != nil {
+			continue
+		}
+		if err := json.Unmarshal(r[1], &o); err != nil {
+			continue
+		}
+		if err := json.Unmarshal(r[2], &h); err != nil {
+			continue
+		}
+		if err := json.Unmarshal(r[3], &l); err != nil {
+			continue
+		}
+		if err := json.Unmarshal(r[4], &c); err != nil {
+			continue
+		}
+		if err := json.Unmarshal(r[5], &v); err != nil {
+			continue
+		}
 		out = append(out, MarketKline{
-			Time: k.OpenTime / 1000, Open: parseF(k.Open), High: parseF(k.High),
-			Low: parseF(k.Low), Close: parseF(k.Close), Volume: parseF(k.Volume),
+			Time: openTime / 1000, Open: parseF(o), High: parseF(h),
+			Low: parseF(l), Close: parseF(c), Volume: parseF(v),
 		})
 	}
 	return out, nil
 }
 
-// GetPublicTicker combines 24h stats with mark price and funding rate.
-func GetPublicTicker(ctx context.Context, symbol string) (*MarketTicker, error) {
-	stats, err := marketClient().NewListPriceChangeStatsService().Symbol(symbol).Do(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("binance 24h ticker: %w", err)
-	}
-	if len(stats) == 0 {
-		return nil, fmt.Errorf("symbol %s not found", symbol)
-	}
-	s := stats[0]
-	t := &MarketTicker{
-		Symbol: s.Symbol, LastPrice: parseF(s.LastPrice), PriceChange: parseF(s.PriceChange),
-		PriceChangePct: parseF(s.PriceChangePercent), High24h: parseF(s.HighPrice),
-		Low24h: parseF(s.LowPrice), Volume24h: parseF(s.Volume), QuoteVolume24h: parseF(s.QuoteVolume),
-	}
-	// Funding is supplementary; the ticker is still useful without it.
-	if prem, err := marketClient().NewPremiumIndexService().Symbol(symbol).Do(ctx); err == nil && len(prem) > 0 {
-		t.MarkPrice = parseF(prem[0].MarkPrice)
-		t.FundingRate = parseF(prem[0].LastFundingRate)
-		t.NextFundingTime = prem[0].NextFundingTime
-	}
-	return t, nil
+type spotTicker24h struct {
+	Symbol             string `json:"symbol"`
+	LastPrice          string `json:"lastPrice"`
+	PriceChange        string `json:"priceChange"`
+	PriceChangePercent string `json:"priceChangePercent"`
+	HighPrice          string `json:"highPrice"`
+	LowPrice           string `json:"lowPrice"`
+	Volume             string `json:"volume"`
+	QuoteVolume        string `json:"quoteVolume"`
 }
 
-// GetPublicSymbols lists trading USDT perpetuals, cached for an hour.
+// GetPublicTicker returns 24h stats for one symbol. Mark price is set to
+// the last price and funding fields stay zero (spot source has neither).
+func GetPublicTicker(ctx context.Context, symbol string) (*MarketTicker, error) {
+	var s spotTicker24h
+	if err := publicGet(ctx, "/api/v3/ticker/24hr?symbol="+symbol, &s); err != nil {
+		return nil, fmt.Errorf("binance 24h ticker: %w", err)
+	}
+	if s.Symbol == "" {
+		return nil, fmt.Errorf("symbol %s not found", symbol)
+	}
+	last := parseF(s.LastPrice)
+	return &MarketTicker{
+		Symbol: s.Symbol, LastPrice: last, MarkPrice: last,
+		PriceChange: parseF(s.PriceChange), PriceChangePct: parseF(s.PriceChangePercent),
+		High24h: parseF(s.HighPrice), Low24h: parseF(s.LowPrice),
+		Volume24h: parseF(s.Volume), QuoteVolume24h: parseF(s.QuoteVolume),
+	}, nil
+}
+
+// GetPublicSymbols lists trading USDT spot pairs, cached for an hour.
+// Leveraged tokens (BTCUP/BTCDOWN/...) are excluded to mirror the old
+// perpetuals list.
 func GetPublicSymbols(ctx context.Context) ([]string, error) {
 	symbolsMu.Lock()
 	defer symbolsMu.Unlock()
 	if len(symbolsCache) > 0 && time.Since(symbolsCachedAt) < time.Hour {
 		return symbolsCache, nil
 	}
-	info, err := marketClient().NewExchangeInfoService().Do(ctx)
-	if err != nil {
+	var info struct {
+		Symbols []struct {
+			Symbol     string `json:"symbol"`
+			Status     string `json:"status"`
+			QuoteAsset string `json:"quoteAsset"`
+		} `json:"symbols"`
+	}
+	if err := publicGet(ctx, "/api/v3/exchangeInfo", &info); err != nil {
 		return nil, fmt.Errorf("binance exchangeInfo: %w", err)
 	}
 	var out []string
 	for _, s := range info.Symbols {
-		if s.QuoteAsset == "USDT" && s.ContractType == "PERPETUAL" && s.Status == "TRADING" {
-			out = append(out, s.Symbol)
+		if s.QuoteAsset != "USDT" || s.Status != "TRADING" {
+			continue
 		}
+		base := strings.TrimSuffix(s.Symbol, "USDT")
+		if strings.HasSuffix(base, "UP") || strings.HasSuffix(base, "DOWN") ||
+			strings.HasSuffix(base, "BULL") || strings.HasSuffix(base, "BEAR") {
+			continue
+		}
+		out = append(out, s.Symbol)
 	}
 	sort.Strings(out)
 	symbolsCache, symbolsCachedAt = out, time.Now()
@@ -151,7 +218,7 @@ var (
 	tickersCachedAt time.Time
 )
 
-// GetPublicTickers returns 24h stats for all trading USDT perpetuals.
+// GetPublicTickers returns 24h stats for all trading USDT pairs.
 // One Binance call covers every symbol; cached briefly so many open pages
 // share it.
 func GetPublicTickers(ctx context.Context) ([]MarketTickerLite, error) {
@@ -168,8 +235,8 @@ func GetPublicTickers(ctx context.Context) ([]MarketTickerLite, error) {
 	for _, s := range symbols {
 		trading[s] = true
 	}
-	stats, err := marketClient().NewListPriceChangeStatsService().Do(ctx)
-	if err != nil {
+	var stats []spotTicker24h
+	if err := publicGet(ctx, "/api/v3/ticker/24hr", &stats); err != nil {
 		return nil, fmt.Errorf("binance 24h tickers: %w", err)
 	}
 	out := make([]MarketTickerLite, 0, len(symbols))
