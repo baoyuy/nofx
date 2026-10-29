@@ -246,6 +246,16 @@ func (e *StrategyEngine) usesHyperliquidNativeUniverse() bool {
 	return false
 }
 
+// wantsOITopData reports whether the strategy opted into the paid NofxOS OI
+// datasets. Without this gate every decision cycle would call the API.
+func (e *StrategyEngine) wantsOITopData() bool {
+	if e == nil || e.config == nil || e.nofxosClient == nil {
+		return false
+	}
+	ind := e.config.Indicators
+	return ind.EnableOIRanking || ind.EnableQuantOI || e.config.CoinSource.UseOITop
+}
+
 // GetRiskControlConfig gets risk control configuration
 func (e *StrategyEngine) GetRiskControlConfig() store.RiskControlConfig {
 	return e.config.RiskControl

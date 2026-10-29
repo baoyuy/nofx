@@ -67,10 +67,10 @@ export default function HeaderBar({
   }, [location.pathname])
   const tabs: { page: Page; path: string; label: string; auth: boolean }[] = [
     {
-      page: 'data',
-      path: ROUTES.data,
-      label: language === 'zh' ? '数据' : 'Data',
-      auth: false,
+      page: 'market',
+      path: ROUTES.market,
+      label: language === 'zh' ? '行情' : 'Market',
+      auth: true,
     },
     {
       page: 'traders',
@@ -171,7 +171,9 @@ export default function HeaderBar({
               {userOpen && (
                 <div className="nofx-user-menu" id="nofx-user-menu">
                   <div className="nofx-user-identity">
-                    <small>{language === 'zh' ? '已登录为' : 'Signed in as'}</small>
+                    <small>
+                      {language === 'zh' ? '已登录为' : 'Signed in as'}
+                    </small>
                     <strong>{user.email}</strong>
                   </div>
                   <button

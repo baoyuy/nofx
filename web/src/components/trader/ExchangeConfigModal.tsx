@@ -32,7 +32,15 @@ import { Tooltip } from './Tooltip'
 import { getShortName } from './utils'
 
 // Supported exchange templates
+// Live Binance prices, simulated orders, no API key and no real funds.
+const PAPER_EXCHANGE_TYPE = 'binance_paper'
+
 const SUPPORTED_EXCHANGE_TEMPLATES = [
+  {
+    exchange_type: PAPER_EXCHANGE_TYPE,
+    name: 'Binance Paper',
+    type: 'cex' as const,
+  },
   { exchange_type: 'binance', name: 'Binance Futures', type: 'cex' as const },
   { exchange_type: 'okx', name: 'OKX Futures', type: 'cex' as const },
   { exchange_type: 'bitget', name: 'Bitget Futures', type: 'cex' as const },
@@ -377,7 +385,17 @@ export function ExchangeConfigModal({
 
     setIsSaving(true)
     try {
-      if (
+      if (currentExchangeType === PAPER_EXCHANGE_TYPE) {
+        await onSave(
+          exchangeId,
+          exchangeType,
+          trimmedAccountName,
+          '',
+          '',
+          '',
+          false
+        )
+      } else if (
         currentExchangeType === 'binance' ||
         currentExchangeType === 'bybit' ||
         currentExchangeType === 'indodax'
@@ -667,39 +685,44 @@ export function ExchangeConfigModal({
                     {selectedTemplate.exchange_type}
                   </div>
                 </div>
-                <a
-                  href={
-                    exchangeRegistrationLinks[currentExchangeType || '']?.url ||
-                    '#'
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all hover:scale-105"
-                  style={{
-                    background: 'rgba(41,91,232, 0.1)',
-                    border: '1px solid rgba(41,91,232, 0.3)',
-                  }}
-                >
-                  <UserPlus className="w-4 h-4" style={{ color: '#295be8' }} />
-                  <span
-                    className="text-sm font-medium"
-                    style={{ color: '#295be8' }}
+                {currentExchangeType !== PAPER_EXCHANGE_TYPE && (
+                  <a
+                    href={
+                      exchangeRegistrationLinks[currentExchangeType || '']
+                        ?.url || '#'
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all hover:scale-105"
+                    style={{
+                      background: 'rgba(41,91,232, 0.1)',
+                      border: '1px solid rgba(41,91,232, 0.3)',
+                    }}
                   >
-                    {t('exchangeConfig.register', language)}
-                  </span>
-                  {exchangeRegistrationLinks[currentExchangeType || '']
-                    ?.hasReferral && (
+                    <UserPlus
+                      className="w-4 h-4"
+                      style={{ color: '#295be8' }}
+                    />
                     <span
-                      className="text-xs px-1.5 py-0.5 rounded-sm"
-                      style={{
-                        background: 'rgba(46, 139, 87, 0.2)',
-                        color: '#2E8B57',
-                      }}
+                      className="text-sm font-medium"
+                      style={{ color: '#295be8' }}
                     >
-                      {t('exchangeConfig.bonus', language)}
+                      {t('exchangeConfig.register', language)}
                     </span>
-                  )}
-                </a>
+                    {exchangeRegistrationLinks[currentExchangeType || '']
+                      ?.hasReferral && (
+                      <span
+                        className="text-xs px-1.5 py-0.5 rounded-sm"
+                        style={{
+                          background: 'rgba(46, 139, 87, 0.2)',
+                          color: '#2E8B57',
+                        }}
+                      >
+                        {t('exchangeConfig.bonus', language)}
+                      </span>
+                    )}
+                  </a>
+                )}
               </div>
 
               {/* Account Name */}
@@ -728,6 +751,34 @@ export function ExchangeConfigModal({
                   required
                 />
               </div>
+
+              {currentExchangeType === PAPER_EXCHANGE_TYPE && (
+                <div
+                  role="note"
+                  className="p-4 rounded-xl text-sm space-y-2"
+                  style={{
+                    background: 'rgba(46, 139, 87, 0.08)',
+                    border: '1px solid rgba(46, 139, 87, 0.25)',
+                    color: '#192434',
+                  }}
+                >
+                  <div className="font-semibold" style={{ color: '#2E8B57' }}>
+                    {language === 'zh'
+                      ? '模拟盘：不需要 API Key，不动真钱'
+                      : 'Paper trading: no API key, no real money'}
+                  </div>
+                  <div>
+                    {language === 'zh'
+                      ? '使用币安合约的实时价格，AI 照常分析和下单，但订单只在本地虚拟账户里成交。初始资金 1000 USDT，手续费按 0.05% 计算，止损、止盈和爆仓都会按实时价格触发。'
+                      : 'Uses live Binance futures prices. The AI analyzes and places orders as usual, but fills happen in a local virtual account starting with 1000 USDT. Fees are 0.05% per side; stop-loss, take-profit and liquidation trigger on live prices.'}
+                  </div>
+                  <div style={{ color: '#707e92' }}>
+                    {language === 'zh'
+                      ? '不计资金费率，结果会比实盘略好一点。'
+                      : 'Funding fees are not simulated, so results run slightly better than live.'}
+                  </div>
+                </div>
+              )}
 
               {/* CEX Fields */}
               {(currentExchangeType === 'binance' ||
@@ -839,8 +890,8 @@ export function ExchangeConfigModal({
                       placeholder={
                         editingExchangeId && selectedExchange?.has_api_key
                           ? language === 'zh'
-                          ? '已保存。如需更换请重新输入。'
-                          : 'Saved. Re-enter to replace.'
+                            ? '已保存。如需更换请重新输入。'
+                            : 'Saved. Re-enter to replace.'
                           : t('enterAPIKey', language)
                       }
                       className="w-full px-4 py-3 rounded-xl"
@@ -871,8 +922,8 @@ export function ExchangeConfigModal({
                       placeholder={
                         editingExchangeId && selectedExchange?.has_secret_key
                           ? language === 'zh'
-                          ? '已保存。如需更换请重新输入。'
-                          : 'Saved. Re-enter to replace.'
+                            ? '已保存。如需更换请重新输入。'
+                            : 'Saved. Re-enter to replace.'
                           : t('enterSecretKey', language)
                       }
                       className="w-full px-4 py-3 rounded-xl"
@@ -903,8 +954,8 @@ export function ExchangeConfigModal({
                         placeholder={
                           editingExchangeId && selectedExchange?.has_passphrase
                             ? language === 'zh'
-                          ? '已保存。如需更换请重新输入。'
-                          : 'Saved. Re-enter to replace.'
+                              ? '已保存。如需更换请重新输入。'
+                              : 'Saved. Re-enter to replace.'
                             : t('enterPassphrase', language)
                         }
                         className="w-full px-4 py-3 rounded-xl"

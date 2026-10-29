@@ -29,6 +29,7 @@ type Store struct {
 	order          *OrderStore
 	grid           *GridStore
 	aiCharge       *AIChargeStore
+	marketAnalysis *MarketAnalysisStore
 	telegramConfig TelegramConfigStore
 
 	mu sync.RWMutex
@@ -164,6 +165,9 @@ func (s *Store) initTables() error {
 	if err := s.AICharge().initTables(); err != nil {
 		return fmt.Errorf("failed to initialize AI charge tables: %w", err)
 	}
+	if err := s.MarketAnalysis().initTables(); err != nil {
+		return fmt.Errorf("failed to initialize market analysis tables: %w", err)
+	}
 	return nil
 }
 
@@ -295,6 +299,16 @@ func (s *Store) AICharge() *AIChargeStore {
 		s.aiCharge = NewAIChargeStore(s.gdb)
 	}
 	return s.aiCharge
+}
+
+// MarketAnalysis gets the saved market-page AI analyses storage
+func (s *Store) MarketAnalysis() *MarketAnalysisStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.marketAnalysis == nil {
+		s.marketAnalysis = NewMarketAnalysisStore(s.gdb)
+	}
+	return s.marketAnalysis
 }
 
 // TelegramConfig gets Telegram bot configuration storage

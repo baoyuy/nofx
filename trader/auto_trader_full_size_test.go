@@ -84,6 +84,7 @@ func TestApplyAutopilotFullSizeOpenSkipsNonClaw402Strategies(t *testing.T) {
 
 func TestEnforcePositionValueRatioCapsAutopilotAtFiveTimesEquity(t *testing.T) {
 	cfg := store.GetDefaultStrategyConfig("en")
+	cfg.CoinSource.SourceType = "vergex_signal" // cap applies to the Claw402 Autopilot book
 	cfg.RiskControl.BTCETHMaxPositionValueRatio = 10
 	cfg.RiskControl.AltcoinMaxPositionValueRatio = 10
 	at := &AutoTrader{config: AutoTraderConfig{StrategyConfig: &cfg}}

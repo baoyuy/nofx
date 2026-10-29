@@ -157,14 +157,14 @@ func TestPlanningBrokerIDStableLosslessAndLegacyLookup(t *testing.T) {
 	b := &FuturesTrader{}
 	raw := "0123456789abcdef0123456789abcdef"
 	native, e := b.RouteClientID(raw)
-	if e != nil || len(native) != 32 || !strings.HasPrefix(native, futuresBrokerPrefix) {
+	if e != nil || len(native) > 32 || !strings.HasPrefix(native, futuresOrderPrefix) || strings.HasPrefix(native, "x-") {
 		t.Fatal(native, e)
 	}
 	again, _ := b.RouteClientID(raw)
 	if again != native {
-		t.Fatal("broker attribution broke idempotency")
+		t.Fatal("order prefix broke idempotency")
 	}
-	decoded, e := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(native, futuresBrokerPrefix))
+	decoded, e := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(native, futuresOrderPrefix))
 	if e != nil || hex.EncodeToString(decoded) != raw {
 		t.Fatal("durable ID was truncated")
 	}

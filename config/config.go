@@ -75,7 +75,7 @@ func Init() {
 func initConfig() error {
 	cfg := &Config{
 		APIServerPort:         8080,
-		ExperienceImprovement: true, // Default: enabled to help improve the product
+		ExperienceImprovement: false, // Default: disabled; set EXPERIENCE_IMPROVEMENT=true to opt in
 		// Database defaults
 		DBType:    "sqlite",
 		DBPath:    "data/data.db",
@@ -113,9 +113,9 @@ func initConfig() error {
 	}
 
 	// Experience improvement: anonymous usage statistics
-	// Default enabled, set EXPERIENCE_IMPROVEMENT=false to disable
+	// Default disabled, set EXPERIENCE_IMPROVEMENT=true to enable
 	if v := os.Getenv("EXPERIENCE_IMPROVEMENT"); v != "" {
-		cfg.ExperienceImprovement = strings.ToLower(v) != "false"
+		cfg.ExperienceImprovement = strings.ToLower(v) == "true"
 	}
 
 	// Market data provider API keys

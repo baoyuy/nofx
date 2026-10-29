@@ -403,8 +403,8 @@ export function TraderConfigModal({
                             {t('coinSource', language)}:{' '}
                             {aiConfig.coin_source.source_type === 'static'
                               ? language === 'zh'
-                                ? '固定美股标的'
-                                : 'Fixed US stocks'
+                                ? `固定币种：${(aiConfig.coin_source.static_coins || []).join(', ')}`
+                                : `Fixed coins: ${(aiConfig.coin_source.static_coins || []).join(', ')}`
                               : aiConfig.coin_source.source_type ===
                                   'vergex_signal'
                                 ? language === 'zh'

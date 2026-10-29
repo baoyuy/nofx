@@ -22,9 +22,10 @@ import { TraderLaunchGuestPage } from '../components/trader/TraderLaunchGuestPag
 import { FAQPage } from '../pages/FAQPage'
 import { LandingPage } from '../pages/LandingPage'
 import { BeginnerOnboardingPage } from '../pages/BeginnerOnboardingPage'
-import { DataPage } from '../pages/DataPage'
 import { SettingsPage } from '../pages/SettingsPage'
-import { StrategyStudioPage } from '../pages/StrategyStudioPage'
+// Free fixed-coins editor replaces the Claw402-only StrategyStudioPage.
+import { FreeStrategyPage } from '../pages/FreeStrategyPage'
+import { MarketPage } from '../pages/MarketPage'
 import { TradingPlanningPage } from '../pages/TradingPlanningPage'
 import { TerminalDashboard } from '../components/terminal/TerminalDashboard'
 import { useAuth } from '../contexts/AuthContext'
@@ -455,13 +456,10 @@ export function AppRoutes() {
             </AppChrome>
           }
         />
+        {/* The paid upstream Data page is removed; old links land on Market. */}
         <Route
           path={ROUTES.data}
-          element={
-            <AppChrome currentPage="data" showFooter={false}>
-              <DataPage />
-            </AppChrome>
-          }
+          element={<Navigate to={ROUTES.market} replace />}
         />
         <Route
           path={ROUTES.settings}
@@ -535,7 +533,23 @@ export function AppRoutes() {
           element={
             isAuthenticated ? (
               <AppChrome currentPage="strategy" animateContent>
-                <StrategyStudioPage />
+                <FreeStrategyPage />
+              </AppChrome>
+            ) : (
+              <LandingPage />
+            )
+          }
+        />
+        <Route
+          path={ROUTES.market}
+          element={
+            isAuthenticated ? (
+              <AppChrome
+                currentPage="market"
+                showFooter={false}
+                wrapInMain={false}
+              >
+                <MarketPage />
               </AppChrome>
             ) : (
               <LandingPage />

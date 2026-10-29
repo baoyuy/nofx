@@ -810,18 +810,7 @@ func resolveTraderDataWalletKey(st *store.Store, userID string, selectedModel *s
 		}
 	}
 
-	if st == nil {
-		return ""
-	}
-
-	// Fallback: find any configured claw402 model for this user so that paid
-	// NofxAI data sources work even when a non-claw402 model (e.g. deepseek) is
-	// selected as the AI brain.
-	preferredID := ""
-	walletKey, err := st.AIModel().ResolveClaw402WalletKey(userID, preferredID)
-	if err != nil {
-		logger.Warnf("⚠️ Failed to load claw402 wallet for trader data routing: %v", err)
-		return ""
-	}
-	return walletKey
+	// No fallback to other claw402 models: a trader whose AI brain is not
+	// claw402 must never spend from a wallet the user configured elsewhere.
+	return ""
 }

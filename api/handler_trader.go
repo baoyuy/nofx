@@ -191,7 +191,7 @@ func validateExchangeForTraderCreation(exchange *store.Exchange) (string, string
 	}
 
 	switch exchange.ExchangeType {
-	case "binance", "bybit", "okx", "bitget", "gate", "kucoin", "hyperliquid", "aster", "lighter", "indodax":
+	case "binance", "bybit", "okx", "bitget", "gate", "kucoin", "hyperliquid", "aster", "lighter", "indodax", "binance_paper":
 		return "", "", nil
 	default:
 		return formatTraderCreationError(

@@ -15,25 +15,32 @@ import (
 	"time"
 )
 
-// RouteClientID retains all 128 bits of the durable ID and shares NOFX's
-// Binance attribution prefix. Raw URL base64 needs 22 characters, so the
-// complete tagged ID fits the existing 32-character bound without truncation.
+// RouteClientID retains all 128 bits of the durable ID behind the NOFX order
+// prefix. Raw URL base64 needs 22 characters, so the complete tagged ID fits
+// the existing 32-character bound without truncation.
 func (b *FuturesTrader) RouteClientID(id string) (string, error) {
+	return routeClientIDWithPrefix(futuresOrderPrefix, id)
+}
+
+func routeClientIDWithPrefix(prefix, id string) (string, error) {
 	raw, e := hex.DecodeString(id)
 	if e != nil || len(raw) != 16 {
 		return "", errors.New("invalid execution client ID")
 	}
-	return futuresBrokerPrefix + base64.RawURLEncoding.EncodeToString(raw), nil
+	return prefix + base64.RawURLEncoding.EncodeToString(raw), nil
 }
+
 func (b *FuturesTrader) nativeClientID(o execution.Order) (string, error) {
 	if o.VenueClientID == "" {
 		return o.ClientID, nil
 	} // Historical untagged orders: query their original ID only.
-	expected, e := b.RouteClientID(o.ClientID)
-	if e != nil || expected != o.VenueClientID {
-		return "", errors.New("persisted Broker route mismatch")
+	for _, prefix := range []string{futuresOrderPrefix, legacyFuturesBrokerPrefix} {
+		expected, e := routeClientIDWithPrefix(prefix, o.ClientID)
+		if e == nil && expected == o.VenueClientID {
+			return expected, nil
+		}
 	}
-	return expected, nil
+	return "", errors.New("persisted Broker route mismatch")
 }
 
 func (b *FuturesTrader) Venue() string { return "binance" }

@@ -13,30 +13,31 @@ import (
 	"github.com/adshao/go-binance/v2/futures"
 )
 
-const futuresBrokerID = "KzrpZaP9"
-const futuresBrokerPrefix = "x-" + futuresBrokerID
+// futuresOrderPrefix tags NOFX-created orders. It is a plain label, not a
+// Binance broker ("x-<brokerId>") attribution code.
+const futuresOrderPrefix = "nofx"
+
+// legacyFuturesBrokerPrefix is the upstream broker prefix. Kept only so
+// orders persisted by older versions can still be looked up and cancelled.
+const legacyFuturesBrokerPrefix = "x-KzrpZaP9"
 
 // getBrOrderID generates unique order ID (for futures contracts)
-// Format: x-{BR_ID}{TIMESTAMP}{RANDOM}
+// Format: nofx{TIMESTAMP}{RANDOM}
 // Futures limit is 32 characters, use this limit consistently
 // Uses nanosecond timestamp + random number to ensure global uniqueness (collision probability < 10^-20)
 func getBrOrderID() string {
-	brID := futuresBrokerID // Shared by automatic and approved planning orders
-
-	// Calculate available space: 32 - len("x-KzrpZaP9") = 32 - 11 = 21 characters
-	// Allocation: 13-digit timestamp + 8-digit random = 21 characters (perfect utilization)
-	timestamp := time.Now().UnixNano() % 10000000000000 // 13-digit nanosecond timestamp
+	// 13-digit nanosecond timestamp + 8-digit random hex = 25 characters total
+	timestamp := time.Now().UnixNano() % 10000000000000
 
 	// Generate 4-byte random number (8 hex digits)
 	randomBytes := make([]byte, 4)
 	rand.Read(randomBytes)
 	randomHex := hex.EncodeToString(randomBytes)
 
-	// Format: x-KzrpZaP9{13-digit timestamp}{8-digit random}
-	// Example: x-KzrpZaP91234567890123abcdef12 (exactly 31 characters)
-	orderID := fmt.Sprintf("x-%s%d%s", brID, timestamp, randomHex)
+	// Example: nofx1234567890123abcdef12
+	orderID := fmt.Sprintf("%s%d%s", futuresOrderPrefix, timestamp, randomHex)
 
-	// Ensure not exceeding 32-character limit (theoretically exactly 31 characters)
+	// Ensure not exceeding 32-character limit
 	if len(orderID) > 32 {
 		orderID = orderID[:32]
 	}

@@ -20,7 +20,10 @@ func DB() *gorm.DB {
 
 // InitGorm initializes GORM with SQLite
 func InitGorm(dbPath string) (*gorm.DB, error) {
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+	// Use the pure-Go modernc driver (registered as "sqlite" in driver.go) so
+	// the binary works with CGO_ENABLED=0, e.g. on Windows without a C compiler.
+	dialector := sqlite.New(sqlite.Config{DriverName: "sqlite", DSN: dbPath})
+	db, err := gorm.Open(dialector, &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 		// Use UTC for all auto-generated timestamps (autoCreateTime, autoUpdateTime)
 		NowFunc: func() time.Time {

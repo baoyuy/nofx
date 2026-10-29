@@ -308,6 +308,12 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	logger.Infof("📊 [%s] Position mode: %s", config.Name, marginModeStr)
 
 	switch config.Exchange {
+	case binance.PaperExchangeType:
+		logger.Infof("📝 [%s] Using Binance PAPER trading (live prices, simulated orders, no real funds)", config.Name)
+		trader, err = binance.GetPaperTrader(config.ExchangeID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize paper trader: %w", err)
+		}
 	case "binance":
 		logger.Infof("🏦 [%s] Using Binance Futures trading", config.Name)
 		trader = binance.NewFuturesTrader(config.BinanceAPIKey, config.BinanceSecretKey, userID)
@@ -572,6 +578,12 @@ func (at *AutoTrader) Run() error {
 			binanceTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second, at.stopMonitorCh)
 			at.logInfof("🔄 Binance order+position sync enabled (every 30s)")
 		}
+	}
+
+	// Record stop-loss / take-profit / liquidation closes fired by the paper simulator
+	if paperTrader, ok := at.trader.(*binance.PaperTrader); ok && at.store != nil {
+		go at.syncPaperCloses(paperTrader, 10*time.Second, at.stopMonitorCh)
+		at.logInfof("📝 Paper trading close sync enabled (every 10s)")
 	}
 
 	// Start Gate order sync if using Gate exchange

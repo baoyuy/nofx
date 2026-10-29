@@ -229,13 +229,13 @@ func (s *Server) createDefaultStrategies(userID string, lang string) error {
 	}
 	locales := map[string]strategyLocale{
 		"zh": {
-			defaultStrategy: strategyI18n{"NOFX Claw402 Auto Strategy", "The only built-in strategy: read the Claw402.ai direction board each cycle, load direction history and cost/liquidation heatmaps, then manage positions by the live board."},
+			defaultStrategy: strategyI18n{"固定币种策略", "免费内置策略：每个周期分析固定的 BTC/ETH/SOL 永续合约 K 线，不依赖任何付费数据源。"},
 		},
 		"en": {
-			defaultStrategy: strategyI18n{"NOFX Claw402 Auto Strategy", "The only built-in strategy: read the Claw402.ai direction board each cycle, load direction history and cost/liquidation heatmaps, then manage positions by the live board."},
+			defaultStrategy: strategyI18n{"Fixed Coins Strategy", "Free built-in strategy: analyze candles for a fixed BTC/ETH/SOL perpetual list each cycle, with no paid data sources."},
 		},
 		"id": {
-			defaultStrategy: strategyI18n{"Strategi Otomatis NOFX Claw402", "Satu strategi bawaan: membaca papan arah Claw402.ai setiap siklus, memuat riwayat arah dan heatmap biaya/likuidasi, lalu mengelola posisi mengikuti papan langsung."},
+			defaultStrategy: strategyI18n{"Strategi Koin Tetap", "Strategi bawaan gratis: menganalisis candle BTC/ETH/SOL perpetual setiap siklus tanpa sumber data berbayar."},
 		},
 	}
 	locale, ok := locales[lang]
@@ -250,18 +250,14 @@ func (s *Server) createDefaultStrategies(userID string, lang string) error {
 		applyConfig func(*store.StrategyConfig)
 	}
 
-	setClaw402Strategy := func(c *store.StrategyConfig) {
-		c.CoinSource.SourceType = "vergex_signal"
-		c.CoinSource.StaticCoins = nil
+	setFreeStrategy := func(c *store.StrategyConfig) {
+		c.CoinSource.SourceType = "static"
+		c.CoinSource.StaticCoins = []string{"BTCUSDT", "ETHUSDT", "SOLUSDT"}
 		c.CoinSource.UseAI500 = false
 		c.CoinSource.UseOITop = false
 		c.CoinSource.UseOILow = false
 		c.CoinSource.UseHyperAll = false
 		c.CoinSource.UseHyperMain = false
-		c.CoinSource.HyperRankCategory = "all"
-		c.CoinSource.VergexLimit = 10
-		c.CoinSource.VergexMarketType = "all"
-		c.CoinSource.VergexChain = "hyperliquid"
 		c.RiskControl.MaxPositions = store.AutopilotDefaultMaxPositions
 		c.RiskControl.BTCETHMaxLeverage = 10
 		c.RiskControl.AltcoinMaxLeverage = 10
@@ -287,7 +283,7 @@ func (s *Server) createDefaultStrategies(userID string, lang string) error {
 			description: locale.defaultStrategy.description,
 			isActive:    true,
 			applyConfig: func(c *store.StrategyConfig) {
-				setClaw402Strategy(c)
+				setFreeStrategy(c)
 			},
 		},
 	}

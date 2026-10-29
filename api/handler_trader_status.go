@@ -157,6 +157,9 @@ func (s *Server) handleClosePosition(c *gin.Context) {
 	// Use ExchangeType (e.g., "binance") instead of ExchangeID (which is now UUID)
 	// Convert EncryptedString fields to string
 	switch exchangeCfg.ExchangeType {
+	case binance.PaperExchangeType:
+		// Shared instance: same virtual account the running trader uses.
+		tempTrader, createErr = binance.GetPaperTrader(exchangeCfg.ID)
 	case "binance":
 		tempTrader = binance.NewFuturesTrader(string(exchangeCfg.APIKey), string(exchangeCfg.SecretKey), userID)
 	case "hyperliquid":

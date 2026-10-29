@@ -31,6 +31,9 @@ func MissingRequiredExchangeCredentialFields(exchangeType, apiKey, secretKey, pa
 			namedField{"lighter_wallet_addr", lighterWalletAddr},
 			namedField{"lighter_api_key_private_key", lighterAPIKeyPrivateKey},
 		)
+	case "binance_paper":
+		// Paper trading uses public market data only; no credentials.
+		return nil
 	default:
 		return []string{"exchange_type"}
 	}

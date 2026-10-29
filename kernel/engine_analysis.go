@@ -87,9 +87,12 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	pruneCandidateCoinsWithoutMarketData(ctx)
 	enrichVergexDataWithStrategy(ctx, engine)
 
-	// Ensure OITopDataMap is initialized
+	// Ensure OITopDataMap is initialized. OI Top is a paid NofxOS dataset, so it
+	// is only fetched when the strategy explicitly enables OI data.
 	if ctx.OITopDataMap == nil {
 		ctx.OITopDataMap = make(map[string]*OITopData)
+	}
+	if len(ctx.OITopDataMap) == 0 && engine.wantsOITopData() {
 		oiPositions, err := engine.nofxosClient.GetOITopPositions()
 		if err == nil {
 			for _, pos := range oiPositions {

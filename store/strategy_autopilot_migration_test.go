@@ -2,9 +2,17 @@ package store
 
 import "testing"
 
+// legacyAutopilotConfig returns a config shaped like the upstream Claw402
+// Autopilot preset; the free default is static and is never migrated.
+func legacyAutopilotConfig() StrategyConfig {
+	cfg := GetDefaultStrategyConfig("en")
+	cfg.CoinSource.SourceType = "vergex_signal"
+	return cfg
+}
+
 func TestMigrateLegacyAutopilotRiskDefaults(t *testing.T) {
 	for _, ratio := range []float64{5, 10} {
-		cfg := GetDefaultStrategyConfig("en")
+		cfg := legacyAutopilotConfig()
 		cfg.RiskControl.MaxPositions = 2
 		cfg.RiskControl.BTCETHMaxPositionValueRatio = ratio
 		cfg.RiskControl.AltcoinMaxPositionValueRatio = ratio
@@ -21,7 +29,7 @@ func TestMigrateLegacyAutopilotRiskDefaults(t *testing.T) {
 		}
 	}
 
-	cfg := GetDefaultStrategyConfig("en")
+	cfg := legacyAutopilotConfig()
 	cfg.RiskControl.MaxPositions = 4
 	cfg.RiskControl.BTCETHMaxPositionValueRatio = legacyAutopilotAllocatedPositionRatio
 	cfg.RiskControl.AltcoinMaxPositionValueRatio = legacyAutopilotAllocatedPositionRatio
@@ -36,7 +44,7 @@ func TestMigrateLegacyAutopilotRiskDefaults(t *testing.T) {
 }
 
 func TestMigrateLegacyAutopilotRiskDefaultsPreservesCustomBooks(t *testing.T) {
-	cfg := GetDefaultStrategyConfig("en")
+	cfg := legacyAutopilotConfig()
 	cfg.RiskControl.MaxPositions = 3
 	cfg.RiskControl.BTCETHMaxPositionValueRatio = 3
 	cfg.RiskControl.AltcoinMaxPositionValueRatio = 3
@@ -56,7 +64,7 @@ func TestMigrateLegacyAutopilotRiskDefaultsPreservesCustomBooks(t *testing.T) {
 }
 
 func TestClampLimitsEnforcesAutopilotPositionHardCap(t *testing.T) {
-	cfg := GetDefaultStrategyConfig("en")
+	cfg := legacyAutopilotConfig()
 	cfg.RiskControl.BTCETHMaxPositionValueRatio = 10
 	cfg.RiskControl.AltcoinMaxPositionValueRatio = 8
 

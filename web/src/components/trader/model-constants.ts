@@ -188,7 +188,50 @@ export const AI_PROVIDER_CONFIG: Record<string, AIProviderConfig> = {
     apiUrl: 'https://claw402.ai',
     apiName: 'Claw402',
   },
+  deepseek: {
+    defaultModel: 'deepseek-chat',
+    apiUrl: 'https://platform.deepseek.com/api_keys',
+    apiName: 'DeepSeek',
+  },
+  qwen: {
+    defaultModel: 'qwen3-max',
+    apiUrl: 'https://bailian.console.aliyun.com/',
+    apiName: 'Qwen',
+  },
+  openai: {
+    defaultModel: 'gpt-5.4',
+    apiUrl: 'https://platform.openai.com/api-keys',
+    apiName: 'OpenAI',
+  },
+  claude: {
+    defaultModel: '',
+    apiUrl: 'https://console.anthropic.com/settings/keys',
+    apiName: 'Claude',
+  },
+  gemini: {
+    defaultModel: '',
+    apiUrl: 'https://aistudio.google.com/apikey',
+    apiName: 'Gemini',
+  },
+  grok: {
+    defaultModel: '',
+    apiUrl: 'https://console.x.ai/',
+    apiName: 'Grok',
+  },
+  kimi: {
+    defaultModel: '',
+    apiUrl: 'https://platform.moonshot.ai/console/api-keys',
+    apiName: 'Kimi',
+  },
+  minimax: {
+    defaultModel: 'MiniMax-M2.7',
+    apiUrl: 'https://platform.minimax.io/',
+    apiName: 'MiniMax',
+  },
 }
+
+// Generic OpenAI-compatible endpoint: URL and model name are mandatory.
+export const CUSTOM_PROVIDER = 'custom'
 
 // Helper function to get exchange display name from exchange ID (UUID)
 export function getExchangeDisplayName(

@@ -225,6 +225,8 @@ func probeExchangeAccountState(exchangeCfg *store.Exchange, userID string) Excha
 
 func buildExchangeProbeTrader(exchangeCfg *store.Exchange, userID string) (trader.Trader, error) {
 	switch exchangeCfg.ExchangeType {
+	case binance.PaperExchangeType:
+		return binance.GetPaperTrader(exchangeCfg.ID)
 	case "binance":
 		return binance.NewAccountTrader(context.Background(), string(exchangeCfg.APIKey), string(exchangeCfg.SecretKey), userID)
 	case "bybit":

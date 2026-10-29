@@ -9,6 +9,7 @@ import (
 	"nofx/config"
 	"nofx/crypto"
 	"nofx/logger"
+	"nofx/mcp"
 	"nofx/security"
 	"nofx/store"
 	"nofx/wallet"
@@ -198,6 +199,13 @@ func (s *Server) handleUpdateModelConfigs(c *gin.Context) {
 
 	tradersToReload := make(map[string]bool)
 	for modelID, modelData := range req.Models {
+		// A custom endpoint has no provider defaults to fall back on.
+		if modelData.Enabled && isCustomModelID(modelID) &&
+			(strings.TrimSpace(modelData.CustomAPIURL) == "" || strings.TrimSpace(modelData.CustomModelName) == "") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Custom API requires both an API URL and a model name"})
+			return
+		}
+
 		// SSRF protection: validate custom_api_url before storing
 		if modelData.CustomAPIURL != "" {
 			cleanURL := strings.TrimSuffix(modelData.CustomAPIURL, "#")
@@ -240,12 +248,27 @@ func (s *Server) handleUpdateModelConfigs(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Model configuration updated"})
 }
 
-// handleGetSupportedModels Get list of AI models supported by the system
+// handleGetSupportedModels Get list of AI models supported by the system.
+// Only bring-your-own-key providers are listed; the paid Claw402 gateway is
+// intentionally omitted. "custom" is any OpenAI-compatible endpoint.
 func (s *Server) handleGetSupportedModels(c *gin.Context) {
-	// Return static list of supported AI models with default versions
 	supportedModels := []map[string]interface{}{
-		{"id": "claw402", "name": "Claw402 (Base USDC)", "provider": "claw402", "defaultModel": "gpt-5.6"},
+		{"id": "custom", "name": "Custom API (OpenAI compatible)", "provider": "custom", "defaultModel": ""},
+		{"id": "deepseek", "name": "DeepSeek", "provider": "deepseek", "defaultModel": mcp.DefaultDeepSeekModel},
+		{"id": "qwen", "name": "Qwen", "provider": "qwen", "defaultModel": mcp.DefaultQwenModel},
+		{"id": "openai", "name": "OpenAI", "provider": "openai", "defaultModel": "gpt-5.4"},
+		{"id": "claude", "name": "Claude", "provider": "claude", "defaultModel": ""},
+		{"id": "gemini", "name": "Gemini", "provider": "gemini", "defaultModel": ""},
+		{"id": "grok", "name": "Grok", "provider": "grok", "defaultModel": ""},
+		{"id": "kimi", "name": "Kimi", "provider": "kimi", "defaultModel": ""},
+		{"id": "minimax", "name": "MiniMax", "provider": "minimax", "defaultModel": mcp.DefaultMiniMaxModel},
 	}
 
 	c.JSON(http.StatusOK, supportedModels)
+}
+
+// isCustomModelID reports whether a model id refers to the generic
+// OpenAI-compatible provider ("custom" or "<user>_custom").
+func isCustomModelID(modelID string) bool {
+	return modelID == mcp.ProviderCustom || strings.HasSuffix(modelID, "_"+mcp.ProviderCustom)
 }

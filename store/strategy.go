@@ -281,29 +281,16 @@ func (c *StrategyConfig) NormalizeProductSchema() {
 		if c.CoinSource.VergexChain == "" {
 			c.CoinSource.VergexChain = "hyperliquid"
 		}
+	case "mixed":
+		// Keep the user's explicit per-source flags.
 	default:
-		c.CoinSource.SourceType = "vergex_signal"
+		// Unknown sources fall back to the free static list instead of the paid board.
+		c.CoinSource.SourceType = "static"
 		c.CoinSource.UseAI500 = false
 		c.CoinSource.UseOITop = false
 		c.CoinSource.UseOILow = false
 		c.CoinSource.UseHyperAll = false
 		c.CoinSource.UseHyperMain = false
-		minLimit := 10
-		if len(c.CoinSource.StaticCoins) > 0 {
-			minLimit = len(c.CoinSource.StaticCoins)
-			if minLimit > MaxCandidateCoins {
-				minLimit = MaxCandidateCoins
-			}
-		}
-		if c.CoinSource.VergexLimit < minLimit {
-			c.CoinSource.VergexLimit = minLimit
-		}
-		if c.CoinSource.VergexMarketType == "" {
-			c.CoinSource.VergexMarketType = "all"
-		}
-		if c.CoinSource.VergexChain == "" {
-			c.CoinSource.VergexChain = "hyperliquid"
-		}
 	}
 
 	c.Indicators.Klines.PrimaryTimeframe = normalizeTimeframe(c.Indicators.Klines.PrimaryTimeframe)
@@ -372,7 +359,7 @@ func inferCoinSourceType(source CoinSourceConfig) string {
 	case source.HyperRankCategory != "" || source.HyperRankDirection != "" || source.HyperRankLimit > 0:
 		return "hyper_rank"
 	default:
-		return "vergex_signal"
+		return "static"
 	}
 }
 
@@ -1009,7 +996,10 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 	config := StrategyConfig{
 		Language: normalizedLang,
 		CoinSource: CoinSourceConfig{
-			SourceType:        "vergex_signal",
+			// Free default: a fixed coin list that works on any CEX (e.g. Binance)
+			// without paid Claw402/Vergex/NofxOS data.
+			SourceType:        "static",
+			StaticCoins:       []string{"BTCUSDT", "ETHUSDT", "SOLUSDT"},
 			UseAI500:          false,
 			AI500Limit:        3,
 			UseOITop:          false,
@@ -1077,43 +1067,43 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 
 	if lang == "zh" {
 		config.PromptSections = PromptSectionsConfig{
-			RoleDefinition: `# You are the NOFX Claw402 auto-trader
+			RoleDefinition: `# 角色
 
-	Trade only the Hyperliquid instruments returned by the current Claw402.ai direction board. The board direction is authoritative; direction history, cost/liquidation heatmap and raw candles are supporting context only.`,
-			TradingFrequency: `# Trading Frequency
+	你是一名谨慎的加密货币永续合约交易员，只交易候选列表中的币种，依据 K 线和已启用的指标做决策。`,
+			TradingFrequency: `# 交易频率
 
-	- A bullish symbol may open long; a bearish symbol may open short.
-	- Hold while the signal direction remains unchanged.
-	- Close only after the direction changes, becomes neutral, or leaves the valid board.`,
-			EntryStandards: `# Entry Standards
+	- 没有清晰信号时保持观望，不为交易而交易。
+	- 持仓逻辑未被破坏时继续持有，避免频繁开平。`,
+			EntryStandards: `# 开仓标准
 
-	Follow the Claw402 direction exactly. Supporting detail and candles may explain a signal but cannot veto, reverse, or prematurely exit it.`,
-			DecisionProcess: `# Decision Process
+	- 只在趋势、动量和价格结构相互印证时开仓。
+	- 每笔交易必须给出止损和止盈，并满足最小盈亏比要求。`,
+			DecisionProcess: `# 决策流程
 
-	1. Read the current Claw402 direction board.
-	2. Hold positions whose direction is unchanged; close changed, neutral or absent signals.
-	3. For flat symbols, map bullish to long and bearish to short.
-	4. Use detail data and candles as context, then output strict JSON.`,
+	1. 检查现有持仓：止损、止盈或逻辑失效时平仓。
+	2. 逐个分析候选币种的 K 线和指标。
+	3. 只对把握最高的机会开仓，其余保持观望。
+	4. 输出严格的 JSON。`,
 		}
 	} else {
 		config.PromptSections = PromptSectionsConfig{
-			RoleDefinition: `# You are the NOFX Claw402 auto-trader
+			RoleDefinition: `# Role
 
-	Trade Hyperliquid instruments from the current Claw402.ai direction board only. The board direction is authoritative; direction history, cost/liquidation heatmap and raw candles are supporting context only.`,
+	You are a disciplined crypto perpetual futures trader. Trade only symbols in the candidate list and decide from candles and the enabled indicators.`,
 			TradingFrequency: `# Trading Frequency
 
-	- A bullish symbol may open long; a bearish symbol may open short.
-	- Hold while the signal direction remains unchanged.
-	- Close only after the direction changes, becomes neutral, or leaves the valid board.`,
+	- Stay flat when there is no clear signal; never trade for its own sake.
+	- Hold positions while the original thesis is intact; avoid churning.`,
 			EntryStandards: `# Entry Standards
 
-	Follow the Claw402 direction exactly. Supporting detail and candles may explain a signal but cannot veto, reverse, or prematurely exit it.`,
+	- Enter only when trend, momentum and price structure agree.
+	- Every trade must have a stop loss and take profit that meet the minimum risk/reward.`,
 			DecisionProcess: `# Decision Process
 
-	1. Read the current Claw402 direction board.
-	2. Hold positions whose direction is unchanged; close changed, neutral or absent signals.
-	3. For flat symbols, map bullish to long and bearish to short.
-	4. Use detail data and candles as context, then output strict JSON.`,
+	1. Review open positions: close on stop, target, or a broken thesis.
+	2. Analyze each candidate's candles and indicators.
+	3. Open only the highest-conviction setups; otherwise wait.
+	4. Output strict JSON.`,
 		}
 	}
 

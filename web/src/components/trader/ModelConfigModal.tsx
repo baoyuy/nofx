@@ -7,7 +7,11 @@ import { getModelIcon } from '../common/ModelIcons'
 import { ModelStepIndicator } from './ModelStepIndicator'
 import { ModelCard } from './ModelCard'
 import { Claw402ConfigForm } from './Claw402ConfigForm'
-import { AI_PROVIDER_CONFIG, getShortName } from './model-constants'
+import {
+  AI_PROVIDER_CONFIG,
+  CUSTOM_PROVIDER,
+  getShortName,
+} from './model-constants'
 
 interface ModelConfigModalProps {
   allModels: AIModel[]
@@ -136,7 +140,9 @@ export function ModelConfigModal({
         <fieldset disabled={saving} className="min-w-0 border-0 p-0 m-0">
           {saving && (
             <p role="status" className="px-6 pt-4 text-sm">
-              {language === 'zh' ? '正在保存 AI 连接…' : 'Saving AI connection…'}
+              {language === 'zh'
+                ? '正在保存 AI 连接…'
+                : 'Saving AI connection…'}
             </p>
           )}
           {saveError && (
@@ -189,7 +195,9 @@ export function ModelConfigModal({
               <button
                 type="button"
                 onClick={onClose}
-                aria-label={language === 'zh' ? '关闭 AI 设置' : 'Close AI setup'}
+                aria-label={
+                  language === 'zh' ? '关闭 AI 设置' : 'Close AI setup'
+                }
                 className="p-2 rounded-lg hover:bg-nofx-bg-deeper transition-colors"
                 style={{ color: '#707e92' }}
               >
@@ -418,8 +426,26 @@ function StandardProviderConfigForm({
   onSubmit: (e: React.FormEvent) => void
   language: Language
 }) {
+  const isCustom =
+    selectedModel.provider === CUSTOM_PROVIDER ||
+    selectedModel.id === CUSTOM_PROVIDER ||
+    selectedModel.id.endsWith(`_${CUSTOM_PROVIDER}`)
   return (
     <form onSubmit={onSubmit} className="space-y-5">
+      {isCustom && (
+        <div
+          className="p-4 rounded-xl text-sm"
+          style={{
+            background: 'rgba(41,91,232, 0.08)',
+            border: '1px solid rgba(41,91,232, 0.2)',
+            color: '#192434',
+          }}
+        >
+          {language === 'zh'
+            ? '支持任何 OpenAI 兼容接口（中转 API、OneAPI、硅基流动、火山方舟等）。接口地址一般以 /v1 结尾，系统会自动拼上 /chat/completions；如果你的地址已经是完整路径，在末尾加 # 号。'
+            : 'Works with any OpenAI-compatible endpoint (relay APIs, OneAPI, etc.). The URL usually ends with /v1 and /chat/completions is appended automatically; if your URL is already the full path, add # at the end.'}
+        </div>
+      )}
       {/* Selected Model Header */}
       <div
         className="p-4 rounded-xl flex items-center gap-4"
@@ -495,7 +521,9 @@ function StandardProviderConfigForm({
             color: '#2E8B57',
           }}
         >
-          {language === 'zh' ? '当前模型密钥状态：' : 'Current model key status:'}{' '}
+          {language === 'zh'
+            ? '当前模型密钥状态：'
+            : 'Current model key status:'}{' '}
           {selectedModel.has_api_key
             ? language === 'zh'
               ? 'API 密钥已配置'
@@ -568,13 +596,24 @@ function StandardProviderConfigForm({
               d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
             />
           </svg>
-          {t('customBaseURL', language)}
+          {isCustom
+            ? language === 'zh'
+              ? '接口地址 *'
+              : 'API URL *'
+            : t('customBaseURL', language)}
         </label>
         <input
-          type="url"
+          type="text"
+          inputMode="url"
           value={baseUrl}
           onChange={(e) => onBaseUrlChange(e.target.value)}
-          placeholder={t('customBaseURLPlaceholder', language)}
+          placeholder={
+            isCustom
+              ? 'https://api.example.com/v1'
+              : t('customBaseURLPlaceholder', language)
+          }
+          required={isCustom}
+          pattern="https?://.+"
           className="w-full px-4 py-3 rounded-xl"
           style={{
             background: '#f6f8fc',
@@ -583,7 +622,11 @@ function StandardProviderConfigForm({
           }}
         />
         <div className="text-xs" style={{ color: '#707e92' }}>
-          {t('leaveBlankForDefault', language)}
+          {isCustom
+            ? language === 'zh'
+              ? '以 http:// 或 https:// 开头'
+              : 'Must start with http:// or https://'
+            : t('leaveBlankForDefault', language)}
         </div>
       </div>
 
@@ -607,13 +650,22 @@ function StandardProviderConfigForm({
               d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
             />
           </svg>
-          {t('customModelName', language)}
+          {isCustom
+            ? language === 'zh'
+              ? '模型名称 *'
+              : 'Model name *'
+            : t('customModelName', language)}
         </label>
         <input
           type="text"
           value={modelName}
           onChange={(e) => onModelNameChange(e.target.value)}
-          placeholder={t('customModelNamePlaceholder', language)}
+          placeholder={
+            isCustom
+              ? 'deepseek-chat / gpt-4o / qwen-max'
+              : t('customModelNamePlaceholder', language)
+          }
+          required={isCustom}
           className="w-full px-4 py-3 rounded-xl"
           style={{
             background: '#f6f8fc',
@@ -622,7 +674,11 @@ function StandardProviderConfigForm({
           }}
         />
         <div className="text-xs" style={{ color: '#707e92' }}>
-          {t('leaveBlankForDefaultModel', language)}
+          {isCustom
+            ? language === 'zh'
+              ? '填写服务商提供的模型 ID，大小写要一致'
+              : 'Use the exact model ID from your provider'
+            : t('leaveBlankForDefaultModel', language)}
         </div>
       </div>
 

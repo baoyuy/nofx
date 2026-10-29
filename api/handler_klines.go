@@ -86,7 +86,7 @@ func (s *Server) getKlinesFromCoinank(symbol, interval, exchange string, limit i
 	// Map exchange string to coinank enum
 	var coinankExchange coinank_enum.Exchange
 	switch strings.ToLower(exchange) {
-	case "binance":
+	case "binance", "binance_paper":
 		coinankExchange = coinank_enum.Binance
 	case "bybit":
 		coinankExchange = coinank_enum.Bybit

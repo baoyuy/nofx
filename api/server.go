@@ -205,6 +205,7 @@ func (s *Server) setupRoutes() {
 		// Routes requiring authentication
 		protected := api.Group("/", s.authMiddleware())
 		s.registerPlanning(api, protected)
+		s.registerMarketRoutes(api, protected)
 		// UI-only secret export: do not register in the AI route/tool catalog.
 		protected.POST("/wallet/export", s.handleWalletExport)
 		{
@@ -354,14 +355,12 @@ CRITICAL: Always use the "id" field for strategy_id.`,
 			s.route(protected, "POST", "/strategies/test-run", "Test-run strategy AI analysis", s.handleStrategyTestRun)
 			s.route(protected, "GET", "/strategies/:id", "Get strategy by ID", s.handleGetStrategy)
 			s.routeWithSchema(protected, "POST", "/strategies", "Create a new trading strategy",
-				`Body: {"name":"<string, required>","description":"<string, optional>","lang":"zh|en","config":<StrategyConfig object, OPTIONAL — if omitted the system applies complete working defaults automatically (ai500 top coins, all standard indicators, standard risk control)>}
+				`Body: {"name":"<string, required>","description":"<string, optional>","lang":"zh|en","config":<StrategyConfig object, OPTIONAL — if omitted the system applies complete working defaults automatically (static BTC/ETH/SOL coins, standard risk control)>}
 IMPORTANT: For most use cases just POST {"name":"<name>"} — the backend fills everything in. Only include "config" when the user explicitly requests custom settings (specific coins, custom leverage, custom timeframes).
 
 StrategyConfig fields:
-  coin_source.source_type: "vergex_signal" (Claw402/Vergex direction board; default and recommended)
-  coin_source.vergex_limit: number of Claw402 candidates enriched with detail data (default 10, max 10)
-  coin_source.vergex_market_type: "all" for the full Claw402 board; detail calls use each ranking item's market_type
-  coin_source.vergex_chain: "hyperliquid"
+  coin_source.source_type: "static" (fixed coin list, free; default and recommended) | "hyper_all" | "hyper_main" | "hyper_rank" (free Hyperliquid public data)
+  coin_source.static_coins: e.g. ["BTCUSDT","ETHUSDT","SOLUSDT"]
   indicators.klines.primary_timeframe: "1m"|"3m"|"5m"|"15m"|"1h"|"4h" — scalping→"5m", trend/swing→"1h"/"4h"
   indicators.klines.primary_count: number of candles (20-100)
   indicators.klines.enable_multi_timeframe: true for trend/swing analysis

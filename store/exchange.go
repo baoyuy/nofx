@@ -232,6 +232,8 @@ func getExchangeNameAndType(exchangeType string) (name string, typ string) {
 		return "LIGHTER DEX", "dex"
 	case "indodax":
 		return "Indodax", "cex"
+	case "binance_paper":
+		return "Binance Paper Trading", "cex"
 	default:
 		return exchangeType + " Exchange", "cex"
 	}
