@@ -76,7 +76,7 @@ export function recordActivity(
       ...items.filter((item) => item.id !== 'entry_policy'),
       {
         id: 'entry_policy',
-        label: L('AI500 · Long-only planning', 'AI500 · 仅做多规划'),
+        label: L('Trend board · Long-only planning', '趋势榜 · 仅做多规划'),
         detail: String(d.message),
         state: 'done' as const,
         started: now,

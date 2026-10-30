@@ -58,7 +58,7 @@ export function PlanFunding({
           </small>
         )}
         {plan.constraints.entry_policy === 'ai500_trend_long' && (
-          <small>{zh ? 'AI500 · 仅做多' : 'AI500 · Long only'}</small>
+          <small>{zh ? '趋势榜 · 仅做多' : 'Trend board · Long only'}</small>
         )}
       </div>
     )
@@ -90,8 +90,8 @@ export function PlanFunding({
       {plan.constraints.entry_policy === 'ai500_trend_long' && (
         <p>
           {zh
-            ? 'AI500 · 仅限做多入场。每种入场方式单独评估。'
-            : 'AI500 · Long entries only. Each entry method is assessed separately.'}
+            ? '趋势榜 · 仅限做多入场。每种入场方式单独评估。'
+            : 'Trend board · Long entries only. Each entry method is assessed separately.'}
         </p>
       )}
       {plan.constraints.planning_only ? (

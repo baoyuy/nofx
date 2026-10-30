@@ -50,10 +50,10 @@ it('loads read-only plugins only on opening and fetches data only on explicit cl
   )
   expect(api).not.toHaveBeenCalled()
   fireEvent.click(
-    screen.getByText('Data plugins · Funding, OI and holder analytics')
+    screen.getByText('Data plugins · Funding, OI, long/short and taker flow')
   )
   const details = screen.getByText(
-    'Data plugins · Funding, OI and holder analytics'
+    'Data plugins · Funding, OI, long/short and taker flow'
   ).parentElement! as HTMLDetailsElement
   details.open = true
   fireEvent(details, new Event('toggle'))
@@ -90,7 +90,7 @@ it('drops a pending response when the market changes', async () => {
     <PlanningDataPanel exchangeID="account" symbol="BTCUSDT" venue="binance" />
   )
   const details = screen.getByText(
-    'Data plugins · Funding, OI and holder analytics'
+    'Data plugins · Funding, OI, long/short and taker flow'
   ).parentElement! as HTMLDetailsElement
   details.open = true
   fireEvent(details, new Event('toggle'))

@@ -133,8 +133,8 @@ export function TradingPlanningPage() {
     [exchangeID, setExchangeID] = useState(''),
     [modelID, setModelID] = useState('')
   const [venue, setVenue] = useState('binance')
-  // The paid AI500 board is removed, so no market is in the AI500 group.
-  const ai500Symbols: string[] = []
+  // Markets on the free trend board (legacy "ai500" group, long-only).
+  const [ai500Symbols, setAI500Symbols] = useState<string[]>([])
   const requestedVenue = useRef('binance')
   const marketChosen = useRef(false)
   const [symbol, setSymbol] = useState('BTCUSDT'),
@@ -1058,8 +1058,8 @@ export function TradingPlanningPage() {
       <small>
         {r.state === 'draft' && outsideEntryPolicy(r.plan)
           ? isZh
-            ? '超出 AI500 仅做多策略范围 · 请生成新计划'
-            : 'Outside AI500 long-only policy · generate a new plan'
+            ? '超出趋势榜仅做多策略范围 · 请生成新计划'
+            : 'Outside trend board long-only policy · generate a new plan'
           : expired(r.plan, clock) && r.state === 'draft'
             ? isZh
               ? '已过期 · 重新规划'
@@ -1187,6 +1187,7 @@ export function TradingPlanningPage() {
           disabled={busy}
           selected={symbol}
           onSelect={openMarket}
+          onAI500Markets={setAI500Symbols}
         />
       }
       {blockingRun && (

@@ -3,6 +3,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { FrontierMarkets } from './FrontierMarkets'
 const mocks = vi.hoisted(() => ({ api: vi.fn() }))
 vi.mock('../../lib/planning', () => ({ planningAPI: mocks.api }))
+vi.mock('./PlanningTrendBoard', () => ({
+  PlanningTrendBoard: () => <div>Trend board shortcuts</div>,
+}))
 afterEach(() => {
   cleanup()
   mocks.api.mockReset()
@@ -20,7 +23,7 @@ const market = (
   price: '100',
   execution_supported: execution,
 })
-it('offers ranked public stock shortcuts without a paid AI500 board', async () => {
+it('shows the free trend board first and offers ranked public stock shortcuts', async () => {
   mocks.api.mockResolvedValue({
     venue: 'binance',
     markets: [market('BTCUSDT', 100), market('TSLAUSDT', 500, 'stocks')],
@@ -36,7 +39,8 @@ it('offers ranked public stock shortcuts without a paid AI500 board', async () =
       onSelect={select}
     />
   )
-  expect(screen.queryByRole('button', { name: 'AI500' })).toBeNull()
+  expect(screen.getByText('Trend board shortcuts')).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Trend' })).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: 'Stocks' }))
   const stock = await screen.findByRole('button', { name: /TSLAUSDT/ })
   fireEvent.click(stock)

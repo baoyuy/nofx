@@ -132,7 +132,6 @@ export async function planningAPI<T>(path: string, body?: unknown): Promise<T> {
     'reconcile',
     'close-position',
   ].includes(action)
-  const paidData = ['ai500', 'plugin-data'].includes(action)
   const controller = new AbortController()
   const timer = setTimeout(
     () => controller.abort(),
@@ -160,10 +159,6 @@ export async function planningAPI<T>(path: string, body?: unknown): Promise<T> {
       if (tradeAction)
         throw new Error(
           'Order request timed out. Its result is unconfirmed. No automatic retry was made. Check Positions & orders and verify trade status before sending another request.'
-        )
-      if (paidData)
-        throw new Error(
-          'AI/data request timed out. Payment result is unconfirmed. No automatic retry; check the original payment before making another request.'
         )
       if (action === 'check-status')
         throw new Error(

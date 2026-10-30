@@ -52,11 +52,11 @@ describe('planning request deadlines', () => {
       expect(fetch).toHaveBeenCalledTimes(1)
     }
   )
-  it('does not imply an unpaid result when a GET data purchase times out', async () => {
+  it('reports a plain timeout for free data reads without replaying them', async () => {
     stallRequest()
-    const result = expect(planningAPI('plugin-data?id=cost')).rejects.toThrow(
-      'Payment result is unconfirmed'
-    )
+    const result = expect(
+      planningAPI('plugin-data?id=oi_trend')
+    ).rejects.toThrow('Request timed out')
     await vi.advanceTimersByTimeAsync(35000)
     await result
     expect(fetch).toHaveBeenCalledTimes(1)

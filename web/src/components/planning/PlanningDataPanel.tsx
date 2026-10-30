@@ -62,6 +62,8 @@ export interface PluginResult {
   metrics: { key: string; label: string; value: string; unit: string }[]
   visual?: PluginVisual
 }
+// Free positioning plugins backed by Binance futures statistics.
+const BINANCE_ONLY_PLUGINS = ['long_short_ratio', 'taker_flow', 'oi_trend']
 const num = (n: string | number) =>
   Number(n).toLocaleString('zh-CN', { maximumFractionDigits: 4 })
 const money = (n: string | number) =>
@@ -500,15 +502,15 @@ export const PlanningDataPanel = memo(function PlanningDataPanel({
     >
       <summary>
         {zh
-          ? '数据插件 · 资金费率、未平仓量和持有人分析'
-          : 'Data plugins · Funding, OI and holder analytics'}
+          ? '数据插件 · 资金费率、持仓量、多空比和主动买卖'
+          : 'Data plugins · Funding, OI, long/short and taker flow'}
       </summary>
       {opened && (
         <>
           <p>
             {zh
-              ? '启用一个数据源后，规划助手即可使用它。这些读取无法下单。Claw402 持有人分析仅覆盖匹配的 Hyperliquid 市场。付费读取使用你的 NOFX 手续费钱包，并缓存五分钟。'
-              : 'Enable a source to make it available to the planning assistant. These reads cannot place orders. Claw402 holder analytics only cover matching Hyperliquid markets. Paid reads use your NOFX fee wallet and are cached for five minutes.'}
+              ? '启用一个数据源后，规划助手即可使用它。这些读取无法下单。全部是免费的交易所公开数据；多空比、主动买卖和持仓量趋势仅支持币安 USDT 合约。'
+              : 'Enable a source to make it available to the planning assistant. These reads cannot place orders. All sources are free public exchange data; long/short, taker flow and OI trend cover Binance USDT futures only.'}
           </p>
           <label>
             {zh ? '时间窗口' : 'Time window'}
@@ -541,8 +543,8 @@ export const PlanningDataPanel = memo(function PlanningDataPanel({
                   disabled={
                     busy ||
                     !item.enabled ||
-                    (item.id.startsWith('hyperdata_') &&
-                      venue !== 'hyperliquid')
+                    (BINANCE_ONLY_PLUGINS.includes(item.id) &&
+                      venue !== 'binance')
                   }
                   onClick={() => read(item)}
                 >
@@ -568,7 +570,7 @@ export const PlanningDataPanel = memo(function PlanningDataPanel({
                     <b>
                       {m.unit === 'fraction'
                         ? num(Number(m.value) * 100) + '%'
-                        : num(m.value) + ' ' + m.unit}
+                        : (num(m.value) + ' ' + m.unit).trim()}
                     </b>
                   </div>
                 ))}

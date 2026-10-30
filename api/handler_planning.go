@@ -41,8 +41,8 @@ type planningBrokerCache struct {
 type planningServices struct {
 	brokers     sync.Map
 	dataPlugins sync.Map
-	ai500       sync.Map
-	ai500Read   func(context.Context, string) ([]byte, error)
+	trend       planningTrendCache
+	trendRead   func(context.Context) (market.TrendBoard, error)
 	feedSlots   chan struct{}
 	source      *market.Client
 	live        *live.Controller
@@ -355,7 +355,7 @@ func (s *Server) handlePlanningCompile(c *gin.Context) {
 		planningError(c, errors.New("invalid planning market group"))
 		return
 	}
-	in.Constraints = p.planningEntryPolicy(c.GetString("user_id"), ex.ExchangeType, in.Symbol, in.MarketGroup, in.Constraints)
+	in.Constraints = p.planningEntryPolicy(ex.ExchangeType, in.Symbol, in.MarketGroup, in.Constraints)
 	snapshot, e := p.source.Snapshot(c.Request.Context(), ex.ExchangeType, in.Symbol)
 	if e != nil {
 		planningError(c, e)
@@ -468,7 +468,7 @@ func (s *Server) handlePlanningChat(c *gin.Context) {
 		planningError(c, e)
 		return
 	}
-	in.Constraints = p.planningEntryPolicy(user, in.Venue, in.Symbol, in.MarketGroup, in.Constraints)
+	in.Constraints = p.planningEntryPolicy(in.Venue, in.Symbol, in.MarketGroup, in.Constraints)
 	engine := harness.Engine{Store: ds, Market: p.source, Charts: p.source, Model: &model.NOFXAdapter{Client: client, TextTools: model.RequiresTextTools(ai.Provider, ai.CustomModelName)}, Limits: in.Constraints, Forge: forgeRegistry, Plugins: registry}
 	var preferences planning.Preferences
 	if s.store.GormDB().Where("user_id = ?", user).First(&preferences).Error == nil && preferences.Text != "" {
@@ -741,7 +741,7 @@ func (s *Server) planningDataRegistry(user string) (*plugins.Registry, error) {
 	}
 	hash := sha256.Sum256([]byte(user))
 	root := filepath.Join("data", "planning", hex.EncodeToString(hash[:16]))
-	registry, e := plugins.Open(filepath.Join(root, "plugins.json"), append(plugins.Builtins(p.source), (plugins.Hyperdata{Fetch: s.planningPaidData(user)}).Definitions()...)...)
+	registry, e := plugins.Open(filepath.Join(root, "plugins.json"), plugins.Builtins(p.source)...)
 	if e != nil {
 		return nil, e
 	}

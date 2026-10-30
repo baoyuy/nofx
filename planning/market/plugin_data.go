@@ -14,6 +14,9 @@ import (
 
 func (c *Client) PluginData(ctx context.Context, id string, q plugins.Request) (plugins.Result, error) {
 	out := plugins.Result{Venue: q.Venue, Symbol: q.Symbol, Observed: time.Now().UTC(), Mode: "public", Notice: "Read-only snapshot, not a direction forecast or fill evidence. Funding is excluded from the current risk estimate. One OI snapshot does not measure OI change."}
+	if positioningPlugin(id) {
+		return c.positioningData(ctx, id, q, out)
+	}
 	if id != "funding" && id != "open_interest" {
 		return out, errors.New("unknown public data plugin")
 	}
