@@ -26,13 +26,6 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	zh := false
 	singleSymbol, primarySymbol := e.singleSymbolInfo()
 
-	// Configs created in the Chinese-UI era carry legacy stored prompt sections
-	// and custom prompts written for a different contract; ignore them wholesale
-	// and fall back to the canonical built-in English sections.
-	legacyZhConfig := strings.EqualFold(strings.TrimSpace(e.config.Language), "zh")
-	if legacyZhConfig {
-		promptSections = store.PromptSectionsConfig{}
-	}
 
 	if e.usesVergexSignalPrompt() {
 		return e.buildVergexSystemPrompt(accountEquity, variant, lang, zh, singleSymbol, primarySymbol)
@@ -155,9 +148,6 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	//   2. It guarantees a stock-specific, US-equity-tuned briefing
 	//      regardless of when the strategy was first created.
 	customPrompt := englishOnlyPromptSection(e.config.CustomPrompt)
-	if legacyZhConfig {
-		customPrompt = ""
-	}
 	if singleSymbol && market.IsXyzDexAsset(primarySymbol) {
 		customPrompt = buildXYZStockCustomPrompt(primarySymbol)
 	}
@@ -277,12 +267,14 @@ func vergexCustomPromptSection(section string) string {
 	return trimmed
 }
 
+// englishOnlyPromptSection returns a user-edited rule section as written, in
+// any language: the strategy page lets users write their own rules. Only
+// legacy text written for the paid Claw402 board is dropped, so the built-in
+// section is used instead.
 func englishOnlyPromptSection(section string) string {
 	trimmed := strings.TrimSpace(section)
-	if trimmed == "" {
-		return ""
-	}
-	if detectLanguage(trimmed) == LangChinese {
+	lower := strings.ToLower(trimmed)
+	if trimmed == "" || strings.Contains(lower, "claw402") || strings.Contains(lower, "vergex") {
 		return ""
 	}
 	return trimmed

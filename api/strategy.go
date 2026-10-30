@@ -573,6 +573,12 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 		SafeBadRequest(c, "Invalid request parameters")
 		return
 	}
+	// The test run reads candidate coins, so it may only use the user's own pool.
+	req.Config.ClampLimits()
+	if err := s.checkStrategyCoinPool(userID, &req.Config); err != nil {
+		SafeBadRequest(c, err.Error())
+		return
+	}
 
 	if req.PromptVariant == "" {
 		req.PromptVariant = "balanced"

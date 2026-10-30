@@ -66,36 +66,35 @@ func TestBuildSystemPromptUsesVergexClaw402Prompt(t *testing.T) {
 	}
 }
 
-func TestBuildSystemPromptFallsBackToEnglishWhenConfiguredLanguageIsChinese(t *testing.T) {
+func TestBuildSystemPromptUsesUserRulesInAnyLanguage(t *testing.T) {
 	cfg := store.GetDefaultStrategyConfig("zh")
 	cfg.CoinSource.SourceType = "static"
 	cfg.CoinSource.StaticCoins = []string{"BTCUSDT", "ETHUSDT"}
 	cfg.CoinSource.VergexLimit = 0
 	cfg.CoinSource.VergexMarketType = ""
 	cfg.CoinSource.VergexChain = ""
-	cfg.PromptSections.RoleDefinition = "# You are a Chinese system prompt"
-	cfg.PromptSections.TradingFrequency = "# High-frequency trading\nTrade every minute."
-	cfg.PromptSections.EntryStandards = "# Entry\nOpen positions freely."
-	cfg.PromptSections.DecisionProcess = "# Decision\nOutput directly."
-	cfg.CustomPrompt = "Chinese preference should not enter the system prompt."
+	cfg.PromptSections.RoleDefinition = "# 角色\n你是一名只做 BTC 的趋势交易员"
+	cfg.PromptSections.TradingFrequency = "# 交易频率\n每天最多两笔"
+	cfg.PromptSections.EntryStandards = "# Entry\nFollow the Claw402 board."
+	cfg.PromptSections.DecisionProcess = ""
+	cfg.CustomPrompt = "只在 4 小时趋势向上时做多"
 
-	engine := NewStrategyEngine(&cfg)
-	prompt := engine.BuildSystemPrompt(30, "balanced")
+	prompt := NewStrategyEngine(&cfg).BuildSystemPrompt(30, "balanced")
 
-	required := []string{
+	for _, phrase := range []string{
 		"Data Dictionary & Trading Rules",
-		"You are a professional Hyperliquid USDC multi-asset trading AI",
-		"Trading Frequency Awareness",
-		"Entry Standards",
-		"Decision Process",
-	}
-	for _, phrase := range required {
+		"你是一名只做 BTC 的趋势交易员",
+		"每天最多两笔",
+		"只在 4 小时趋势向上时做多",
+		"Entry Standards (Strict)", // legacy Claw402 text replaced by the built-in section
+		"Decision Process",         // empty section falls back to the built-in one
+	} {
 		if !strings.Contains(prompt, phrase) {
-			t.Fatalf("English fallback prompt missing %q:\n%s", phrase, prompt)
+			t.Fatalf("prompt missing %q:\n%s", phrase, prompt)
 		}
 	}
-	if containsCJK(prompt) {
-		t.Fatalf("system prompt must be English-only, got CJK text:\n%s", prompt)
+	if strings.Contains(prompt, "Claw402 board") {
+		t.Fatalf("legacy paid-board rules must not reach the model:\n%s", prompt)
 	}
 }
 

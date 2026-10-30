@@ -69,4 +69,35 @@ export const strategyApi = {
     if (!result.success) throw new Error('Failed to duplicate strategy')
     return result.data!
   },
+
+  // Builds the prompts from live market data without trading. With
+  // run_real_ai the chosen model also analyzes once (uses its tokens).
+  async testRunStrategy(data: {
+    config: StrategyConfig
+    ai_model_id?: string
+    run_real_ai?: boolean
+  }): Promise<StrategyTestRun> {
+    const result = await httpClient.request<StrategyTestRun>(
+      `${API_BASE}/strategies/test-run`,
+      {
+        method: 'POST',
+        data: { prompt_variant: 'balanced', ...data },
+        timeout: 180000,
+      }
+    )
+    if (!result.success || !result.data) {
+      throw new Error(result.message || 'Strategy test run failed')
+    }
+    return result.data
+  },
+}
+
+export interface StrategyTestRun {
+  system_prompt: string
+  user_prompt: string
+  candidate_count: number
+  candidates: { symbol: string }[]
+  ai_response?: string
+  ai_error?: string
+  note?: string
 }
