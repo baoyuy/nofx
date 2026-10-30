@@ -619,7 +619,8 @@ export function FrontierSetup({
                         setCex(true)
                       }}
                     >
-                      {currentAccount?.exchange_type === choice
+                      {currentAccount?.exchange_type === choice &&
+                      !currentAccount.paper
                         ? zh
                           ? `更新 ${venueName(choice)} 连接`
                           : `Update ${venueName(choice)} connection`
@@ -673,7 +674,11 @@ export function FrontierSetup({
         <ExchangeConfigModal
           allExchanges={accounts}
           editingExchangeId={
-            !addingAccount && currentAccount?.exchange_type === choice
+            // A paper account has no API key to edit; connecting Binance
+            // here always creates a separate live account.
+            !addingAccount &&
+            !currentAccount?.paper &&
+            currentAccount?.exchange_type === choice
               ? currentAccount.id
               : null
           }

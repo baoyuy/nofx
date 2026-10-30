@@ -43,6 +43,26 @@ export function rememberAccount(venue: string, id: string) {
 }
 
 export const frontierVenues = ['binance', 'hyperliquid', 'okx', 'bitget']
+export const PAPER_EXCHANGE_TYPE = 'binance_paper'
+
+// Accounts Frontier can trade. A Binance paper account trades Binance
+// markets with simulated fills, so inside Frontier it carries the binance
+// venue and paper=true; the saved exchange_type is never changed.
+export function frontierAccounts(accounts: Exchange[]): Exchange[] {
+  return accounts
+    .filter(
+      (a) =>
+        a.enabled &&
+        !a.testnet &&
+        (frontierVenues.includes(a.exchange_type || '') ||
+          a.exchange_type === PAPER_EXCHANGE_TYPE)
+    )
+    .map((a) =>
+      a.exchange_type === PAPER_EXCHANGE_TYPE
+        ? { ...a, exchange_type: 'binance', paper: true }
+        : a
+    )
+}
 export const apiKeyVenues = ['binance', 'okx', 'bitget']
 export function venueName(venue: string) {
   return (

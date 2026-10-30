@@ -35,7 +35,7 @@ func (p *PaperTrader) checkTriggers() {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	changed := false
+	changed := p.matchExecLocked(marks)
 	for _, pos := range p.state.Positions {
 		mark, ok := marks[pos.Symbol]
 		if !ok {
@@ -104,8 +104,8 @@ func (p *PaperTrader) GetBalance() (map[string]interface{}, error) {
 	marks := p.marks()
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	upnl, used := p.usedMarginLocked(marks)
-	available := p.state.WalletBalance + upnl - used
+	upnl, _ := p.usedMarginLocked(marks)
+	available := p.availableLocked(marks)
 	if available < 0 {
 		available = 0
 	}

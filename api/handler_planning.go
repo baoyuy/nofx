@@ -81,7 +81,19 @@ func (s *Server) planningService() (*planningServices, error) {
 	return s.planning, s.planningError
 }
 func accountKey(e *store.Exchange) string {
+	if e.ExchangeType == binance.PaperExchangeType {
+		return planning.AccountIdentity(e.ExchangeType, e.ID, "")
+	}
 	return planning.AccountIdentity(e.ExchangeType, string(e.APIKey), e.HyperliquidWalletAddr)
+}
+
+// planningVenue is the market an account trades. A Binance paper account
+// trades Binance markets with simulated fills.
+func planningVenue(e *store.Exchange) string {
+	if e.ExchangeType == binance.PaperExchangeType {
+		return "binance"
+	}
+	return e.ExchangeType
 }
 
 func (s *Server) planningBroker(ctx context.Context, user, id string) (live.Broker, string, error) {
@@ -125,6 +137,12 @@ func (s *Server) planningBroker(ctx context.Context, user, id string) (live.Brok
 	}
 	key := accountKey(ex)
 	switch ex.ExchangeType {
+	case binance.PaperExchangeType:
+		t, err := binance.GetPaperTrader(ex.ID)
+		if err != nil {
+			return nil, "", err
+		}
+		return cache(live.NOFXBroker{Trader: t}, key)
 	case "binance":
 		if ex.APIKey == "" || ex.SecretKey == "" {
 			return nil, "", errors.New("Connect a Binance futures account in NOFX settings first")
@@ -163,8 +181,8 @@ func (s *Server) planningAccount(user, id string) (*store.Exchange, error) {
 	if ex.Testnet {
 		return nil, errors.New("This endpoint supports live mainnet accounts only")
 	}
-	if !frontierVenue(ex.ExchangeType) {
-		return nil, errors.New("Frontier supports Binance, Hyperliquid, OKX and Bitget perpetual accounts")
+	if !frontierVenue(planningVenue(ex)) {
+		return nil, errors.New("Frontier supports Binance (live or paper), Hyperliquid, OKX and Bitget perpetual accounts")
 	}
 	return ex, nil
 }
@@ -177,7 +195,7 @@ func (s *Server) planningWorkspace(user, id, venue string) (*store.Exchange, err
 		if e != nil {
 			return nil, e
 		}
-		if venue != "" && venue != ex.ExchangeType {
+		if venue != "" && venue != planningVenue(ex) {
 			return nil, errors.New("Selected account does not match the market venue")
 		}
 		return ex, nil
@@ -351,12 +369,12 @@ func (s *Server) handlePlanningCompile(c *gin.Context) {
 		planningError(c, e)
 		return
 	}
-	if in.MarketGroup != "" && (in.MarketGroup != "ai500" || ex.ExchangeType != "binance") {
+	if in.MarketGroup != "" && (in.MarketGroup != "ai500" || planningVenue(ex) != "binance") {
 		planningError(c, errors.New("invalid planning market group"))
 		return
 	}
-	in.Constraints = p.planningEntryPolicy(ex.ExchangeType, in.Symbol, in.MarketGroup, in.Constraints)
-	snapshot, e := p.source.Snapshot(c.Request.Context(), ex.ExchangeType, in.Symbol)
+	in.Constraints = p.planningEntryPolicy(planningVenue(ex), in.Symbol, in.MarketGroup, in.Constraints)
+	snapshot, e := p.source.Snapshot(c.Request.Context(), planningVenue(ex), in.Symbol)
 	if e != nil {
 		planningError(c, e)
 		return
@@ -376,7 +394,7 @@ func (s *Server) handlePlanningCompile(c *gin.Context) {
 		planningError(c, e)
 		return
 	}
-	ds := planning.DraftStore{DB: s.store.GormDB(), UserID: c.GetString("user_id"), ExchangeID: ex.ID, Venue: ex.ExchangeType}
+	ds := planning.DraftStore{DB: s.store.GormDB(), UserID: c.GetString("user_id"), ExchangeID: ex.ID, Venue: planningVenue(ex)}
 	if e = ds.Add([]core.Plan{draft}); e != nil {
 		planningError(c, e)
 		return
@@ -402,7 +420,7 @@ func (s *Server) handlePlanningChat(c *gin.Context) {
 		planningError(c, e)
 		return
 	}
-	in.Venue = ex.ExchangeType
+	in.Venue = planningVenue(ex)
 	if e = in.Validate(); e != nil {
 		planningError(c, e)
 		return
@@ -444,7 +462,7 @@ func (s *Server) handlePlanningChat(c *gin.Context) {
 		return
 	}
 	defer p.turns.Delete(user)
-	ds := &planning.DraftStore{DB: s.store.GormDB(), UserID: user, ExchangeID: ex.ID, Venue: ex.ExchangeType}
+	ds := &planning.DraftStore{DB: s.store.GormDB(), UserID: user, ExchangeID: ex.ID, Venue: planningVenue(ex)}
 	if in.PlanID != "" {
 		var selected planning.Draft
 		if e = s.store.GormDB().Where("user_id = ? AND id = ? AND exchange_id = ? AND status = ?", user, in.PlanID, ex.ID, "draft").First(&selected).Error; e != nil {
@@ -787,7 +805,7 @@ func (s *Server) handlePlanningPluginData(c *gin.Context) {
 		planningError(c, e)
 		return
 	}
-	result, e := registry.Read(c.Request.Context(), c.Query("plugin"), plugins.Request{Venue: ex.ExchangeType, Symbol: c.Query("symbol"), Window: window})
+	result, e := registry.Read(c.Request.Context(), c.Query("plugin"), plugins.Request{Venue: planningVenue(ex), Symbol: c.Query("symbol"), Window: window})
 	if e != nil {
 		planningError(c, e)
 		return

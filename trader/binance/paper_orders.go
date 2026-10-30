@@ -39,6 +39,31 @@ func (p *PaperTrader) usedMarginLocked(marks map[string]float64) (float64, float
 	return upnl, margin
 }
 
+// availableLocked is free margin: wallet + uPnL - position margin - margin
+// reserved by resting entry orders. Caller holds p.mu.
+func (p *PaperTrader) availableLocked(marks map[string]float64) float64 {
+	upnl, used := p.usedMarginLocked(marks)
+	return p.state.WalletBalance + upnl - used - p.reservedMarginLocked()
+}
+
+// addPositionLocked opens or adds to a position at fill and charges fee.
+// Caller holds p.mu and has checked margin.
+func (p *PaperTrader) addPositionLocked(symbol, side string, qty, fill float64, leverage int, fee float64) *paperPosition {
+	key := paperKey(symbol, side)
+	pos, ok := p.state.Positions[key]
+	if !ok {
+		pos = &paperPosition{Symbol: symbol, Side: side, OpenedAt: time.Now().UTC()}
+		p.state.Positions[key] = pos
+	}
+	// Weighted average entry when adding to an existing position.
+	pos.EntryPrice = (pos.EntryPrice*pos.Quantity + fill*qty) / (pos.Quantity + qty)
+	pos.Quantity += qty
+	pos.Leverage = leverage
+	p.state.Leverage[symbol] = leverage
+	p.state.WalletBalance -= fee
+	return pos
+}
+
 func (p *PaperTrader) open(symbol, side string, quantity float64, leverage int) (map[string]interface{}, error) {
 	if leverage <= 0 {
 		leverage = 1
@@ -65,26 +90,13 @@ func (p *PaperTrader) open(symbol, side string, quantity float64, leverage int) 
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	upnl, used := p.usedMarginLocked(marks)
-	available := p.state.WalletBalance + upnl - used
-	if need := notional/float64(leverage) + fee; need > available {
+	if need, available := notional/float64(leverage)+fee, p.availableLocked(marks); need > available {
 		return nil, fmt.Errorf("insufficient virtual balance: need %.2f USDT margin, available %.2f USDT", need, available)
 	}
 
-	key := paperKey(symbol, side)
-	pos, ok := p.state.Positions[key]
-	if !ok {
-		pos = &paperPosition{Symbol: symbol, Side: side, OpenedAt: time.Now().UTC()}
-		p.state.Positions[key] = pos
-	}
-	// Weighted average entry when adding to an existing position.
-	pos.EntryPrice = (pos.EntryPrice*pos.Quantity + fill*qty) / (pos.Quantity + qty)
-	pos.Quantity += qty
-	pos.Leverage = leverage
+	pos := p.addPositionLocked(symbol, side, qty, fill, leverage, fee)
 	// Real OpenLong/OpenShort cancel existing protective orders first.
 	pos.StopLoss, pos.TakeProfit = 0, 0
-	p.state.Leverage[symbol] = leverage
-	p.state.WalletBalance -= fee
 
 	orderSide := "BUY"
 	if side == "short" {

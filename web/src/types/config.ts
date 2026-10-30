@@ -32,6 +32,8 @@ export interface Exchange {
   secretKey?: string
   passphrase?: string // OKX specific
   testnet?: boolean
+  // Frontier only: a Binance paper account shown under the binance venue
+  paper?: boolean
   // Hyperliquid specific
   hyperliquidWalletAddr?: string
   hyperliquidUnifiedAccount?: boolean

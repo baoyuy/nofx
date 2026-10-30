@@ -71,6 +71,7 @@ type paperState struct {
 	Orders         []paperOrder              `json:"orders"`
 	Closed         []types.ClosedPnLRecord   `json:"closed"`
 	PendingCloses  []PaperCloseEvent         `json:"pending_closes"`
+	ExecOrders     []*paperExecOrder         `json:"exec_orders,omitempty"` // Frontier orders
 	NextOrderID    int64                     `json:"next_order_id"`
 	CreatedAt      time.Time                 `json:"created_at"`
 }
@@ -179,6 +180,7 @@ func (p *PaperTrader) saveLocked() error {
 	if len(p.state.Closed) > paperMaxHistory {
 		p.state.Closed = p.state.Closed[len(p.state.Closed)-paperMaxHistory:]
 	}
+	p.trimExecLocked()
 	data, err := json.MarshalIndent(&p.state, "", "  ")
 	if err != nil {
 		return err
@@ -210,12 +212,18 @@ func (p *PaperTrader) price(symbol string, fresh bool) (float64, error) {
 	return v, nil
 }
 
-// marks fetches prices for every symbol with an open position.
+// marks fetches prices for every symbol with an open position or a resting
+// Frontier order.
 func (p *PaperTrader) marks() map[string]float64 {
 	p.mu.Lock()
 	symbols := map[string]bool{}
 	for _, pos := range p.state.Positions {
 		symbols[pos.Symbol] = true
+	}
+	for _, o := range p.state.ExecOrders {
+		if o.open() {
+			symbols[o.Order.Symbol] = true
+		}
 	}
 	p.mu.Unlock()
 	out := make(map[string]float64, len(symbols))

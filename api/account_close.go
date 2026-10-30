@@ -85,6 +85,9 @@ func (s *Server) handlePlanningAccountClose(c *gin.Context) {
 	defer cancel()
 	user := c.GetString("user_id")
 	order, err := s.closeFuturesAccount(ctx, user, in, func(ex *store.Exchange) (accountCloser, error) {
+		if ex.ExchangeType == binance.PaperExchangeType {
+			return binance.GetPaperTrader(ex.ID)
+		}
 		if ex.ExchangeType == "okx" {
 			return okx.NewAccountTrader(string(ex.APIKey), string(ex.SecretKey), string(ex.Passphrase)), nil
 		}
@@ -133,7 +136,7 @@ func (s *Server) closeFuturesAccount(ctx context.Context, user string, in accoun
 	if err != nil {
 		return out, err
 	}
-	if in.ExchangeID == "" || (ex.ExchangeType != "binance" && ex.ExchangeType != "okx" && ex.ExchangeType != "bitget") || ex.Testnet {
+	if in.ExchangeID == "" || (ex.ExchangeType != "binance" && ex.ExchangeType != binance.PaperExchangeType && ex.ExchangeType != "okx" && ex.ExchangeType != "bitget") || ex.Testnet {
 		return out, errors.New("Select a Binance, OKX or Bitget mainnet USDT futures account")
 	}
 	key := accountKey(ex)

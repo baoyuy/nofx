@@ -1,4 +1,4 @@
-import { frontierVenues, defaultMarket } from '../lib/frontierAccounts'
+import { frontierAccounts, defaultMarket } from '../lib/frontierAccounts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -325,12 +325,7 @@ export function TradingPlanningPage() {
     Promise.all([api.getExchangeConfigs(), api.getModelConfigs()])
       .then(([ex, ai]) => {
         if (!active.current) return
-        const supported = ex.filter(
-          (a) =>
-            a.enabled &&
-            !a.testnet &&
-            frontierVenues.includes(a.exchange_type || '')
-        )
+        const supported = frontierAccounts(ex)
         const enabled = ai.filter((m) => m.enabled && m.has_api_key)
         setAccounts(supported)
         setModels(enabled)
@@ -442,12 +437,7 @@ export function TradingPlanningPage() {
       api.getModelConfigs(),
     ])
     if (!active.current) return
-    const supported = ex.filter(
-      (a) =>
-        a.enabled &&
-        !a.testnet &&
-        frontierVenues.includes(a.exchange_type || '')
-    )
+    const supported = frontierAccounts(ex)
     const enabled = ai.filter((m) => m.enabled && m.has_api_key)
     setAccounts(supported)
     setModels(enabled)
@@ -1137,7 +1127,8 @@ export function TradingPlanningPage() {
               .filter((a) => a.exchange_type === venue)
               .map((a) => (
                 <option key={a.id} value={a.id}>
-                  {accountLabel(a, accounts)} · {a.exchange_type}
+                  {accountLabel(a, accounts)} ·{' '}
+                  {a.paper ? (isZh ? '模拟盘' : 'Paper') : a.exchange_type}
                 </option>
               ))}
             <option value="__add_account__">{isZh ? '+ 添加另一个账户…' : '+ Add another account…'}</option>
@@ -1165,7 +1156,14 @@ export function TradingPlanningPage() {
           </form>
         </div>
         <span className="planning-live">
-          <i /> {isZh ? '实盘交易 · 由你掌控' : 'Live trading · You’re in control'}
+          <i />{' '}
+          {accounts.find((a) => a.id === exchangeID)?.paper
+            ? isZh
+              ? '模拟盘交易 · 不动真钱'
+              : 'Paper trading · No real funds'
+            : isZh
+              ? '实盘交易 · 由你掌控'
+              : 'Live trading · You’re in control'}
         </span>
       </div>
       <FrontierSetup
@@ -1817,8 +1815,14 @@ export function TradingPlanningPage() {
                 <b>{current.plan.idea.name}</b>
                 <p>
                   {planStates[run?.state || current.state] || current.state} ·{' '}
-                  {isZh ? '实盘交易' : 'Live trading'} ·{' '}
-                  {accounts.find((a) => a.id === data.accounts[selected])?.name}
+                  {accounts.find((a) => a.id === data.accounts[selected])?.paper
+                    ? isZh
+                      ? '模拟盘交易'
+                      : 'Paper trading'
+                    : isZh
+                      ? '实盘交易'
+                      : 'Live trading'}{' '}
+                  · {accounts.find((a) => a.id === data.accounts[selected])?.name}
                 </p>
                 {run?.error && <p className="stop-text">{run.error}</p>}
                 {current.state === 'draft' ? (
