@@ -3,8 +3,8 @@ import type { SignalRankItem } from '../../lib/api/data'
 import { useLanguage } from '../../contexts/LanguageContext'
 
 /**
- * SignalMatrix renders the Vergex (Claw402) direction board as a high-density
- * heatmap grid — one cell per symbol, colored by directional bias (green =
+ * SignalMatrix renders the direction board (built from free Binance trend,
+ * momentum, taker flow and open interest) as a high-density heatmap grid — one cell per symbol, colored by directional bias (green =
  * bullish, red = bearish, muted = neutral) with intensity scaled by the signal
  * score. Rank 1 is the strongest signal. Cream-themed Bloomberg/terminal feel.
  *
@@ -208,7 +208,7 @@ function Head() {
       <span className="tm-px" style={{ fontSize: 11 }}>
         {isZh ? '信号矩阵' : 'Signal matrix'}
       </span>
-      <span className="tm-sc">{isZh ? '信号矩阵 · vergex' : 'Signal matrix · vergex'}</span>
+      <span className="tm-sc">{isZh ? '信号矩阵 · 币安' : 'Signal matrix · Binance'}</span>
     </div>
   )
 }

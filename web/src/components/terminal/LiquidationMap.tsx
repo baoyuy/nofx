@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { api } from '../../lib/api'
-import type { VergexHeatmapBin } from '../../lib/api/data'
+import type { VergexHeatmapBin, VergexHeatmapData } from '../../lib/api/data'
 import { demoSeedPrice, demoTick } from '../../lib/demo/demoUniverse'
 import { formatRequestError } from '../../lib/requestErrors'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -9,13 +9,13 @@ import { useLanguage } from '../../contexts/LanguageContext'
 const lmRnd = (a: number, b: number) => a + Math.random() * (b - a)
 
 /**
- * LiquidationMap renders the vergex (claw402) cost / liquidation heatmap as a
- * vertical price ladder — position-cost concentration plus liquidation fuel by
- * price level. Long metrics diverge right, short metrics diverge left from the
- * mark price. Cream-themed adaptation of a Bloomberg-style liquidation map.
+ * LiquidationMap renders the cost / liquidation map as a vertical price
+ * ladder — position-cost concentration plus liquidation fuel by price level.
+ * Long metrics diverge right, short metrics diverge left from the mark price.
+ * Cream-themed adaptation of a Bloomberg-style liquidation map.
  *
- * Real paid data only (hip3_perp synthetic markets). Polled at 5 min to spare
- * the claw402 wallet.
+ * Binance does not publish positions, so the map is estimated from 7 days of
+ * candles (taker buys/sells) and open interest. Crypto perpetuals only.
  */
 
 const C_LONG_COST = 'var(--tm-up)' // forest green
@@ -53,16 +53,14 @@ interface LiquidationMapProps {
   demo?: boolean
 }
 
-export function LiquidationMap({ symbol, marketType = 'hip3_perp', height = 460, demo = false }: LiquidationMapProps) {
+export function LiquidationMap({ symbol, marketType = 'core_perp', height = 460, demo = false }: LiquidationMapProps) {
   const { language } = useLanguage()
   const isZh = language === 'zh'
-  // Use the selected market's metadata. Speculative alternate-market requests
-  // can spend the wallet twice and return an unrelated instrument.
-  const fetcher = (mt: string) =>
-    api.getVergexCostLiquidationHeatmap({ marketType: mt, symbol, chain: 'mainnet', liqBand: '15' })
-  const opts = { refreshInterval: 300000, revalidateOnFocus: false, revalidateOnReconnect: false, shouldRetryOnError: false, keepPreviousData: false }
+  // xyz: synthetic markets are not on Binance; the backend reports them unsupported.
+  const requestSymbol = marketType === 'hip3_perp' ? `xyz:${symbol}` : symbol
+  const opts = { refreshInterval: 120000, revalidateOnFocus: false, revalidateOnReconnect: false, shouldRetryOnError: false, keepPreviousData: false }
 
-  const primary = useSWR(symbol && !demo ? ['heatmap', marketType, symbol] : null, () => fetcher(marketType), opts)
+  const primary = useSWR(symbol && !demo ? ['heatmap', requestSymbol] : null, () => api.getMarketHeatmap(requestSymbol, true), opts)
 
   // showcase mode: drive a slow ticker so the synthetic ladder gently breathes
   const [demoFrame, setDemoFrame] = useState(0)
@@ -126,7 +124,7 @@ export function LiquidationMap({ symbol, marketType = 'hip3_perp', height = 460,
   const markRef = useRef<HTMLDivElement>(null)
 
   const view = useMemo(() => {
-    const d = data?.data
+    const d: VergexHeatmapData | undefined = data?.data
     // keepPreviousData can leave a stale heatmap on screen when the selected
     // symbol has no hip3 market (e.g. a crypto major) — detect the mismatch and
     // treat it as no-data so the panel honestly reflects the requested symbol.
@@ -158,7 +156,8 @@ export function LiquidationMap({ symbol, marketType = 'hip3_perp', height = 460,
       }),
       { lc: 0, sc: 0, ll: 0, sl: 0 },
     )
-    return { rows, maxSide, mark: stale ? 0 : d?.markPrice ?? 0, costAddrs: stale ? 0 : d?.costAddrs ?? 0, liqAddrs: stale ? 0 : d?.liqAddrs ?? 0, totals, dispSymbol: stale ? symbol : d?.market?.symbol || symbol }
+    const unsupported = !stale && d?.cost?.state === 'unsupported'
+    return { rows, maxSide, mark: stale ? 0 : d?.markPrice ?? 0, costAddrs: stale ? 0 : d?.costAddrs ?? 0, liqAddrs: stale ? 0 : d?.liqAddrs ?? 0, estimated: !stale && !!d?.estimated, scaledToOI: !stale && !!d?.scaledToOI, unsupported, totals, dispSymbol: stale ? symbol : d?.market?.symbol || symbol }
   }, [data, symbol])
 
   const markRowIdx = useMemo(() => {
@@ -205,9 +204,13 @@ export function LiquidationMap({ symbol, marketType = 'hip3_perp', height = 460,
               ? '○ 不可用'
               : '○ unavailable'
             : view.rows.length
-              ? isZh
-                ? '● 实时'
-                : '● live'
+              ? view.estimated
+                ? isZh
+                  ? '● 估算'
+                  : '● estimate'
+                : isZh
+                  ? '● 实时'
+                  : '● live'
               : isLoading
                 ? isZh
                   ? '○ 同步中'
@@ -241,9 +244,9 @@ export function LiquidationMap({ symbol, marketType = 'hip3_perp', height = 460,
         ) : (
           <span className="tm-sc">
             {isZh ? (
-              <>标记价 <b style={{ color: 'var(--tm-red)' }}>{view.mark ? fmtPx(view.mark) : '—'}</b> · {view.costAddrs.toLocaleString()} 个持仓 / {view.liqAddrs.toLocaleString()} 个强平价位</>
+              <>标记价 <b style={{ color: 'var(--tm-red)' }}>{view.mark ? fmtPx(view.mark) : '—'}</b> · {view.estimated ? `币安 7 天主动买卖估算${view.scaledToOI ? '，按当前持仓量缩放' : ''}` : `${view.costAddrs.toLocaleString()} 个持仓 / ${view.liqAddrs.toLocaleString()} 个强平价位`}</>
             ) : (
-              <>mark <b style={{ color: 'var(--tm-red)' }}>{view.mark ? fmtPx(view.mark) : '—'}</b> · {view.costAddrs.toLocaleString()} positions / {view.liqAddrs.toLocaleString()} liq levels</>
+              <>mark <b style={{ color: 'var(--tm-red)' }}>{view.mark ? fmtPx(view.mark) : '—'}</b> · {view.estimated ? `estimated from 7d Binance taker flow${view.scaledToOI ? ', scaled to open interest' : ''}` : `${view.costAddrs.toLocaleString()} positions / ${view.liqAddrs.toLocaleString()} liq levels`}</>
             )}
           </span>
         )}
@@ -252,8 +255,8 @@ export function LiquidationMap({ symbol, marketType = 'hip3_perp', height = 460,
       {error ? (
         <div role="alert" className="tm-error" style={{ padding: '16px 0' }}>
           {isZh
-            ? `${view.dispSymbol} 的热力图不可用。${formatRequestError(error)} 不会自动付费重试。`
-            : `Heatmap unavailable for ${view.dispSymbol}. ${formatRequestError(error)} No automatic paid retry.`}
+            ? `${view.dispSymbol} 的热力图不可用。${formatRequestError(error)}`
+            : `Heatmap unavailable for ${view.dispSymbol}. ${formatRequestError(error)}`}
         </div>
       ) : !view.rows.length ? (
         <div className="tm-sc" style={{ padding: '16px 0' }}>
@@ -261,6 +264,10 @@ export function LiquidationMap({ symbol, marketType = 'hip3_perp', height = 460,
             ? isZh
               ? '正在加载成本/强平图…'
               : 'Loading cost/liquidation map…'
+            : view.unsupported
+              ? isZh
+                ? `${view.dispSymbol} 不是币安 U 本位合约，没有成本/强平图。`
+                : `${view.dispSymbol} is not a Binance USDT-M perpetual; no cost/liquidation map.`
             : isZh
               ? '所选范围内暂无热力图数据。'
               : 'No heatmap data in the selected range.'}

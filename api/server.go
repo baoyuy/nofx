@@ -207,6 +207,7 @@ func (s *Server) setupRoutes() {
 		s.registerPlanning(api, protected)
 		s.registerMarketRoutes(api, protected)
 		s.registerCoinPoolRoutes(protected)
+		s.registerMarketBoardRoutes(protected)
 		// UI-only secret export: do not register in the AI route/tool catalog.
 		protected.POST("/wallet/export", s.handleWalletExport)
 		{

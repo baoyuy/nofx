@@ -47,11 +47,25 @@ function KlineChartSession({ symbol, height = 360, fill = false, demo = false }:
   const base = baseSymbol(symbol || '')
   const coin = /^xyz:/i.test(symbol) ? `xyz:${base}` : base
 
-  // history seed (resynced occasionally; the WS carries the live bar)
+  // history seed (resynced occasionally; the WS carries the live bar). Crypto
+  // coins Hyperliquid does not list fall back to Binance candles, polled
+  // instead of streamed.
+  const [binance, setBinance] = useState(false)
   const { data: seed, isLoading, error } = useSWR(
     coin && !demo ? ['kline', coin, INTERVAL] : null,
-    () => api.getKlines(coin, INTERVAL, 'hyperliquid', MAX_BARS, true),
-    { refreshInterval: 60000, revalidateOnFocus: false, shouldRetryOnError: false, keepPreviousData: false },
+    async () => {
+      try {
+        const rows = await api.getKlines(coin, INTERVAL, 'hyperliquid', MAX_BARS, true)
+        setBinance(false)
+        return rows
+      } catch (err) {
+        if (/^xyz:/i.test(coin)) throw err
+        const rows = await api.getKlines(`${base}USDT`, INTERVAL, 'binance', MAX_BARS, true)
+        setBinance(true)
+        return rows
+      }
+    },
+    { refreshInterval: binance ? 15000 : 60000, revalidateOnFocus: false, shouldRetryOnError: false, keepPreviousData: false },
   )
 
   // synthetic showcase candles — a fast, gently rising series
@@ -126,7 +140,7 @@ function KlineChartSession({ symbol, height = 360, fill = false, demo = false }:
   const [wsLive, setWsLive] = useState(false)
   const pending = useRef<Kline | null>(null)
   useEffect(() => {
-    if (!coin || demo) return
+    if (!coin || demo || binance) return
     setLiveBar(null)
     setWsLive(false)
     pending.current = null
@@ -179,7 +193,7 @@ function KlineChartSession({ symbol, height = 360, fill = false, demo = false }:
       }
       ws?.close()
     }
-  }, [coin, demo])
+  }, [coin, demo, binance])
 
   // merge the live bar into the seeded history
   const realCandles = useMemo(() => {
@@ -203,7 +217,7 @@ function KlineChartSession({ symbol, height = 360, fill = false, demo = false }:
     <div style={{ fontFamily: 'var(--tm-mono)', ...(fill ? { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 } : {}) }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
         <span className="tm-px" style={{ fontSize: 11 }}>{base || (isZh ? '市场' : 'MARKET')}</span>
-        <span className="tm-sc">{INTERVAL} · {isZh ? '实时K线' : 'Live candles'}</span>
+        <span className="tm-sc">{INTERVAL} · {binance ? (isZh ? '币安K线 · 15 秒刷新' : 'Binance candles · 15s refresh') : isZh ? '实时K线' : 'Live candles'}</span>
         <span className="tm-sc" style={{ marginLeft: 'auto', color: live ? 'var(--tm-up)' : 'var(--tm-muted)' }}>
           {error && !demo
             ? isZh

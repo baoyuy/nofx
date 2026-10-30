@@ -14,7 +14,6 @@ import type {
 import { OrchestrationTopology } from './OrchestrationTopology'
 import { OrderBook } from './OrderBook'
 import { LiquidationMap } from './LiquidationMap'
-import { WinrateMatrix } from './WinrateMatrix'
 import { KlineChart } from './KlineChart'
 import { ExecutionLog } from './ExecutionLog'
 import { formatRequestError } from '../../lib/requestErrors'
@@ -23,14 +22,6 @@ import { RiskRadar } from './RiskRadar'
 import { EdgeProfile } from './EdgeProfile'
 import { useDemoEngine } from '../../lib/demo/useDemoEngine'
 import { useLanguage } from '../../contexts/LanguageContext'
-
-// crypto majors trade on the Hyperliquid main dex (no hip3 cost/liq heatmap);
-// everything else in the universe is an xyz-dex synthetic market that does.
-const CRYPTO_MAJORS = new Set([
-  'BTC', 'ETH', 'SOL', 'HYPE', 'BNB', 'XRP', 'DOGE', 'AVAX', 'LINK', 'SUI', 'APT', 'ARB', 'OP',
-  'TON', 'ADA', 'TRX', 'LTC', 'BCH', 'NEAR', 'INJ', 'SEI', 'TIA', 'PEPE', 'WIF', 'BONK', 'AAVE',
-  'UNI', 'ENA', 'ONDO', 'JUP', 'PENDLE', 'KPEPE', 'ZEC', 'XPL', 'LIT',
-])
 
 // fixed height for the three row-1 panels so the row stays balanced at any width
 const ROW1_H = 500
@@ -198,16 +189,15 @@ export function TerminalDashboard({
   )
   const { data: realFlow } = useSWR(
     traderId ? ['flow-markets', traderId] : null,
-    () => api.getFlowMarkets(selectedTrader?.ai_model, 'mainnet', '1h', 50, true),
-    // paid x402 endpoint — poll slowly (5m) to conserve claw402 funds; the
-    // topology beam animation is client-side and stays fast regardless
-    { refreshInterval: 300000, shouldRetryOnError: false }
+    () => api.getFlowMarkets('1h', 30, true),
+    // free Binance data, cached server-side for a minute; the topology beam
+    // animation is client-side and stays fast regardless
+    { refreshInterval: 120000, shouldRetryOnError: false }
   )
   const { data: realSignalRank } = useSWR(
     traderId ? ['signal-rank', traderId] : null,
     () => api.getDirectionChangeLeaderboard(30, true),
-    // paid x402 endpoint — poll slowly (5m) to conserve claw402 funds
-    { refreshInterval: 300000, shouldRetryOnError: false }
+    { refreshInterval: 120000, shouldRetryOnError: false }
   )
 
   // Demo / showcase mode for product walkthroughs. Toggle with Shift+D (or the
@@ -243,27 +233,12 @@ export function TerminalDashboard({
   const candidateCoins = latest?.candidate_coins ?? []
   const flowItems = flow?.data?.inflow ?? []
 
-  // Both the cost/liq map and the order book follow this symbol so they stay in
-  // sync. The heatmap only covers hip3_perp synthetic markets, so we pick a
-  // synthetic (non-crypto) the bot trades — preferring the BUSIEST one (most
-  // 1h trades, per flow-markets) so the shared order book ticks as fast as
-  // possible. Falls back to any held synthetic, then SP500.
+  // When the bot holds nothing, the price panels show the busiest market by
+  // 1h trades (per the net-flow board), then BTC.
   const heatmapSymbol = useMemo(() => {
-    const held = new Set(
-      [...(positions ?? []).map((p) => p.symbol), ...candidateCoins]
-        .map(baseLabel)
-        .filter((b) => b && !CRYPTO_MAJORS.has(b)),
-    )
-    const synthByActivity = flowItems
-      .map((i) => ({ b: baseLabel(i.symbol), trades: i.trades || 0 }))
-      .filter((x) => x.b && !CRYPTO_MAJORS.has(x.b))
-      .sort((a, b) => b.trades - a.trades)
-    const busiestHeld = synthByActivity.find((x) => held.has(x.b))
-    if (busiestHeld) return busiestHeld.b
-    if (held.size) return [...held][0]
-    if (synthByActivity.length) return synthByActivity[0].b
-    return 'SP500'
-  }, [positions, candidateCoins, flowItems])
+    const busiest = [...flowItems].sort((a, b) => (b.trades || 0) - (a.trades || 0))[0]
+    return busiest ? baseLabel(busiest.symbol) : 'BTC'
+  }, [flowItems])
 
   // user can click a signal-matrix cell to drive both the cost/liq map and the
   // order book. Default to the instrument the bot is ACTUALLY holding (first
@@ -272,19 +247,16 @@ export function TerminalDashboard({
   // holds nothing.
   const [selectedSym, setSelectedSym] = useState<string | null>(null)
   const defaultSym = useMemo(() => {
-    // the bot's actual first open position (else this cycle's first candidate);
-    // every market — synthetic or crypto — now has a cost/liq heatmap, so no
-    // need to prefer one type. Falls back to the busiest synthetic if flat.
+    // the bot's actual first open position (else this cycle's first candidate)
     const heldBases = [...(positions ?? []).map((p) => p.symbol), ...candidateCoins].map(baseLabel).filter(Boolean)
-    return heldBases[0] || heatmapSymbol || 'SP500'
+    return heldBases[0] || heatmapSymbol
   }, [positions, candidateCoins, heatmapSymbol])
   const activeSym = baseLabel(selectedSym || defaultSym)
   const activeSignal = signalRank?.items?.find((item) => baseLabel(item.symbol) === activeSym)
   const sourceSymbol = activeSignal?.symbol || [...(positions ?? []).map((p) => p.symbol), ...candidateCoins].find((s) => baseLabel(s) === activeSym) || selectedSym || defaultSym
-  const activeMarketType = activeSignal?.market_type === 'core_perp' || activeSignal?.market_type === 'hip3_perp'
-    ? activeSignal.market_type
-    : /^xyz:/i.test(sourceSymbol) ? 'hip3_perp'
-      : /USDT$/i.test(sourceSymbol) || CRYPTO_MAJORS.has(activeSym) ? 'core_perp' : 'hip3_perp'
+  // xyz: symbols are Hyperliquid synthetic (stock/index) markets; everything
+  // else is a crypto perpetual.
+  const activeMarketType = /^xyz:/i.test(sourceSymbol) ? 'hip3_perp' : 'core_perp'
   const activeRequestSymbol = activeMarketType === 'hip3_perp' ? `xyz:${activeSym}` : activeSym
 
   const pnl = account?.total_pnl ?? 0
@@ -519,9 +491,7 @@ export function TerminalDashboard({
               balanced; the K-line flexes to fill any remaining space ── */}
         <div className="tm-grid-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,0.95fr) minmax(0,1.05fr)' }}>
           <div style={{ ...sc, borderRight: cellBorder, height: ROW1_H, overflow: 'hidden' }}>
-            {/* cost/liq heatmap works for both synthetic (hip3_perp) and crypto
-                (perp) markets — pass the likely marketType; the component falls
-                back to the other one if the guess is wrong */}
+            {/* estimated from Binance data, so crypto perpetuals only */}
             <LiquidationMap
               symbol={activeSym}
               demo={on}
@@ -540,18 +510,6 @@ export function TerminalDashboard({
               <KlineChart symbol={activeRequestSymbol} fill demo={on} />
             </div>
           </div>
-        </div>
-        <div className="tm-rule" />
-
-        {/* ── win-rate matrix (holder cost × win-rate grid, claw402 paid data).
-              Full-width panel under row 1; long/short grids side by side with
-              click-to-drill address lists. ── */}
-        <div style={sc}>
-          <WinrateMatrix
-            symbol={activeSym}
-            demo={on}
-            marketType={activeMarketType}
-          />
         </div>
         <div className="tm-rule" />
 
@@ -742,12 +700,12 @@ export function TerminalDashboard({
         </div>
         <div className="tm-rule" />
 
-        {/* market net inflow (Vergex) · by-symbol history · edge profile — footer */}
+        {/* market net inflow (Binance taker flow) · by-symbol history · edge profile — footer */}
         <div className="tm-grid-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,0.9fr) minmax(0,0.9fr)' }}>
           <div style={{ ...sc, borderRight: cellBorder }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
               <span className="tm-px" style={{ fontSize: 12 }}>{isZh ? '市场净流入' : 'Market net inflow'}</span>
-              <span className="tm-sc">{isZh ? `市场净流入 · ${flow?.data?.window || '1h'} · Vergex` : `Market net inflow · ${flow?.data?.window || '1h'} · Vergex`}</span>
+              <span className="tm-sc">{isZh ? `主动买入 − 主动卖出 · ${flow?.data?.window || '1h'} · 币安` : `Taker buys − taker sells · ${flow?.data?.window || '1h'} · Binance`}</span>
               <span className="tm-sc" style={{ marginLeft: 'auto' }}>{isZh ? `${flowItems.length} 个市场` : `${flowItems.length} markets`}</span>
             </div>
             <FlowMarkets items={flowItems} window={flow?.data?.window} />

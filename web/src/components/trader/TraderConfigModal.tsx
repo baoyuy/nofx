@@ -83,6 +83,40 @@ interface TraderConfigModalProps {
   onSave?: (data: CreateTraderRequest) => Promise<void>
 }
 
+// coinSourceLabel names a strategy's coin source for the summary card.
+function coinSourceLabel(
+  source: { source_type: string; static_coins?: string[] },
+  language: string
+): string {
+  const zh = language === 'zh'
+  switch (source.source_type) {
+    case 'static': {
+      const coins = (source.static_coins || []).join(', ')
+      return zh ? `固定币种：${coins}` : `Fixed coins: ${coins}`
+    }
+    case 'coin_pool':
+      return zh ? '我的币池' : 'My coin pool'
+    case 'vergex_signal':
+      return zh
+        ? 'Vergex 信号榜（付费，已停用）'
+        : 'Vergex signal board (paid, retired)'
+    case 'hyper_rank':
+      return zh ? 'Hyperliquid 排行' : 'Hyperliquid ranking'
+    case 'hyper_all':
+      return zh ? 'Hyperliquid 全部市场' : 'Hyperliquid all markets'
+    case 'hyper_main':
+      return zh ? 'Hyperliquid 主要市场' : 'Hyperliquid main markets'
+    case 'ai500':
+      return 'AI500'
+    case 'oi_top':
+      return 'OI Top'
+    case 'oi_low':
+      return 'OI Low'
+    default:
+      return '-'
+  }
+}
+
 export function TraderConfigModal({
   isOpen,
   onClose,
@@ -401,40 +435,7 @@ export function TraderConfigModal({
                         <div className="grid grid-cols-2 gap-2 text-xs text-nofx-text-muted">
                           <div>
                             {t('coinSource', language)}:{' '}
-                            {aiConfig.coin_source.source_type === 'static'
-                              ? language === 'zh'
-                                ? `固定币种：${(aiConfig.coin_source.static_coins || []).join(', ')}`
-                                : `Fixed coins: ${(aiConfig.coin_source.static_coins || []).join(', ')}`
-                              : aiConfig.coin_source.source_type ===
-                                  'vergex_signal'
-                                ? language === 'zh'
-                                  ? 'Vergex 信号榜'
-                                  : 'Vergex signal board'
-                                : aiConfig.coin_source.source_type ===
-                                    'hyper_rank'
-                                  ? language === 'zh'
-                                    ? 'Claw402 榜单'
-                                    : 'Claw402 board'
-                                  : aiConfig.coin_source.source_type ===
-                                      'hyper_all'
-                                    ? language === 'zh'
-                                      ? 'Hyperliquid 全部市场'
-                                      : 'Hyperliquid all markets'
-                                    : aiConfig.coin_source.source_type ===
-                                        'hyper_main'
-                                      ? language === 'zh'
-                                        ? 'Hyperliquid 主要市场'
-                                        : 'Hyperliquid main markets'
-                                      : aiConfig.coin_source.source_type ===
-                                          'ai500'
-                                        ? 'AI500'
-                                        : aiConfig.coin_source.source_type ===
-                                            'oi_top'
-                                          ? 'OI Top'
-                                          : aiConfig.coin_source.source_type ===
-                                              'oi_low'
-                                            ? 'OI Low'
-                                            : '-'}
+                            {coinSourceLabel(aiConfig.coin_source, language)}
                           </div>
                           <div>
                             {t('marginLimit', language)}:{' '}

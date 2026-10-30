@@ -20,8 +20,8 @@ export interface Kline {
   closeTime: number
 }
 
-// Vergex net-flow market ranking (GET /api/vergex/flow-markets). Numeric fields
-// arrive as strings from the upstream API.
+// Taker net-flow ranking from free Binance data (GET /api/market-board/flow).
+// Numeric fields arrive as strings.
 export interface FlowMarketItem {
   key: string
   marketType: string
@@ -36,12 +36,13 @@ export interface FlowMarketsResponse {
   data?: {
     by?: string
     window?: string
+    source?: string
     inflow?: FlowMarketItem[]
     outflow?: FlowMarketItem[]
   }
 }
 
-// Normalized Vergex direction-change leaderboard item.
+// Normalized direction board item (GET /api/market-board/direction).
 export interface SignalRankItem {
   rank: number
   symbol: string
@@ -200,6 +201,10 @@ export interface VergexHeatmapData {
     state?: string
     reason?: string
   }
+  /** "binance" for the free estimate built from candles and open interest */
+  source?: string
+  estimated?: boolean
+  scaledToOI?: boolean
 }
 
 export interface VergexHeatmapResponse {
@@ -551,17 +556,14 @@ export const dataApi = {
   },
 
   async getFlowMarkets(
-    aiModelId?: string,
-    chain = 'mainnet',
     window = '1h',
     limit = 25,
     silent?: boolean
   ): Promise<FlowMarketsResponse> {
-    const params = new URLSearchParams({ chain, window, limit: String(limit) })
-    if (aiModelId) params.set('ai_model_id', aiModelId)
+    const params = new URLSearchParams({ window, limit: String(limit) })
     const result = await httpClient.request<FlowMarketsResponse>(
-      `${API_BASE}/vergex/flow-markets?${params}`,
-      { silent }
+      `${API_BASE}/market-board/flow?${params}`,
+      { silent, timeout: 60000 }
     )
     if (!result.success) throw new Error('Failed to fetch flow markets')
     return result.data!
@@ -572,8 +574,8 @@ export const dataApi = {
     silent?: boolean
   ): Promise<SignalRankingResponse> {
     const result = await httpClient.request<VergexDirectionLeaderboardResponse>(
-      `${API_BASE}/vergex/direction-change/leaderboard`,
-      { silent }
+      `${API_BASE}/market-board/direction`,
+      { silent, timeout: 60000 }
     )
     if (!result.success)
       throw new Error('Failed to fetch direction leaderboard')
@@ -588,6 +590,21 @@ export const dataApi = {
           item.market?.marketType === 'core_perp' ? 'crypto' : undefined,
       })),
     }
+  },
+
+  /** Estimated cost/liquidation map from free Binance data. */
+  async getMarketHeatmap(
+    symbol: string,
+    silent?: boolean
+  ): Promise<VergexHeatmapResponse> {
+    const params = new URLSearchParams({ symbol })
+    const result = await httpClient.request<VergexHeatmapResponse>(
+      `${API_BASE}/market-board/heatmap?${params}`,
+      { silent, timeout: 60000 }
+    )
+    if (!result.success)
+      throw new Error(result.message || 'Failed to fetch cost/liquidation map')
+    return result.data || {}
   },
 
   async getEquityHistory(traderId?: string, silent?: boolean): Promise<any[]> {
