@@ -644,6 +644,7 @@ export function TradingPlanningPage() {
           session_id: session.current,
           turn_id: generation.id,
           history: historyMessages,
+          language: isZh ? 'zh' : 'en',
           constraints: { ...limits, leverage, entry_policy: entryPolicy },
           auto_size: Boolean(exchangeID),
         },
