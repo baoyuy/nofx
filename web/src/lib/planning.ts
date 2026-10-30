@@ -230,33 +230,20 @@ export async function streamPlanning(
     await reader.cancel().catch(() => {})
   }
 }
-const scripts = new Map<string, Promise<void>>()
+// The chart (lightweight-charts) is split into its own chunk and loaded on
+// first use of Frontier.
+let chartModule: Promise<void> | null = null
 export function loadPlanningChart(): Promise<void> {
-  const load = (url: string) => {
-    let promise = scripts.get(url)
-    if (!promise) {
-      promise = new Promise<void>((resolve, reject) => {
-        const script = document.createElement('script')
-        script.src = url
-        script.onload = () => resolve()
-        script.onerror = () => {
-          scripts.delete(url)
-          script.remove()
-          reject(
-            new Error(
-              'Chart failed to load. Check that the charting submodule was initialized during the build.'
-            )
-          )
-        }
-        document.head.append(script)
-      })
-      scripts.set(url, promise)
-    }
-    return promise
-  }
-  return load('/charting_library/charting_library.standalone.js').then(() =>
-    load('/planning/chart.js?v=' + __PLANNING_CHART_VERSION__)
-  )
+  chartModule ||= import('./planningChart')
+    .then(({ WorkspaceChart }) => {
+      window.WorkspaceChart =
+        WorkspaceChart as unknown as Window['WorkspaceChart']
+    })
+    .catch(() => {
+      chartModule = null
+      throw new Error('Chart failed to load. Reload the page and try again.')
+    })
+  return chartModule
 }
 export function expired(p: Plan, clock = Date.now()) {
   return Date.parse(p.expires) <= clock

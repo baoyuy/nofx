@@ -11,9 +11,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
     "prepare": "husky",
-    "test": "vitest run",
-    "prebuild": "node scripts/prepare-charting.mjs",
-    "predev": "node scripts/prepare-charting.mjs"
+    "test": "vitest run"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",

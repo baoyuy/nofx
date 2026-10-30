@@ -163,6 +163,28 @@
   height: clamp(380px, 54vh, 640px);
   background: var(--panel-bg);
   border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+}
+.planning-chart-toolbar {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.planning-page .planning-chart-toolbar button {
+  padding: 3px 9px;
+  font-size: 11px;
+  min-height: 0;
+}
+.planning-page .planning-chart-toolbar button[aria-pressed='true'] {
+  background: rgba(41, 91, 232, 0.1);
+  border-color: rgba(41, 91, 232, 0.4);
+  color: #295be8;
+}
+.planning-chart-canvas {
+  flex: 1;
+  min-height: 0;
 }
 .planning-legend {
   padding: 8px;

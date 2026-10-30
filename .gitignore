@@ -141,8 +141,6 @@ PR_DESCRIPTION.md
 skills-lock.json
 img.png
 
-# Generated from the pinned charting submodule by web prebuild/predev.
-web/public/charting_library/
 
 # Local-only files from the free fork setup
 _backup_original/
