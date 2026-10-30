@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
   accounts: vi.fn(),
   states: vi.fn(),
   update: vi.fn(),
-  launch: vi.fn(),
   createExchange: vi.fn(),
 }))
 vi.mock('../../contexts/AuthContext', () => ({
@@ -35,12 +34,6 @@ vi.mock('../../lib/api', () => ({
     updateModelConfigs: mocks.update,
     createTrader: mocks.update,
     createExchangeEncrypted: mocks.createExchange,
-  },
-}))
-vi.mock('./AutopilotLaunchPanel', () => ({
-  AutopilotLaunchPanel: () => {
-    mocks.launch()
-    return <div>Guided setup panel</div>
   },
 }))
 vi.mock('./TradersList', () => ({
@@ -121,7 +114,6 @@ it('starts with connections without mounting automated launch or writing configu
   expect(screen.getByText('Verification needed')).toBeVisible()
   expect(screen.getByText('Not verified')).toBeVisible()
   expect(screen.queryByText(/Telegram|Notifications/)).toBeNull()
-  expect(mocks.launch).not.toHaveBeenCalled()
   expect(mocks.update).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: 'Add AI', exact: true }))
   expect(screen.getByRole('dialog', { name: 'AI connection' })).toBeVisible()
@@ -132,18 +124,14 @@ it('starts with connections without mounting automated launch or writing configu
   expect(screen.getByRole('dialog', { name: 'Trading account' })).toBeVisible()
   expect(mocks.update).not.toHaveBeenCalled()
 })
-it('opens guided Autopilot setup only on request and preserves saved connections', async () => {
+it('shows saved Autopilots without the paid guided setup and preserves saved connections', async () => {
   open()
   await screen.findByRole('button', { name: 'Edit My AI' })
   fireEvent.click(
     screen.getByRole('button', { name: /Autopilot Optional automated trading/ })
   )
   expect(screen.getByText('Saved Autopilots')).toBeVisible()
-  expect(mocks.launch).not.toHaveBeenCalled()
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Guided setup', exact: true })
-  )
-  expect(screen.getByText('Guided setup panel')).toBeVisible()
+  expect(screen.queryByRole('button', { name: 'Guided setup' })).toBeNull()
   expect(mocks.update).not.toHaveBeenCalled()
   fireEvent.click(
     screen.getByRole('button', { name: /Connections AI & trading accounts/ })
@@ -203,7 +191,6 @@ it('verifies a newly saved account automatically and shows balance once with its
   expect(screen.getByText('300.50 USDT')).toBeVisible()
   expect(mocks.states).toHaveBeenCalledTimes(2)
   expect(mocks.createExchange).toHaveBeenCalledTimes(1)
-  expect(mocks.launch).not.toHaveBeenCalled()
 })
 it('offers a read-only retry after account verification fails', async () => {
   mocks.states.mockRejectedValueOnce(new Error('timeout'))
@@ -226,7 +213,6 @@ it('offers a read-only retry after account verification fails', async () => {
     screen.getByText('Check Futures permissions and IP allowlist')
   ).toBeVisible()
   expect(mocks.update).not.toHaveBeenCalled()
-  expect(mocks.launch).not.toHaveBeenCalled()
 })
 it('waits for saved connections before allowing a new AI wallet or account setup', () => {
   mocks.models.mockReturnValueOnce(new Promise(() => {}))

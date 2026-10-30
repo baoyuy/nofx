@@ -5,8 +5,6 @@ import {
 } from '../../lib/frontierAccounts'
 import { accountLabel } from '../../lib/frontierAccounts'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { QRCodeSVG } from 'qrcode.react'
-import { AIWalletBackup } from '../common/AIWalletBackup'
 import type { AIModel, Exchange } from '../../types'
 import { api } from '../../lib/api'
 import { planningAPI } from '../../lib/planning'
@@ -88,9 +86,7 @@ export function FrontierSetup({
   const language = useSafeLanguage()
   const zh = language === 'zh'
   const [wallet, setWallet] = useState<Wallet | null>(null)
-  const [working, setWorking] = useState(false)
   const [error, setError] = useState('')
-  const [copied, setCopied] = useState(false)
   const [cex, setCex] = useState(false)
   const [addingAccount, setAddingAccount] = useState(false)
   const [choice, setChoice] = useState(venue)
@@ -202,7 +198,6 @@ export function FrontierSetup({
   useEffect(() => {
     mounted.current = true
     setWallet(null)
-    setCopied(false)
     onWalletState('checking')
     void refreshWallet()
     return () => {
@@ -293,38 +288,6 @@ export function FrontierSetup({
       previous?.focus()
     }
   }, [open, cex, ownAI, onOpen])
-  async function createWallet() {
-    if (working || pending.current) return
-    if (!wallet?.found) {
-      setOwnAI([
-        { id: 'claw402', name: 'Claw402', provider: 'claw402', enabled: false },
-      ])
-      return
-    }
-    setWorking(true)
-    setError('')
-    try {
-      const next = await planningAPI<Wallet>('setup-wallet', {
-        model_id:
-          wallet?.model_id ||
-          (selectedModel?.provider === 'claw402' ? modelID : ''),
-      })
-      if (!mounted.current) return
-      setWallet(next)
-      onWalletState(feeWalletState(next))
-      await onRefresh(selectedModel?.id || next.model_id)
-      await refreshWallet()
-    } catch {
-      if (mounted.current)
-        setError(
-          zh
-            ? '无法确认 AI 设置。重试前请先查看钱包状态。'
-            : 'AI setup could not be confirmed. Check the wallet status before retrying.'
-        )
-    } finally {
-      if (mounted.current) setWorking(false)
-    }
-  }
   async function savedExchange(id?: string) {
     const latest = await api.getExchangeConfigs()
     const saved =
@@ -355,19 +318,9 @@ export function FrontierSetup({
                 ? zh
                   ? '你的 API 提供商'
                   : 'Your API provider'
-                : status === 'ready'
-                  ? `${Number(wallet?.balance_usdc).toFixed(2)} USDC`
-                  : status === 'empty'
-                    ? zh
-                      ? '添加 AI 资金'
-                      : 'Add AI funds'
-                    : status === 'checking'
-                      ? zh
-                        ? '正在检查余额…'
-                        : 'Checking balance…'
-                      : zh
-                        ? '设置 AI'
-                        : 'Set up AI'}
+                : zh
+                  ? '设置 AI'
+                  : 'Set up AI'}
             </b>
           </button>
           <button
@@ -429,8 +382,8 @@ export function FrontierSetup({
           </button>
           <small>
             {zh
-              ? 'AI 费用和交易资金是分开的。'
-              : 'AI fees and trading funds are separate.'}
+              ? 'AI 由你自己的 API 密钥计费，与交易资金分开。'
+              : 'AI bills through your own API key, separate from trading funds.'}
           </small>
         </section>
       )}
@@ -492,146 +445,27 @@ export function FrontierSetup({
                     <b>{zh ? '你的 AI 已配置' : 'Your AI is configured'}</b>
                     <p>
                       {zh
-                        ? `${selectedModel.name} 通过你的提供商计费。下方的独立 AI 余额仅用于 AI500 等付费数据。`
-                        : `${selectedModel.name} bills through your provider. The separate AI balance below is only needed for paid data such as AI500.`}
+                        ? `${selectedModel.name} 通过你的提供商计费。`
+                        : `${selectedModel.name} bills through your provider.`}
                     </p>
                   </div>
                 )}
-                <div className="frontier-ai-options">
-                  <b>{zh ? '按量付费' : 'Pay as you go'}</b>
-                  <p>
-                    {zh
-                      ? 'AI 请求和高级数据费用从一个专用的 USDC 钱包扣除。你的交易余额永远不会用于这些费用。'
-                      : 'AI requests and premium data are charged to a dedicated USDC wallet. Your trading balance is never used for these fees.'}
-                  </p>
-                </div>
-                {wallet?.found ? (
-                  <div className="frontier-wallet-card">
-                    <QRCodeSVG value={wallet.address || ''} size={130} />
-                    <div>
-                      <b>USDC on Base</b>
-                      <p>
-                        {zh
-                          ? '仅向此 AI 付款地址发送 Base 网络上的 USDC。'
-                          : 'Send only USDC on the Base network to this AI payment address.'}
-                      </p>
-                      <code>{wallet.address}</code>
-                      <button
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(
-                              wallet.address || ''
-                            )
-                            setCopied(true)
-                          } catch {
-                            setError(
-                              zh
-                                ? '复制失败。请手动选择并复制地址。'
-                                : 'Copy failed. Select and copy the address instead.'
-                            )
-                          }
-                        }}
-                      >
-                        {copied
-                          ? zh
-                            ? '地址已复制'
-                            : 'Address copied'
-                          : zh
-                            ? '复制 AI 付款地址'
-                            : 'Copy AI payment address'}
-                      </button>
-                      <p role="status">
-                        <strong>
-                          {wallet.balance_status === 'ok'
-                            ? `${Number(wallet.balance_usdc).toFixed(2)} USDC`
-                            : zh
-                              ? '余额未核实'
-                              : 'Balance not verified'}
-                        </strong>{' '}
-                        ·{' '}
-                        {status === 'ready'
-                          ? zh
-                            ? '资金已到账'
-                            : 'Funds received'
-                          : status === 'empty'
-                            ? zh
-                              ? '等待你的存款 · 每 15 秒检查一次'
-                              : 'Waiting for your deposit · checks every 15 seconds'
-                            : zh
-                              ? '需要核实'
-                              : 'Verification needed'}
-                      </p>
-                      <button
-                        disabled={working}
-                        onClick={() => void refreshWallet()}
-                      >
-                        {zh ? '检查余额' : 'Check balance'}
-                      </button>
-                      {!wallet.enabled && (
-                        <button
-                          disabled={working}
-                          onClick={() => void createWallet()}
-                        >
-                          {zh ? '启用现有 AI 钱包' : 'Enable existing AI wallet'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="frontier-setup-start">
-                    <p>
-                      {zh
-                        ? '创建你的 AI 付款钱包，然后用 Base USDC 为它充值。创建钱包不会收费。'
-                        : 'Create your AI payment wallet, then fund it with Base USDC. Creating it does not charge you.'}
-                    </p>
-                    <button
-                      className="planning-primary"
-                      disabled={working || !!error || status === 'checking'}
-                      onClick={() => void createWallet()}
-                    >
-                      {working
-                        ? zh
-                          ? '设置中…'
-                          : 'Setting up…'
-                        : zh
-                          ? '创建 AI 钱包'
-                          : 'Create AI wallet'}
-                    </button>
-                    {error && (
-                      <button onClick={() => void refreshWallet()}>
-                        {zh ? '检查钱包状态' : 'Check wallet status'}
-                      </button>
-                    )}
-                  </div>
-                )}
-                {wallet?.found && wallet.address && wallet.model_id && (
-                  <AIWalletBackup
-                    key={wallet.model_id + wallet.address}
-                    modelID={wallet.model_id}
-                    address={wallet.address}
-                  />
-                )}
-                <p className="frontier-setup-note">
-                  {zh
-                    ? '按请求付费；网关会在付款前确认价格。余额为正并不保证足够支付每个请求。此钱包加密存储在你的 NOFX 服务器上，而不是浏览器中。使用上方的私钥备份保存你的密钥。也请备份你的部署。'
-                    : 'Pay per request; the gateway checks the price before payment. A positive balance does not guarantee enough funds for every request. This wallet is encrypted on your NOFX server, not in your browser. Use Private key backup above to save your key. Keep a backup of your deployment too.'}
-                </p>
-                {directProviders.length > 0 && (
-                  <button
-                    disabled={working}
-                    className="frontier-own-ai"
-                    onClick={() => setOwnAI(directProviders)}
-                  >
-                    {zh ? '改用我自己的 API 密钥 →' : 'Use my own API key instead →'}
-                  </button>
-                )}
+                {/* The paid Claw402 wallet (deposit QR, create wallet,
+                    key backup) is removed; only bring-your-own-key AI. */}
+                <button
+                  className="frontier-own-ai"
+                  disabled={directProviders.length === 0}
+                  onClick={() => setOwnAI(directProviders)}
+                >
+                  {zh ? '连接我自己的 API 密钥 →' : 'Connect my own API key →'}
+                </button>
                 <footer>
                   <button onClick={() => onOpen(null)}>
                     {zh ? '继续浏览' : 'Keep exploring'}
                   </button>
                   <button
                     className="planning-primary"
-                    disabled={!aiReady || working}
+                    disabled={!aiReady}
                     onClick={() => finish('ai')}
                   >
                     {zh ? '使用此 AI 继续' : 'Continue with this AI'}

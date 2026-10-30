@@ -102,12 +102,6 @@ export default function HeaderBar({
       label: t('realtimeNav', language),
       auth: true,
     },
-    {
-      page: 'faq',
-      path: ROUTES.faq,
-      label: language === 'zh' ? '帮助' : 'Help',
-      auth: false,
-    },
   ]
   const open = (tab: (typeof tabs)[number]) => {
     if (tab.auth && !isLoggedIn) {

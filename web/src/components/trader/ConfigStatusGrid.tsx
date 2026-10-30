@@ -177,32 +177,10 @@ export function ConfigStatusGrid({
                   </span>
                   <ArrowUpRight size={14} />
                 </button>
-                {model.provider === 'claw402' && (
-                  <div className="config-wallet-info">
-                    <span>{zh ? 'AI 费用钱包 · Base USDC' : 'AI fee wallet · Base USDC'}</span>
-                    <strong>
-                      {model.balanceUsdc !== undefined &&
-                      model.balanceUsdc !== ''
-                        ? `${displayFunds(model.balanceUsdc)} USDC`
-                        : zh
-                          ? '余额不可用'
-                          : 'Balance not available'}
-                    </strong>
-                    {model.walletAddress && (
-                      <code>{truncateAddress(model.walletAddress)}</code>
-                    )}
-                  </div>
-                )}
                 <div className="config-connection-foot">
                   <span>{usage(getModelUsageInfo(model.id), language)}</span>
                   <button onClick={() => onModelClick(model.id)}>
-                    {model.provider === 'claw402'
-                      ? zh
-                        ? '管理钱包与备份'
-                        : 'Manage wallet & backup'
-                      : zh
-                        ? '管理连接'
-                        : 'Manage connection'}
+                    {zh ? '管理连接' : 'Manage connection'}
                   </button>
                 </div>
               </article>
@@ -214,8 +192,8 @@ export function ConfigStatusGrid({
               <h3>{zh ? '添加你的第一个 AI 连接' : 'Add your first AI connection'}</h3>
               <p>
                 {zh
-                  ? '连接受支持的 AI 服务商或 Claw402 费用钱包。交易资金与之分开。'
-                  : 'Connect a supported AI provider or a Claw402 fee wallet. Trading funds stay separate.'}
+                  ? '用你自己的 API Key 连接受支持的 AI 服务商。交易资金与之分开。'
+                  : 'Connect a supported AI provider with your own API key. Trading funds stay separate.'}
               </p>
               <button onClick={onAddModel}>
                 {zh ? '连接 AI' : 'Connect AI'} <ArrowUpRight size={14} />
@@ -225,8 +203,8 @@ export function ConfigStatusGrid({
         </div>
         <footer>
           {zh
-            ? 'AI 费用用于支付分析服务，与你的交易余额分开。'
-            : 'AI fees pay for analysis. They are separate from your trading balance.'}
+            ? 'AI 调用费用由你在服务商处的账户承担，与交易余额分开。'
+            : 'AI usage is billed by your provider account, separate from your trading balance.'}
         </footer>
       </section>
       <section className="config-card" aria-labelledby="config-accounts-title">

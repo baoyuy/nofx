@@ -19,7 +19,6 @@ import { ExchangeConfigModal } from './ExchangeConfigModal'
 import { ModelConfigModal } from './ModelConfigModal'
 import { ConfigStatusGrid } from './ConfigStatusGrid'
 import { TradersList } from './TradersList'
-import { AutopilotLaunchPanel } from './AutopilotLaunchPanel'
 import {
   Bot,
   Plus,
@@ -43,14 +42,8 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
   const [searchParams, setSearchParams] = useSearchParams()
   const [configsLoading, setConfigsLoading] = useState(true)
   const [configError, setConfigError] = useState('')
-  const [showLaunch, setShowLaunch] = useState(
-    searchParams.get('setup') === 'hyperliquid-funds'
-  )
   const configView =
-    searchParams.get('view') === 'autopilot' ||
-    searchParams.get('setup') === 'hyperliquid-funds'
-      ? 'autopilot'
-      : 'connections'
+    searchParams.get('view') === 'autopilot' ? 'autopilot' : 'connections'
   const changeConfigView = (view: string) => {
     const next = new URLSearchParams(searchParams)
     if (view === 'autopilot') next.set('view', view)
@@ -692,20 +685,6 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
     setShowExchangeModal(true)
   }
 
-  const handleOpenClaw402Config = () => {
-    const configuredClaw402 = allModels?.find(
-      (model) => model.provider === 'claw402'
-    )
-    const supportedClaw402 = supportedModels?.find(
-      (model) => model.provider === 'claw402'
-    )
-    const modelId = configuredClaw402?.id || supportedClaw402?.id || 'claw402'
-
-    setEditingModel(configuredClaw402?.id || null)
-    setInitialModelId(modelId)
-    setShowModelModal(true)
-  }
-
   const handleOpenHyperliquidConfig = () => {
     const existingHyperliquid = allExchanges?.find(
       (exchange) =>
@@ -724,28 +703,13 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
     const setupTarget = searchParams.get('setup')
     if (!setupTarget) return
 
-    if (setupTarget === 'claw402') {
-      // The welcome page shows the deposit QR, auto-creates the wallet if
-      // needed, and polls the balance — friendlier than the key-config modal.
-      navigate(ROUTES.welcome)
-    } else if (setupTarget === 'hyperliquid') {
+    if (setupTarget === 'hyperliquid') {
       handleOpenHyperliquidConfig()
-    } else if (setupTarget === 'hyperliquid-funds') {
-      setShowLaunch(true)
-      // Funding shortfall: bring the guided launch panel (with the trading
-      // balance step and live preflight polling) into view.
-      document
-        .getElementById('autopilot-launch-panel')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      toast.info(
-        language === 'zh' ? '将 USDC 存入你的 Hyperliquid 账户，余额检查会自动更新。' : 'Deposit USDC to your Hyperliquid account, the balance check updates automatically.'
-      )
     } else {
       return
     }
 
     const nextParams = new URLSearchParams(searchParams)
-    if (setupTarget === 'hyperliquid-funds') nextParams.set('view', 'autopilot')
     nextParams.delete('setup')
     setSearchParams(nextParams, { replace: true })
   }, [
@@ -763,19 +727,6 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
   }
 
   const hasRunningTrader = (traders || []).some((trader) => trader.is_running)
-  const launchPanel = (
-    <AutopilotLaunchPanel
-      models={allModels}
-      exchanges={allExchanges}
-      exchangeAccountStates={exchangeAccountStates}
-      traders={traders || []}
-      isLoggedIn={Boolean(user && token)}
-      language={language}
-      onRefresh={refreshLaunchState}
-      onOpenClaw402Config={handleOpenClaw402Config}
-      onOpenHyperliquidConfig={handleOpenHyperliquidConfig}
-    />
-  )
 
   return (
     <div className="config-page">
@@ -951,9 +902,6 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
                         : `${configuredModels.length} AI connection${configuredModels.length === 1 ? '' : 's'} · ${configuredExchanges.length} trading account${configuredExchanges.length === 1 ? '' : 's'}`}
                   </p>
                 </div>
-                <button onClick={() => setShowLaunch((v) => !v)}>
-                  {showLaunch ? (language === 'zh' ? '隐藏引导设置' : 'Hide guided setup') : (language === 'zh' ? '引导设置' : 'Guided setup')}
-                </button>
                 <button
                   className="config-primary"
                   onClick={() => setShowCreateModal(true)}
@@ -966,7 +914,6 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
                   <Plus size={14} /> {language === 'zh' ? '创建 Autopilot' : 'Create Autopilot'}
                 </button>
               </div>
-              {showLaunch && launchPanel}
               {/* Traders List */}
               <TradersList
                 traders={traders}

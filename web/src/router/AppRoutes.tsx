@@ -18,10 +18,7 @@ import { ResetPasswordPage } from '../components/auth/ResetPasswordPage'
 import { SetupPage } from '../components/modals/SetupPage'
 import { CompetitionPage } from '../components/trader/CompetitionPage'
 import { AITradersPage } from '../components/trader/AITradersPage'
-import { TraderLaunchGuestPage } from '../components/trader/TraderLaunchGuestPage'
-import { FAQPage } from '../pages/FAQPage'
 import { LandingPage } from '../pages/LandingPage'
-import { BeginnerOnboardingPage } from '../pages/BeginnerOnboardingPage'
 import { SettingsPage } from '../pages/SettingsPage'
 // Free fixed-coins editor replaces the Claw402-only StrategyStudioPage.
 import { FreeStrategyPage } from '../pages/FreeStrategyPage'
@@ -197,11 +194,7 @@ function AppChrome({
   )
 }
 
-function TradersRoute({
-  showBeginnerOnboarding = false,
-}: {
-  showBeginnerOnboarding?: boolean
-}) {
+function TradersRoute() {
   const navigate = useNavigate()
   const { user, token } = useAuth()
   const { data: traders } = useSWR<TraderInfo[]>(
@@ -214,11 +207,7 @@ function TradersRoute({
   )
 
   return (
-    <AppChrome
-      currentPage="traders"
-      animateContent
-      extraContent={showBeginnerOnboarding ? <BeginnerOnboardingPage /> : null}
-    >
+    <AppChrome currentPage="traders" animateContent>
       <AITradersPage
         onTraderSelect={(traderId) => {
           const trader = traders?.find((item) => item.trader_id === traderId)
@@ -440,7 +429,7 @@ export function AppRoutes() {
           path={ROUTES.setup}
           element={
             user ? (
-              <Navigate to={ROUTES.welcome} replace />
+              <Navigate to={ROUTES.traders} replace />
             ) : systemConfig?.initialized ? (
               <Navigate to={ROUTES.login} replace />
             ) : (
@@ -448,13 +437,10 @@ export function AppRoutes() {
             )
           }
         />
+        {/* The Help page is removed; old links land on Home. */}
         <Route
           path={ROUTES.faq}
-          element={
-            <AppChrome currentPage="faq" showFooter={false} wrapInMain={false}>
-              <FAQPage />
-            </AppChrome>
-          }
+          element={<Navigate to={ROUTES.home} replace />}
         />
         {/* The paid upstream Data page is removed; old links land on Market. */}
         <Route
@@ -473,18 +459,11 @@ export function AppRoutes() {
             )
           }
         />
+        {/* The paid Claw402 AI-wallet deposit overlay is removed; old links
+            land on the configuration page. */}
         <Route
           path={ROUTES.welcome}
-          element={
-            // The welcome overlay is the AI-wallet deposit page (QR +
-            // auto-refreshing balance) — useful to every signed-in user, so
-            // no legacy "beginner mode" gate here.
-            isAuthenticated ? (
-              <TradersRoute showBeginnerOnboarding />
-            ) : (
-              <Navigate to={ROUTES.login} replace />
-            )
-          }
+          element={<Navigate to={ROUTES.traders} replace />}
         />
         <Route
           path={ROUTES.competition}
@@ -511,16 +490,11 @@ export function AppRoutes() {
         <Route
           path={ROUTES.traders}
           element={
+            // The guest page only advertised the paid Claw402 Autopilot flow.
             isAuthenticated ? (
               <TradersRoute />
             ) : (
-              <AppChrome
-                currentPage="traders"
-                showFooter={false}
-                animateContent
-              >
-                <TraderLaunchGuestPage />
-              </AppChrome>
+              <Navigate to={ROUTES.login} replace />
             )
           }
         />

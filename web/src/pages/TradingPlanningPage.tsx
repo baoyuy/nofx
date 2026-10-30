@@ -133,7 +133,8 @@ export function TradingPlanningPage() {
     [exchangeID, setExchangeID] = useState(''),
     [modelID, setModelID] = useState('')
   const [venue, setVenue] = useState('binance')
-  const [ai500Symbols, setAI500Symbols] = useState<string[]>([])
+  // The paid AI500 board is removed, so no market is in the AI500 group.
+  const ai500Symbols: string[] = []
   const requestedVenue = useRef('binance')
   const marketChosen = useRef(false)
   const [symbol, setSymbol] = useState('BTCUSDT'),
@@ -1185,11 +1186,7 @@ export function TradingPlanningPage() {
           venue={venue}
           disabled={busy}
           selected={symbol}
-          walletReady={walletState === 'ready'}
-          walletChecking={walletState === 'checking'}
-          onSetup={() => setSetupOpen('ai')}
           onSelect={openMarket}
-          onAI500Markets={setAI500Symbols}
         />
       }
       {blockingRun && (

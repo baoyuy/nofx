@@ -105,43 +105,18 @@ function show(step: 'ai' | 'exchange' | null = 'ai', direct = false) {
     </StrictMode>
   )
 }
-it('opens the shared backup flow instead of creating and funding a wallet silently', async () => {
+it('offers only a bring-your-own-key AI setup without a paid wallet', async () => {
   show()
-  const button = await screen.findByRole('button', { name: 'Create AI wallet' })
-  await waitFor(() => expect(button).toBeEnabled())
-  fireEvent.click(button)
+  await waitFor(() => expect(mocks.api).toHaveBeenCalled())
   expect(
-    await screen.findByRole('button', { name: 'Create my AI wallet' })
+    screen.queryByRole('button', { name: /AI wallet|AI payment address/ })
+  ).toBeNull()
+  expect(screen.queryByText(/USDC on Base|Pay as you go/)).toBeNull()
+  expect(
+    screen.getByRole('button', { name: 'Connect my own API key →' })
   ).toBeVisible()
   expect(mocks.api.mock.calls.every((call) => call.length === 1)).toBe(true)
   expect(refresh).not.toHaveBeenCalled()
-  expect(
-    screen.queryByRole('button', { name: /execute|place live order/i })
-  ).toBeNull()
-})
-it('never retries an unconfirmed setup mutation automatically', async () => {
-  mocks.api.mockImplementation(async (_path: string, body: unknown) => {
-    if (body) throw new Error('request interrupted')
-    return {
-      ...missing,
-      found: true,
-      address,
-      model_id: 'saved',
-      enabled: false,
-    }
-  })
-  show()
-  const button = await screen.findByRole('button', {
-    name: 'Enable existing AI wallet',
-  })
-  await waitFor(() => expect(button).toBeEnabled())
-  fireEvent.click(button)
-  expect(await screen.findByRole('alert')).toHaveTextContent(
-    'could not be confirmed'
-  )
-  expect(mocks.api.mock.calls.filter((call) => call.length === 2)).toHaveLength(
-    1
-  )
 })
 it('lets an existing direct AI provider continue without a fee-wallet deposit', async () => {
   show('ai', true)
@@ -281,10 +256,9 @@ it('keeps invalid exchange credentials actionable instead of showing a ready acc
 
 it('does not offer an empty provider picker when the deployment supports Claw402 only', async () => {
   show()
-  await screen.findByRole('button', { name: 'Create AI wallet' })
   expect(
-    screen.queryByRole('button', { name: 'Use my own API key instead →' })
-  ).toBeNull()
+    await screen.findByRole('button', { name: 'Connect my own API key →' })
+  ).toBeDisabled()
 })
 
 it.each(['okx', 'bitget'])(

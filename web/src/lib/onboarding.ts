@@ -16,8 +16,10 @@ export function setUserMode(mode: UserMode) {
   localStorage.setItem(USER_MODE_KEY, mode)
 }
 
-export function getPostAuthPath(mode: UserMode | null | undefined): string {
-  return mode === 'beginner' ? '/welcome' : '/traders'
+// The beginner AI-wallet welcome flow is removed; every mode lands on the
+// configuration page.
+export function getPostAuthPath(_mode: UserMode | null | undefined): string {
+  return '/traders'
 }
 
 export function setBeginnerWalletAddress(address: string) {

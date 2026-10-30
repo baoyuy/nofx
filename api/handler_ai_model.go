@@ -65,13 +65,9 @@ func (s *Server) handleGetModelConfigs(c *gin.Context) {
 		return
 	}
 
-	// If no models in database, return default models
+	// No paid Claw402 placeholder: users add their own-key providers.
 	if len(models) == 0 {
-		logger.Infof("⚠️ No AI models in database, returning defaults")
-		defaultModels := []SafeModelConfig{
-			{ID: "claw402", Name: "Claw402 (Base USDC)", Provider: "claw402", Enabled: false, HasAPIKey: false},
-		}
-		c.JSON(http.StatusOK, defaultModels)
+		c.JSON(http.StatusOK, []SafeModelConfig{})
 		return
 	}
 
@@ -105,15 +101,6 @@ func (s *Server) handleGetModelConfigs(c *gin.Context) {
 		}
 
 		safeModels = append(safeModels, safeModel)
-	}
-
-	if len(safeModels) == 0 {
-		logger.Infof("⚠️ No visible AI models in database, returning defaults")
-		defaultModels := []SafeModelConfig{
-			{ID: "claw402", Name: "Claw402 (Base USDC)", Provider: "claw402", Enabled: false, HasAPIKey: false},
-		}
-		c.JSON(http.StatusOK, defaultModels)
-		return
 	}
 
 	c.JSON(http.StatusOK, safeModels)
