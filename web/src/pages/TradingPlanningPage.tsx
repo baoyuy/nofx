@@ -1612,7 +1612,7 @@ export function TradingPlanningPage() {
             <summary>
               {models.find((m) => m.id === modelID)?.customModelName ||
                 models.find((m) => m.id === modelID)?.name ||
-                isZh ? '选择 AI' : 'Choose AI'}{' '}
+                (isZh ? '选择 AI' : 'Choose AI')}{' '}
               <span>{isZh ? '更换模型' : 'Change model'}</span>
             </summary>
             <select
@@ -1638,9 +1638,9 @@ export function TradingPlanningPage() {
               onClick={() =>
                 send(
                   instruction.trim() ||
-                    isZh
+                    (isZh
                       ? '按以下顺序比较四个计划：本市场的市价入场、单笔限价、加权阶梯和 TWAP。'
-                      : 'Compare four plans in this order: market entry, single limit, weighted ladder and TWAP for this market.',
+                      : 'Compare four plans in this order: market entry, single limit, weighted ladder and TWAP for this market.'),
                   true
                 )
               }
