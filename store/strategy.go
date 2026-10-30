@@ -229,6 +229,15 @@ func (c *StrategyConfig) NormalizeProductSchema() {
 		c.CoinSource.UseOILow = false
 		c.CoinSource.UseHyperAll = false
 		c.CoinSource.UseHyperMain = false
+	case "coin_pool":
+		c.CoinSource.UseAI500 = false
+		c.CoinSource.UseOITop = false
+		c.CoinSource.UseOILow = false
+		c.CoinSource.UseHyperAll = false
+		c.CoinSource.UseHyperMain = false
+		if strings.TrimSpace(c.CoinSource.CoinPoolID) == "" {
+			c.CoinSource.SourceType = "static"
+		}
 	case "hyper_all":
 		c.CoinSource.UseAI500 = false
 		c.CoinSource.UseOITop = false
@@ -327,6 +336,8 @@ func normalizeCoinSourceType(value string) string {
 		return "oi_low"
 	case strings.Contains(compact, "hyperrank"):
 		return "hyper_rank"
+	case compact == "pool":
+		return "coin_pool"
 	case strings.Contains(compact, "vergex") || strings.Contains(compact, "claw402") || strings.Contains(compact, "dynamicranking") || strings.Contains(value, "dynamic board") || strings.Contains(value, "gainers board") || strings.Contains(value, "signal board"):
 		return "vergex_signal"
 	case strings.Contains(compact, "hyperall"):
@@ -825,8 +836,11 @@ type PromptSectionsConfig struct {
 
 // CoinSourceConfig coin source configuration
 type CoinSourceConfig struct {
-	// source type shown in the product editor: "static" | "ai500" | "oi_top" | "oi_low"
+	// source type shown in the product editor: "static" | "coin_pool" | "ai500" | "oi_top" | "oi_low"
 	SourceType string `json:"source_type"`
+	// saved coin pool traded when source_type = "coin_pool"; StaticCoins
+	// keeps a snapshot used if the pool is missing
+	CoinPoolID string `json:"coin_pool_id,omitempty"`
 	// static coin list (used when source_type = "static")
 	StaticCoins []string `json:"static_coins,omitempty"`
 	// excluded coins list (filtered out from all sources)
@@ -1535,7 +1549,7 @@ func (c *StrategyConfig) EstimateTokens() TokenEstimate {
 func (c *StrategyConfig) getEffectiveCoinCount() int {
 	count := 0
 	switch c.CoinSource.SourceType {
-	case "static":
+	case "static", "coin_pool":
 		count = len(c.CoinSource.StaticCoins)
 	case "ai500":
 		count = c.CoinSource.AI500Limit

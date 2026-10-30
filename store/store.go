@@ -30,6 +30,7 @@ type Store struct {
 	grid           *GridStore
 	aiCharge       *AIChargeStore
 	marketAnalysis *MarketAnalysisStore
+	coinPool       *CoinPoolStore
 	telegramConfig TelegramConfigStore
 
 	mu sync.RWMutex
@@ -167,6 +168,9 @@ func (s *Store) initTables() error {
 	}
 	if err := s.MarketAnalysis().initTables(); err != nil {
 		return fmt.Errorf("failed to initialize market analysis tables: %w", err)
+	}
+	if err := s.CoinPool().initTables(); err != nil {
+		return fmt.Errorf("failed to initialize coin pool tables: %w", err)
 	}
 	return nil
 }
@@ -309,6 +313,16 @@ func (s *Store) MarketAnalysis() *MarketAnalysisStore {
 		s.marketAnalysis = NewMarketAnalysisStore(s.gdb)
 	}
 	return s.marketAnalysis
+}
+
+// CoinPool gets the saved coin pools storage
+func (s *Store) CoinPool() *CoinPoolStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.coinPool == nil {
+		s.coinPool = NewCoinPoolStore(s.gdb)
+	}
+	return s.coinPool
 }
 
 // TelegramConfig gets Telegram bot configuration storage

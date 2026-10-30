@@ -212,6 +212,10 @@ func (s *Server) handleCreateStrategy(c *gin.Context) {
 	}
 	beforeClamp := *req.Config
 	req.Config.ClampLimits()
+	if err := s.checkStrategyCoinPool(userID, req.Config); err != nil {
+		SafeBadRequest(c, err.Error())
+		return
+	}
 	hadPublishConfig := req.Config.PublishConfig != nil
 	isPublic := req.IsPublic
 	configVisible := req.ConfigVisible
@@ -323,6 +327,10 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 	}
 	beforeClamp := mergedConfig
 	mergedConfig.ClampLimits()
+	if err := s.checkStrategyCoinPool(userID, &mergedConfig); err != nil {
+		SafeBadRequest(c, err.Error())
+		return
+	}
 
 	// Preserve existing name/description when not supplied
 	name := req.Name

@@ -73,6 +73,12 @@ export default function HeaderBar({
       auth: true,
     },
     {
+      page: 'coin-pool',
+      path: ROUTES.coinPool,
+      label: language === 'zh' ? '币池' : 'Coin pool',
+      auth: true,
+    },
+    {
       page: 'traders',
       path: ROUTES.traders,
       label: t('configNav', language),

@@ -23,6 +23,7 @@ import { SettingsPage } from '../pages/SettingsPage'
 // Free fixed-coins editor replaces the Claw402-only StrategyStudioPage.
 import { FreeStrategyPage } from '../pages/FreeStrategyPage'
 import { MarketPage } from '../pages/MarketPage'
+import { CoinPoolPage } from '../pages/CoinPoolPage'
 import { TradingPlanningPage } from '../pages/TradingPlanningPage'
 import { TerminalDashboard } from '../components/terminal/TerminalDashboard'
 import { useAuth } from '../contexts/AuthContext'
@@ -527,6 +528,18 @@ export function AppRoutes() {
               </AppChrome>
             ) : (
               <LandingPage />
+            )
+          }
+        />
+        <Route
+          path={ROUTES.coinPool}
+          element={
+            isAuthenticated ? (
+              <AppChrome currentPage="coin-pool" animateContent>
+                <CoinPoolPage />
+              </AppChrome>
+            ) : (
+              <Navigate to={ROUTES.login} replace />
             )
           }
         />

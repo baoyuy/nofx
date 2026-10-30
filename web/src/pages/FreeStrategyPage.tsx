@@ -13,6 +13,7 @@ import { DeepVoidBackground } from '../components/common/DeepVoidBackground'
 import { api } from '../lib/api'
 import { confirmToast, notify } from '../lib/notify'
 import type { AIStrategyConfig, Strategy, StrategyConfig } from '../types'
+import type { CoinPool } from '../lib/api/coinPool'
 import { ROUTES } from '../router/paths'
 
 // Free strategy editor: fixed coin list (source_type "static") that works on
@@ -46,6 +47,11 @@ type IndicatorKey = (typeof indicatorOptions)[number]['key']
 export interface FreeForm {
   name: string
   description: string
+  // "pool" trades a saved coin pool from the Coin pool page.
+  coinSource?: 'static' | 'pool'
+  coinPoolID?: string
+  // Snapshot of the pool's coins, sent with the strategy.
+  poolCoins?: string[]
   coinsInput: string
   timeframe: string
   bars: number
@@ -115,7 +121,7 @@ export function usesPaidSource(config?: StrategyConfig | null): boolean {
   if (!ai) return false
   const source = ai.coin_source
   return (
-    !['static', 'hyper_all', 'hyper_main', 'hyper_rank'].includes(
+    !['static', 'coin_pool', 'hyper_all', 'hyper_main', 'hyper_rank'].includes(
       source.source_type
     ) ||
     source.use_ai500 ||
@@ -138,9 +144,14 @@ function formFromStrategy(strategy: Strategy): FreeForm {
   const ind = ai?.indicators
   const risk = ai?.risk_control
   const customPrompt = ai?.custom_prompt || ''
+  const pool =
+    ai?.coin_source.source_type === 'coin_pool' && ai.coin_source.coin_pool_id
   return {
     name: strategy.name,
     description: strategy.description || '',
+    coinSource: pool ? 'pool' : 'static',
+    coinPoolID: pool ? ai!.coin_source.coin_pool_id : '',
+    poolCoins: pool ? coins : [],
     coinsInput: coins.length > 0 ? coins.join(', ') : DEFAULT_COINS,
     timeframe: timeframeOptions.includes(ind?.klines.primary_timeframe || '')
       ? ind!.klines.primary_timeframe
@@ -195,13 +206,18 @@ export function configFromForm(
   const ai = getAIConfig(base)
   const defaultAI = getAIConfig(defaultConfig)
   const leverage = form.leverage
+  const pool = form.coinSource === 'pool' && Boolean(form.coinPoolID)
   return {
     strategy_type: 'ai_trading',
     language,
     ai_config: {
       coin_source: {
-        source_type: 'static',
-        static_coins: parseCoins(form.coinsInput),
+        source_type: pool ? 'coin_pool' : 'static',
+        coin_pool_id: pool ? form.coinPoolID : '',
+        // For a pool the backend refreshes this snapshot from the pool.
+        static_coins: pool
+          ? (form.poolCoins || []).slice(0, MAX_COINS)
+          : parseCoins(form.coinsInput),
         excluded_coins: ai?.coin_source.excluded_coins || [],
         use_ai500: false,
         use_oi_top: false,
@@ -332,11 +348,22 @@ export function FreeStrategyPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
+  const [pools, setPools] = useState<CoinPool[]>([])
 
   const parsedCoins = useMemo(
     () => (form ? parseCoins(form.coinsInput) : []),
     [form]
   )
+  const usingPool = form?.coinSource === 'pool'
+  const selectedPool = pools.find((p) => p.id === form?.coinPoolID)
+
+  useEffect(() => {
+    if (!token) return
+    api
+      .getCoinPools()
+      .then(setPools)
+      .catch(() => setPools([]))
+  }, [token])
 
   const selectStrategy = useCallback((strategy: Strategy | null) => {
     setSelected(strategy)
@@ -388,7 +415,11 @@ export function FreeStrategyPage() {
 
   const saveStrategy = async (activateAfter = false) => {
     if (!selected || !form) return
-    if (parsedCoins.length === 0) {
+    if (usingPool && !form.coinPoolID) {
+      notify.error(text(language, '请选择一个币池', 'Choose a coin pool'))
+      return
+    }
+    if (!usingPool && parsedCoins.length === 0) {
       notify.error(
         text(
           language,
@@ -622,47 +653,145 @@ export function FreeStrategyPage() {
                 </Field>
               </div>
 
-              <Field
-                label={text(
-                  language,
-                  '交易币种（最多 10 个）',
-                  'Coins to trade (max 10)'
-                )}
-                hint={text(
-                  language,
-                  '用逗号或空格分隔。可以只写 BTC，会自动补成 BTCUSDT。',
-                  'Separate with commas or spaces. "BTC" becomes BTCUSDT automatically.'
-                )}
+              <div
+                className="flex gap-2"
+                role="radiogroup"
+                aria-label={text(language, '币种来源', 'Coin source')}
               >
-                <input
-                  value={form.coinsInput}
-                  onChange={(event) =>
-                    patchForm({ coinsInput: event.target.value })
-                  }
-                  placeholder="BTCUSDT, ETHUSDT, SOLUSDT"
-                  className={inputClass}
-                />
-              </Field>
-              <div className="flex flex-wrap gap-2" aria-live="polite">
-                {parsedCoins.length === 0 ? (
-                  <span className="text-xs text-nofx-danger">
-                    {text(
-                      language,
-                      '还没有识别到有效币种',
-                      'No valid coins recognized yet'
-                    )}
-                  </span>
-                ) : (
-                  parsedCoins.map((coin) => (
-                    <span
-                      key={coin}
-                      className="rounded-md bg-nofx-gold/10 px-2 py-1 text-xs font-medium text-nofx-gold"
-                    >
-                      {coin}
-                    </span>
-                  ))
-                )}
+                {(
+                  [
+                    ['static', text(language, '固定币种', 'Fixed coins')],
+                    ['pool', text(language, '我的币池', 'My coin pool')],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={(form.coinSource || 'static') === value}
+                    onClick={() => patchForm({ coinSource: value })}
+                    className={`rounded-lg border px-3 py-1.5 text-sm ${(form.coinSource || 'static') === value ? 'border-nofx-gold bg-nofx-gold/10 font-semibold text-nofx-gold' : 'border-[rgba(25,36,52,0.14)] text-nofx-text'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
+              {usingPool ? (
+                <>
+                  <Field
+                    label={text(language, '币池', 'Coin pool')}
+                    hint={text(
+                      language,
+                      '每轮从币池读取最新币种，按评分取前 10 个。在「币池」页更新币池后，策略下一轮自动生效。',
+                      'Each cycle reads the pool fresh and trades its top 10 by score. Updating the pool on the Coin pool page takes effect next cycle.'
+                    )}
+                  >
+                    <select
+                      value={form.coinPoolID || ''}
+                      onChange={(event) => {
+                        const pool = pools.find(
+                          (p) => p.id === event.target.value
+                        )
+                        patchForm({
+                          coinPoolID: event.target.value,
+                          poolCoins: (pool?.coins || []).map((c) => c.symbol),
+                        })
+                      }}
+                      className={inputClass}
+                    >
+                      <option value="">
+                        {text(language, '选择一个币池…', 'Choose a coin pool…')}
+                      </option>
+                      {pools.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} · {p.coins.length}{' '}
+                          {text(language, '个币', 'coins')}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <div
+                    className="flex flex-wrap items-center gap-2"
+                    aria-live="polite"
+                  >
+                    {selectedPool ? (
+                      selectedPool.coins.slice(0, MAX_COINS).map((coin) => (
+                        <span
+                          key={coin.symbol}
+                          className="rounded-md bg-nofx-gold/10 px-2 py-1 text-xs font-medium text-nofx-gold"
+                        >
+                          {coin.symbol}
+                        </span>
+                      ))
+                    ) : form.coinPoolID ? (
+                      <span className="text-xs text-nofx-danger">
+                        {text(
+                          language,
+                          '这个币池已被删除，策略会使用保存时的币种。',
+                          'This pool was deleted; the strategy uses the coins saved with it.'
+                        )}
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => navigate(ROUTES.coinPool)}
+                      className="text-xs text-nofx-gold underline"
+                    >
+                      {pools.length
+                        ? text(language, '管理币池', 'Manage coin pools')
+                        : text(
+                            language,
+                            '还没有币池，去币池页筛选',
+                            'No pools yet: open the Coin pool page'
+                          )}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Field
+                    label={text(
+                      language,
+                      '交易币种（最多 10 个）',
+                      'Coins to trade (max 10)'
+                    )}
+                    hint={text(
+                      language,
+                      '用逗号或空格分隔。可以只写 BTC，会自动补成 BTCUSDT。',
+                      'Separate with commas or spaces. "BTC" becomes BTCUSDT automatically.'
+                    )}
+                  >
+                    <input
+                      value={form.coinsInput}
+                      onChange={(event) =>
+                        patchForm({ coinsInput: event.target.value })
+                      }
+                      placeholder="BTCUSDT, ETHUSDT, SOLUSDT"
+                      className={inputClass}
+                    />
+                  </Field>
+                  <div className="flex flex-wrap gap-2" aria-live="polite">
+                    {parsedCoins.length === 0 ? (
+                      <span className="text-xs text-nofx-danger">
+                        {text(
+                          language,
+                          '还没有识别到有效币种',
+                          'No valid coins recognized yet'
+                        )}
+                      </span>
+                    ) : (
+                      parsedCoins.map((coin) => (
+                        <span
+                          key={coin}
+                          className="rounded-md bg-nofx-gold/10 px-2 py-1 text-xs font-medium text-nofx-gold"
+                        >
+                          {coin}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
             </section>
 
             <section className="rounded-lg border border-[rgba(25,36,52,0.14)] bg-nofx-bg-lighter p-4">

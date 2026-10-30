@@ -291,6 +291,9 @@ func (e *StrategyEngine) GetCandidateCoins() ([]CandidateCoin, error) {
 	coinSource := e.config.CoinSource
 
 	switch coinSource.SourceType {
+	case "coin_pool":
+		return e.filterExcludedCoins(coinPoolCandidates(coinSource)), nil
+
 	case "static":
 		for _, symbol := range coinSource.StaticCoins {
 			symbol = market.Normalize(symbol)

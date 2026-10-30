@@ -5,6 +5,7 @@ import (
 	"nofx/auth"
 	"nofx/config"
 	"nofx/crypto"
+	"nofx/kernel"
 	"nofx/logger"
 	"nofx/manager"
 	_ "nofx/mcp/payment"
@@ -90,6 +91,9 @@ func main() {
 
 	// Initialize installation ID for experience improvement (anonymous statistics)
 	initInstallationID(st)
+
+	// Strategies with coin source "coin_pool" read saved pools each cycle.
+	kernel.CoinPoolResolver = st.CoinPool().Symbols
 
 	// Set JWT secret
 	auth.SetJWTSecret(cfg.JWTSecret)
