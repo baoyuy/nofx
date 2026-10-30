@@ -303,7 +303,8 @@ func (client *Client) ParseMCPResponse(body []byte) (string, error) {
 func (client *Client) ParseMCPResponseFull(body []byte) (*LLMResponse, error) {
 	var result struct {
 		Choices []struct {
-			Message struct {
+			FinishReason string `json:"finish_reason"`
+			Message      struct {
 				Content          string     `json:"content"`
 				ReasoningContent string     `json:"reasoning_content"`
 				ToolCalls        []ToolCall `json:"tool_calls"`
@@ -336,10 +337,15 @@ func (client *Client) ParseMCPResponseFull(body []byte) (*LLMResponse, error) {
 	}
 
 	msg := result.Choices[0].Message
+	if msg.Content == "" && len(msg.ToolCalls) == 0 {
+		client.Log.Warnf("⚠️ [%s] Empty model reply: finish_reason=%q choices=%d completion_tokens=%d reasoning_len=%d body_bytes=%d",
+			client.String(), result.Choices[0].FinishReason, len(result.Choices), result.Usage.CompletionTokens, len(msg.ReasoningContent), len(body))
+	}
 	return &LLMResponse{
 		Content:          msg.Content,
 		ReasoningContent: msg.ReasoningContent,
 		ToolCalls:        msg.ToolCalls,
+		FinishReason:     result.Choices[0].FinishReason,
 	}, nil
 }
 
@@ -573,6 +579,7 @@ func (client *Client) callWithRequestFull(req *Request) (*LLMResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	client.Log.Infof("📡 [%s] Request size: %d bytes, %d messages, %d tools", client.String(), len(jsonData), len(req.Messages), len(req.Tools))
 
 	url := client.Hooks.BuildUrl()
 	httpReq, err := client.buildHTTPRequestWithContext(contextFromRequest(req), url, jsonData)

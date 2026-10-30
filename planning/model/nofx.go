@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"nofx/logger"
 	"nofx/mcp"
 	"nofx/mcp/payment"
 	"sync/atomic"
@@ -64,6 +65,8 @@ func (a *NOFXAdapter) Chat(ctx context.Context, messages []Message, tools []Tool
 		if errors.As(e, &rejected) {
 			return Message{}, errors.New("Payment verification was rejected; no automatic retry. Check the quote, fee wallet and client version. The prior request may still have been charged.")
 		}
+		// Server log only: the cause stays out of model messages and the UI.
+		logger.Warnf("⚠️ [Planning] AI request failed: %v", e)
 		if ctx.Err() != nil {
 			return Message{}, ctx.Err()
 		}
@@ -86,6 +89,9 @@ func (a *NOFXAdapter) Chat(ctx context.Context, messages []Message, tools []Tool
 		out.ToolCalls = append(out.ToolCalls, call)
 	}
 	if out.Content == "" && len(out.ToolCalls) == 0 {
+		if result.FinishReason == "length" {
+			return Message{}, errors.New("The AI model used its whole output budget on hidden reasoning and returned no plan. Choose a non-reasoning model (or one with a lower thinking budget) in your AI provider, then try again.")
+		}
 		return Message{}, errors.New("NOFX AI did not return a final answer or a tool request")
 	}
 	return out, nil

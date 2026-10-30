@@ -33,6 +33,7 @@ type LLMResponse struct {
 	Content          string     // Plain-text reply (final answer)
 	ReasoningContent string     // Thinking-model reasoning content
 	ToolCalls        []ToolCall // Structured tool invocations
+	FinishReason     string     // Why generation stopped (stop, length, tool_calls, ...)
 }
 
 // Tool represents a tool/function that AI can call
