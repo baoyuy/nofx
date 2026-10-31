@@ -5,8 +5,10 @@ import { useLanguage } from '../../contexts/LanguageContext'
 const rnd = (a: number, b: number) => a + Math.random() * (b - a)
 
 /**
- * OrderBook renders a live L2 depth ladder for a single instrument, streamed
- * directly from Hyperliquid's public WebSocket (`l2Book`). The app trades a
+ * OrderBook renders a live L2 depth ladder for a single instrument. It polls
+ * Binance USDT-M depth through our backend (`/api/market/depth`) first; if the
+ * symbol is not a Binance perp (HTTP 4xx), it falls back to streaming directly
+ * from Hyperliquid's public WebSocket (`l2Book`). The app trades a
  * Hyperliquid builder-deployed perp DEX named "xyz" for synthetic / equity
  * markets (xyz:SP500, xyz:SKHX, …) and the main dex for crypto majors
  * (BTC, ETH, …). We resolve which one a symbol belongs to from the xyz dex's
@@ -18,6 +20,8 @@ const rnd = (a: number, b: number) => a + Math.random() * (b - a)
 const HL_INFO = 'https://api.hyperliquid.xyz/info'
 const HL_WS = 'wss://api.hyperliquid.xyz/ws'
 const DEPTH = 11 // levels per side
+const BINANCE_POLL_MS = 2000
+const BINANCE_DOWN_AFTER = 2 // consecutive failed polls before showing 'down'
 
 interface Level {
   px: number
@@ -70,6 +74,12 @@ export function OrderBook({ symbol, markPrice, demo = false }: OrderBookProps) {
   const [xyzSet, setXyzSet] = useState<Set<string>>(new Set())
   const [book, setBook] = useState<BookState | null>(null)
   const [status, setStatus] = useState<'connecting' | 'live' | 'down'>('connecting')
+  // Binance first; switches to Hyperliquid only when Binance doesn't list the symbol
+  const [source, setSource] = useState<'binance' | 'hl'>('binance')
+
+  useEffect(() => {
+    setSource('binance')
+  }, [base])
 
   // one-time: fetch the xyz dex coin universe so we can resolve symbols
   useEffect(() => {
@@ -134,10 +144,55 @@ export function OrderBook({ symbol, markPrice, demo = false }: OrderBookProps) {
     return () => clearInterval(id)
   }, [demo, base])
 
-  // live L2 stream
+  // Binance depth poll (via our backend)
+  useEffect(() => {
+    if (!base || demo || source !== 'binance') return
+    let alive = true
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let failures = 0
+    setBook(null)
+    setStatus('connecting')
+
+    const toLevels = (arr: unknown): Level[] =>
+      (Array.isArray(arr) ? arr : [])
+        .slice(0, DEPTH)
+        .map((l: [number, number]) => ({ px: Number(l[0]), sz: Number(l[1]) }))
+        .filter((l) => l.px > 0)
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/market/depth?symbol=${encodeURIComponent(base)}USDT&limit=22`)
+        if (!alive) return
+        if (res.status >= 400 && res.status < 500) {
+          // not a Binance perp — hand over to the Hyperliquid stream
+          setSource('hl')
+          return
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (!alive) return
+        setBook({ coin: data.symbol || `${base}USDT`, bids: toLevels(data.bids), asks: toLevels(data.asks) })
+        setStatus('live')
+        failures = 0
+      } catch {
+        if (!alive) return
+        failures++
+        if (failures >= BINANCE_DOWN_AFTER) setStatus('down')
+      }
+      if (alive) timer = setTimeout(poll, BINANCE_POLL_MS)
+    }
+
+    poll()
+    return () => {
+      alive = false
+      if (timer) clearTimeout(timer)
+    }
+  }, [base, demo, source])
+
+  // live L2 stream (Hyperliquid fallback)
   const pending = useRef<BookState | null>(null)
   useEffect(() => {
-    if (!coin || demo) return
+    if (!coin || demo || source !== 'hl') return
     let ws: WebSocket | null = null
     let raf: number | null = null
     let retry: ReturnType<typeof setTimeout> | null = null
@@ -194,7 +249,7 @@ export function OrderBook({ symbol, markPrice, demo = false }: OrderBookProps) {
       }
       ws?.close()
     }
-  }, [coin])
+  }, [coin, demo, source])
 
   const view = useMemo(() => {
     if (!book) return null
@@ -236,7 +291,7 @@ export function OrderBook({ symbol, markPrice, demo = false }: OrderBookProps) {
     <div style={{ fontFamily: 'var(--tm-mono)' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
         <span className="tm-px" style={{ fontSize: 11 }}>{isZh ? '订单簿' : 'Order book'}</span>
-        <span className="tm-sc">L2 · {coin || base || '—'}</span>
+        <span className="tm-sc">L2 · {(source === 'hl' ? coin : base) || base || '—'}</span>
         <span
           className="tm-sc"
           style={{ marginLeft: 'auto', color: status === 'live' ? 'var(--tm-up)' : 'var(--tm-muted)' }}
@@ -256,7 +311,19 @@ export function OrderBook({ symbol, markPrice, demo = false }: OrderBookProps) {
       </div>
 
       {!view ? (
-        <div className="tm-sc" style={{ padding: '16px 0' }}>{isZh ? '正在连接 Hyperliquid…' : 'Connecting to Hyperliquid…'}</div>
+        <div className="tm-sc" style={{ padding: '16px 0' }}>
+          {status === 'down'
+            ? isZh
+              ? '订单簿数据暂不可用'
+              : 'Order book unavailable'
+            : source === 'hl'
+              ? isZh
+                ? '正在连接 Hyperliquid…'
+                : 'Connecting to Hyperliquid…'
+              : isZh
+                ? '正在连接…'
+                : 'Connecting…'}
+        </div>
       ) : (
         <div style={{ fontSize: 11 }}>
           {/* column header */}

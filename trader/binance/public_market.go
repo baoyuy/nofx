@@ -265,3 +265,41 @@ func NormalizeUSDTSymbol(raw string) string {
 	}
 	return s
 }
+
+// MarketDepth is an L2 order book snapshot; levels are [price, qty].
+// Bids are sorted best (highest) first, asks best (lowest) first.
+type MarketDepth struct {
+	Bids [][2]float64 `json:"bids"`
+	Asks [][2]float64 `json:"asks"`
+}
+
+// GetPublicDepth returns the top limit levels per side (clamped to [5,50],
+// default 20).
+func GetPublicDepth(ctx context.Context, symbol string, limit int) (*MarketDepth, error) {
+	if limit <= 0 {
+		limit = 20
+	} else if limit < 5 {
+		limit = 5
+	} else if limit > 50 {
+		limit = 50
+	}
+	path := fmt.Sprintf("/fapi/v1/depth?symbol=%s&limit=%d", symbol, limit)
+	var raw struct {
+		Bids [][]string `json:"bids"`
+		Asks [][]string `json:"asks"`
+	}
+	if err := publicGet(ctx, path, &raw); err != nil {
+		return nil, fmt.Errorf("binance depth: %w", err)
+	}
+	toLevels := func(rows [][]string) [][2]float64 {
+		out := make([][2]float64, 0, len(rows))
+		for _, r := range rows {
+			if len(r) < 2 {
+				continue
+			}
+			out = append(out, [2]float64{parseF(r[0]), parseF(r[1])})
+		}
+		return out
+	}
+	return &MarketDepth{Bids: toLevels(raw.Bids), Asks: toLevels(raw.Asks)}, nil
+}

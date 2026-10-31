@@ -21,6 +21,7 @@ import (
 
 func (s *Server) registerMarketRoutes(api, protected *gin.RouterGroup) {
 	s.route(api, "GET", "/market/klines", "Binance USDT-M candles (?symbol=&interval=&limit=)", s.handleMarketKlines)
+	s.route(api, "GET", "/market/depth", "Binance USDT-M L2 order book (?symbol=&limit=)", s.handleMarketDepth)
 	s.route(api, "GET", "/market/ticker", "Binance USDT-M 24h ticker, mark price and funding (?symbol=)", s.handleMarketTicker)
 	s.route(api, "GET", "/market/symbols", "Tradable Binance USDT perpetual symbols", s.handleMarketSymbols)
 	s.route(api, "GET", "/market/tickers", "Price and 24h change of all Binance USDT perpetuals", s.handleMarketTickers)
@@ -65,6 +66,28 @@ func (s *Server) handleMarketKlines(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, klines)
+}
+
+func (s *Server) handleMarketDepth(c *gin.Context) {
+	symbol, ok := marketSymbol(c, c.DefaultQuery("symbol", "BTCUSDT"))
+	if !ok {
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
+	defer cancel()
+	depth, err := binance.GetPublicDepth(ctx, symbol, limit)
+	if err != nil {
+		// Binance answers 400 (code -1121) for symbols it doesn't list; pass
+		// that through as a 4xx so the client can fall back to another venue.
+		if strings.Contains(err.Error(), "HTTP 400") {
+			SafeError(c, http.StatusNotFound, "Symbol is not a Binance USDT perpetual.", err)
+			return
+		}
+		SafeError(c, http.StatusBadGateway, "Could not load Binance depth.", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"symbol": symbol, "bids": depth.Bids, "asks": depth.Asks})
 }
 
 func (s *Server) handleMarketTicker(c *gin.Context) {
