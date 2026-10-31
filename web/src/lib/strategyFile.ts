@@ -1,4 +1,5 @@
 import {
+  DEFAULT_MIN_OI_VALUE,
   LIMITS,
   clampNumber,
   indicatorOptions,
@@ -93,6 +94,7 @@ export function strategyToJsonc(form: FreeForm, language: 'zh' | 'en'): string {
     `    "max_positions": ${form.maxPositions}, // ${t(`最多同时持有几个仓位，${LIMITS.maxPositions.min}-${LIMITS.maxPositions.max}（代码强制）`, `Max open positions at once, ${LIMITS.maxPositions.min}-${LIMITS.maxPositions.max} (code enforced)`)}`,
     `    "max_margin_usage": ${form.marginUsage}, // ${t(`最多占用账户多少保证金，${LIMITS.marginUsage.min}-${LIMITS.marginUsage.max}，0.5 = 50%（代码强制）`, `Max share of the account used as margin, ${LIMITS.marginUsage.min}-${LIMITS.marginUsage.max}; 0.5 = 50% (code enforced)`)}`,
     `    "min_position_usdt": ${form.minPositionSize ?? 12}, // ${t(`单笔最小开仓金额（USDT），${LIMITS.minPositionSize.min}-${LIMITS.minPositionSize.max}（代码强制）。太小会低于交易所最小下单额`, `Min position size in USDT, ${LIMITS.minPositionSize.min}-${LIMITS.minPositionSize.max} (code enforced). Too small falls below the exchange minimum`)}`,
+    `    "min_oi_value_millions": ${form.minOIValue ?? DEFAULT_MIN_OI_VALUE}, // ${t(`候选币最低持仓量（百万美元），${LIMITS.minOIValue.min}-${LIMITS.minOIValue.max}，0 = 不过滤（代码强制）。低于它的币不交给 AI`, `Min candidate open interest in million USD, ${LIMITS.minOIValue.min}-${LIMITS.minOIValue.max}, 0 = off (code enforced). Coins below it are not sent to the AI`)}`,
     `    "min_confidence": ${form.minConfidence}, // ${t(`AI 把握度达到多少才开仓，${LIMITS.confidence.min}-${LIMITS.confidence.max}（AI 参考）。越高开仓越少`, `AI confidence needed to open, ${LIMITS.confidence.min}-${LIMITS.confidence.max} (AI guided). Higher means fewer trades`)}`,
     `    "min_risk_reward": ${form.minRiskReward} // ${t(`最低盈亏比（止盈距离 / 止损距离），${LIMITS.riskReward.min}-${LIMITS.riskReward.max}（AI 参考）`, `Min reward/risk (target distance / stop distance), ${LIMITS.riskReward.min}-${LIMITS.riskReward.max} (AI guided)`)}`,
     '  },',
@@ -373,6 +375,14 @@ export function parseStrategyFile(
       risk.min_position_usdt,
       LIMITS.minPositionSize,
       t('最小开仓金额', 'min position size')
+    )
+  )
+  set(
+    'minOIValue',
+    num(
+      risk.min_oi_value_millions,
+      LIMITS.minOIValue,
+      t('候选币最低持仓量', 'min candidate open interest')
     )
   )
   set(

@@ -6,6 +6,7 @@ export interface SystemStatus {
   start_time: string
   runtime_minutes: number
   call_count: number
+  cycle_number?: number  // Decision cycle number, persisted across restarts
   initial_balance: number
   scan_interval: string
   stop_until: string
@@ -166,6 +167,10 @@ export interface TraderConfigData {
   scan_interval_minutes: number
   initial_balance: number
   is_running: boolean
+  // Strategy values the trader actually uses (risk_control)
+  effective_btc_eth_leverage?: number
+  effective_altcoin_leverage?: number
+  max_positions?: number
   // Legacy fields below (kept for backward compatibility)
   btc_eth_leverage?: number
   altcoin_leverage?: number

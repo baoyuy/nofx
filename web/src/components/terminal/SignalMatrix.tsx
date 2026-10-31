@@ -101,7 +101,7 @@ export function SignalMatrix({
     return (
       <div style={{ fontFamily: 'var(--tm-mono)' }}>
         <Head />
-        <div className="tm-sc">{isZh ? '暂无信号数据（claw402）。' : 'No signal data (claw402).'}</div>
+        <div className="tm-sc">{isZh ? '暂无信号数据。' : 'No signal data.'}</div>
       </div>
     )
   }

@@ -30,6 +30,9 @@ const (
 	MaxPositionSize   = 1000.0
 	MinConfidence     = 50
 	MaxConfidence     = 100
+	// Candidate OI-value filter in millions of USD; 0 disables it.
+	DefaultMinOIValueMillions = 15.0
+	MaxMinOIValueMillions     = 1000.0
 )
 
 const (
@@ -180,6 +183,16 @@ func (c *StrategyConfig) ClampLimits() {
 	}
 	if c.RiskControl.MinConfidence > MaxConfidence {
 		c.RiskControl.MinConfidence = MaxConfidence
+	}
+	if v := c.RiskControl.MinOIValueMillions; v != nil {
+		clamped := *v
+		if clamped < 0 {
+			clamped = 0
+		}
+		if clamped > MaxMinOIValueMillions {
+			clamped = MaxMinOIValueMillions
+		}
+		c.RiskControl.MinOIValueMillions = &clamped
 	}
 }
 
@@ -982,6 +995,18 @@ type RiskControlConfig struct {
 	MinRiskRewardRatio float64 `json:"min_risk_reward_ratio"`
 	// Min AI confidence to open position (AI guided)
 	MinConfidence int `json:"min_confidence"`
+
+	// Candidates whose open-interest value is below this many million USD are
+	// left out of the AI prompt (CODE ENFORCED). nil = default 15M, 0 = off.
+	MinOIValueMillions *float64 `json:"min_oi_value_millions,omitempty"`
+}
+
+// MinOIValueMillionsOrDefault returns the candidate OI filter threshold.
+func (r RiskControlConfig) MinOIValueMillionsOrDefault() float64 {
+	if r.MinOIValueMillions == nil {
+		return DefaultMinOIValueMillions
+	}
+	return *r.MinOIValueMillions
 }
 
 // NewStrategyStore creates a new StrategyStore

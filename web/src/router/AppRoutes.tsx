@@ -45,6 +45,10 @@ import {
   type Page,
 } from './paths'
 
+// After repeated failures, keep polling slowly so the dashboard recovers on
+// its own once the backend is back (0 here would stop polling for good).
+const POLL_BACKOFF_MS = 60000
+
 function FrontierLoginRedirect() {
   useEffect(() => {
     sessionStorage.setItem('returnUrl', ROUTES.planning)
@@ -281,7 +285,7 @@ function DashboardRoute() {
     selectedTraderId ? `account-${selectedTraderId}` : null,
     () => api.getAccount(selectedTraderId, true),
     {
-      refreshInterval: accountPollOff ? 0 : 15000,
+      refreshInterval: accountPollOff ? POLL_BACKOFF_MS : 15000,
       revalidateOnFocus: false,
       dedupingInterval: 10000,
       onErrorRetry: (_err, _key, _config, revalidate, { retryCount }) => {
@@ -303,7 +307,7 @@ function DashboardRoute() {
     selectedTraderId ? `positions-${selectedTraderId}` : null,
     () => api.getPositions(selectedTraderId, true),
     {
-      refreshInterval: positionsPollOff ? 0 : 15000,
+      refreshInterval: positionsPollOff ? POLL_BACKOFF_MS : 15000,
       revalidateOnFocus: false,
       dedupingInterval: 10000,
       onErrorRetry: (_err, _key, _config, revalidate, { retryCount }) => {
@@ -327,7 +331,7 @@ function DashboardRoute() {
       : null,
     () => api.getLatestDecisions(selectedTraderId, decisionsLimit, true),
     {
-      refreshInterval: decisionsPollOff ? 0 : 30000,
+      refreshInterval: decisionsPollOff ? POLL_BACKOFF_MS : 30000,
       revalidateOnFocus: false,
       dedupingInterval: 20000,
       onErrorRetry: (_err, _key, _config, revalidate, { retryCount }) => {

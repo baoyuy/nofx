@@ -21,6 +21,12 @@ type TraderStats struct {
 	MaxDrawdownPct float64 `json:"max_drawdown_pct"`
 }
 
+// netPnL is a closed position's PnL after fees. RealizedPnL is the gross
+// price PnL (what exchanges report); Fee holds both open and close fees.
+func netPnL(pos TraderPosition) float64 {
+	return pos.RealizedPnL - pos.Fee
+}
+
 // GetPositionStats gets position statistics
 func (s *PositionStore) GetPositionStats(traderID string) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
@@ -34,7 +40,7 @@ func (s *PositionStore) GetPositionStats(traderID string) (map[string]interface{
 	var r result
 
 	err := s.db.Model(&TraderPosition{}).
-		Select("COUNT(*) as total, SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) as wins, COALESCE(SUM(realized_pnl), 0) as total_pnl, COALESCE(SUM(fee), 0) as total_fee").
+		Select("COUNT(*) as total, SUM(CASE WHEN realized_pnl - fee > 0 THEN 1 ELSE 0 END) as wins, COALESCE(SUM(realized_pnl - fee), 0) as total_pnl, COALESCE(SUM(fee), 0) as total_fee").
 		Where("trader_id = ? AND status = ?", traderID, "CLOSED").
 		Scan(&r).Error
 	if err != nil {
@@ -77,18 +83,20 @@ func (s *PositionStore) GetFullStatsByTraderFilters(traderIDs []string, traderID
 	var pnls []float64
 	var totalWin, totalLoss float64
 
+	// All PnL figures are net of fees, so TotalPnL + TotalFee is the gross.
 	for _, pos := range positions {
+		net := netPnL(pos)
 		stats.TotalTrades++
-		stats.TotalPnL += pos.RealizedPnL
+		stats.TotalPnL += net
 		stats.TotalFee += pos.Fee
-		pnls = append(pnls, pos.RealizedPnL)
+		pnls = append(pnls, net)
 
-		if pos.RealizedPnL > 0 {
+		if net > 0 {
 			stats.WinTrades++
-			totalWin += pos.RealizedPnL
-		} else if pos.RealizedPnL < 0 {
+			totalWin += net
+		} else if net < 0 {
 			stats.LossTrades++
-			totalLoss += -pos.RealizedPnL
+			totalLoss += -net
 		}
 	}
 
@@ -145,7 +153,7 @@ func (s *PositionStore) GetRecentTrades(traderID string, limit int) ([]RecentTra
 			Side:        strings.ToLower(pos.Side),
 			EntryPrice:  pos.EntryPrice,
 			ExitPrice:   pos.ExitPrice,
-			RealizedPnL: pos.RealizedPnL,
+			RealizedPnL: netPnL(pos),
 			EntryTime:   pos.EntryTime / 1000, // Convert ms to seconds for API compatibility
 		}
 
@@ -265,8 +273,8 @@ func (s *PositionStore) GetSymbolStatsByTraderFilters(traderIDs []string, trader
 		}
 		s := symbolMap[pos.Symbol]
 		s.TotalTrades++
-		s.TotalPnL += pos.RealizedPnL
-		if pos.RealizedPnL > 0 {
+		s.TotalPnL += netPnL(pos)
+		if netPnL(pos) > 0 {
 			s.WinTrades++
 		}
 
@@ -355,8 +363,8 @@ func (s *PositionStore) GetHoldingTimeStats(traderID string) ([]HoldingTimeStats
 
 		r := rangeStats[rangeKey]
 		r.count++
-		r.totalPnL += pos.RealizedPnL
-		if pos.RealizedPnL > 0 {
+		r.totalPnL += netPnL(pos)
+		if netPnL(pos) > 0 {
 			r.wins++
 		}
 	}
@@ -407,8 +415,8 @@ func (s *PositionStore) GetDirectionStatsByTraderFilters(traderIDs []string, tra
 		}
 		s := sideStats[pos.Side]
 		s.TradeCount++
-		s.TotalPnL += pos.RealizedPnL
-		if pos.RealizedPnL > 0 {
+		s.TotalPnL += netPnL(pos)
+		if netPnL(pos) > 0 {
 			s.WinRate++
 		}
 	}

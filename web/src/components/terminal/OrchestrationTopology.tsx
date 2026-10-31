@@ -10,9 +10,11 @@ import { useLanguage } from '../../contexts/LanguageContext'
  * beams to the candidates that progress.
  */
 
+export type FunnelDir = 'long' | 'short' | 'flat'
 export interface FunnelItem {
   symbol: string
-  dir: 'long' | 'short'
+  // 'flat' = neutral signal: drawn grey in the upper zone, counted separately
+  dir: FunnelDir
 }
 export interface FunnelLayer {
   key: string
@@ -41,6 +43,9 @@ const LAYER_STEP = 128
 
 const LONG = 'var(--tm-up)'
 const SHORT = 'var(--tm-dn)'
+const FLAT = 'var(--tm-muted)'
+
+const dirColor = (dir: string) => (dir === 'short' ? SHORT : dir === 'flat' ? FLAT : LONG)
 
 function baseSymbol(raw: string): string {
   return raw.toUpperCase().replace(/^XYZ:/, '').replace(/[-_]/g, '').replace(/(USDT|USDC|USD)$/, '')
@@ -69,19 +74,21 @@ interface Cell {
   base?: string
   x: number
   y: number
-  dir: 'long' | 'short'
+  dir: FunnelDir
   solid: boolean
 }
 
 function splitDedup(items: FunnelItem[]) {
   const seen = new Set<string>()
-  const longs: string[] = []
+  // upper zone holds longs and neutral items, each keeping its own direction
+  const longs: { b: string; dir: FunnelDir }[] = []
   const shorts: string[] = []
   for (const it of items) {
     const b = baseSymbol(it.symbol)
     if (!b || seen.has(b)) continue
     seen.add(b)
-    ;(it.dir === 'short' ? shorts : longs).push(b)
+    if (it.dir === 'short') shorts.push(b)
+    else longs.push({ b, dir: it.dir })
   }
   return { longs: longs.slice(0, CAP_LONG), shorts: shorts.slice(0, CAP_SHORT) }
 }
@@ -100,11 +107,11 @@ export function OrchestrationTopology({ layers, className }: OrchestrationTopolo
     const shortTop = longTop + LONG_ROWS * DY + ZONE_GAP
 
     const cells: Cell[][] = []
-    const realMaps: Map<string, { x: number; y: number; dir: 'long' | 'short' }>[] = []
+    const realMaps: Map<string, { x: number; y: number; dir: FunnelDir }>[] = []
 
     prep.forEach((d, li) => {
       const layerCells: Cell[] = []
-      const real = new Map<string, { x: number; y: number; dir: 'long' | 'short' }>()
+      const real = new Map<string, { x: number; y: number; dir: FunnelDir }>()
       const longScatter = scatter(d.longs.length, CAP_LONG)
       const shortScatter = scatter(d.shorts.length, CAP_SHORT)
 
@@ -114,9 +121,11 @@ export function OrchestrationTopology({ layers, className }: OrchestrationTopolo
         const x = xs[li] + c * DX
         const y = longTop + r * DY
         const itemIdx = longScatter.get(idx)
-        const base = itemIdx !== undefined ? d.longs[itemIdx] : undefined
-        layerCells.push({ base, x, y, dir: 'long', solid: !!base })
-        if (base) real.set(base, { x, y, dir: 'long' })
+        const item = itemIdx !== undefined ? d.longs[itemIdx] : undefined
+        const base = item?.b
+        const dir = item?.dir ?? 'long'
+        layerCells.push({ base, x, y, dir, solid: !!base })
+        if (base) real.set(base, { x, y, dir })
       }
       for (let idx = 0; idx < CAP_SHORT; idx++) {
         const c = idx % COLS
@@ -152,9 +161,9 @@ export function OrchestrationTopology({ layers, className }: OrchestrationTopolo
   // long (top) and short (bottom) so both halves get dispatch lines/beams
   const engineTargets = useMemo(() => {
     const idx = realByLayer.findIndex((m) => m.size > 0)
-    if (idx < 0) return [] as { x: number; y: number; dir: 'long' | 'short' }[]
+    if (idx < 0) return [] as { x: number; y: number; dir: FunnelDir }[]
     const all = [...realByLayer[idx].values()]
-    const longs = all.filter((n) => n.dir === 'long').slice(0, 24)
+    const longs = all.filter((n) => n.dir !== 'short').slice(0, 24)
     const shorts = all.filter((n) => n.dir === 'short').slice(0, 24)
     return [...longs, ...shorts]
   }, [realByLayer])
@@ -164,25 +173,29 @@ export function OrchestrationTopology({ layers, className }: OrchestrationTopolo
       aria-label={isZh ? '决策漏斗矩阵：流量、信号、决策、执行、持有' : 'Decision funnel matrix: flow, signal, decision, execute, hold'}
       className={className} style={{ display: 'block' }}>
 
-      {prepared.map((d, li) => (
-        <g key={d.key} fontFamily="var(--tm-mono)">
-          <text x={colX[li] - 2} y={12} fontSize={8} fill="var(--tm-muted)" style={{ letterSpacing: '0.08em' }}>{d.title}</text>
-          <text x={colX[li] - 2} y={23} fontSize={8}>
-            <tspan fill="var(--tm-up)">{isZh ? '多' : 'L'}{d.longs.length}</tspan>
-            <tspan fill="var(--tm-muted)"> </tspan>
-            <tspan fill="var(--tm-dn)">{isZh ? '空' : 'S'}{d.shorts.length}</tspan>
-          </text>
-        </g>
-      ))}
+      {prepared.map((d, li) => {
+        const flat = d.longs.filter((it) => it.dir === 'flat').length
+        return (
+          <g key={d.key} fontFamily="var(--tm-mono)">
+            <text x={colX[li] - 2} y={12} fontSize={8} fill="var(--tm-muted)" style={{ letterSpacing: '0.08em' }}>{d.title}</text>
+            <text x={colX[li] - 2} y={23} fontSize={8}>
+              <tspan fill="var(--tm-up)">{isZh ? '多' : 'L'}{d.longs.length - flat}</tspan>
+              <tspan fill="var(--tm-muted)"> </tspan>
+              <tspan fill="var(--tm-dn)">{isZh ? '空' : 'S'}{d.shorts.length}</tspan>
+              {flat > 0 ? <tspan fill={FLAT}>{isZh ? ` 中${flat}` : ` N${flat}`}</tspan> : null}
+            </text>
+          </g>
+        )
+      })}
 
       <g strokeWidth={0.6} strokeDasharray="2 3" opacity={0.4}>
         {engineTargets.map((n, i) => (
-          <line key={i} x1={ENGINE_X} y1={cy} x2={n.x} y2={n.y} stroke={n.dir === 'short' ? SHORT : LONG} />
+          <line key={i} x1={ENGINE_X} y1={cy} x2={n.x} y2={n.y} stroke={dirColor(n.dir)} />
         ))}
       </g>
       <g strokeWidth={0.8} strokeDasharray="2 3" opacity={0.5}>
         {edges.map((e) => (
-          <line key={e.key} x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} stroke={e.dir === 'short' ? SHORT : LONG} />
+          <line key={e.key} x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} stroke={dirColor(e.dir)} />
         ))}
       </g>
 
@@ -191,7 +204,7 @@ export function OrchestrationTopology({ layers, className }: OrchestrationTopolo
         const dur = `${(0.42 + r * 0.55).toFixed(2)}s`
         const begin = `${(r * 1.4).toFixed(2)}s`
         return (
-          <circle key={`b0-${i}`} r={1.8} fill={n.dir === 'short' ? SHORT : LONG}>
+          <circle key={`b0-${i}`} r={1.8} fill={dirColor(n.dir)}>
             <animate attributeName="cx" values={`${ENGINE_X};${n.x}`} dur={dur} begin={begin} repeatCount="indefinite" />
             <animate attributeName="cy" values={`${cy};${n.y}`} dur={dur} begin={begin} repeatCount="indefinite" />
             <animate attributeName="opacity" values="0.9;0.9;0" dur={dur} begin={begin} repeatCount="indefinite" />
@@ -203,7 +216,7 @@ export function OrchestrationTopology({ layers, className }: OrchestrationTopolo
         const dur = `${(0.38 + r * 0.6).toFixed(2)}s`
         const begin = `${(r * 1.6).toFixed(2)}s`
         return (
-          <circle key={`be-${e.key}`} r={2.1} fill={e.dir === 'short' ? SHORT : LONG}>
+          <circle key={`be-${e.key}`} r={2.1} fill={dirColor(e.dir)}>
             <animate attributeName="cx" values={`${e.x1};${e.x2}`} dur={dur} begin={begin} repeatCount="indefinite" />
             <animate attributeName="cy" values={`${e.y1};${e.y2}`} dur={dur} begin={begin} repeatCount="indefinite" />
             <animate attributeName="opacity" values="1;1;0" dur={dur} begin={begin} repeatCount="indefinite" />
@@ -213,7 +226,7 @@ export function OrchestrationTopology({ layers, className }: OrchestrationTopolo
 
       {cellsByLayer.map((layer, li) =>
         layer.map((cell, ci) => {
-          const color = cell.dir === 'short' ? SHORT : LONG
+          const color = dirColor(cell.dir)
           if (cell.solid) {
             return <circle key={`${li}-${ci}`} cx={cell.x} cy={cell.y} r={2.7} fill={color} stroke={color} strokeWidth={0.5} />
           }

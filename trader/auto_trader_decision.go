@@ -96,6 +96,7 @@ func (at *AutoTrader) GetStatus() map[string]interface{} {
 		"start_time":      at.startTime.Format(time.RFC3339),
 		"runtime_minutes": int(time.Since(at.startTime).Minutes()),
 		"call_count":      at.callCount,
+		"cycle_number":    at.cycleNumber,
 		"initial_balance": at.initialBalance,
 		"scan_interval":   at.config.ScanInterval.String(),
 		"stop_until":      at.stopUntil.Format(time.RFC3339),
@@ -237,19 +238,25 @@ func (at *AutoTrader) GetPositions() ([]map[string]interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get positions: %w", err)
 	}
+	return FormatPositions(positions), nil
+}
 
-	var result []map[string]interface{}
+// FormatPositions converts raw exchange positions (entryPrice, positionAmt,
+// unRealizedProfit, ...) into the snake_case shape the web UI reads, adding
+// margin used and margin-based PnL%.
+func FormatPositions(positions []map[string]interface{}) []map[string]interface{} {
+	result := make([]map[string]interface{}, 0, len(positions))
 	for _, pos := range positions {
-		symbol := pos["symbol"].(string)
-		side := pos["side"].(string)
-		entryPrice := pos["entryPrice"].(float64)
-		markPrice := pos["markPrice"].(float64)
-		quantity := pos["positionAmt"].(float64)
+		symbol, _ := pos["symbol"].(string)
+		side, _ := pos["side"].(string)
+		entryPrice, _ := pos["entryPrice"].(float64)
+		markPrice, _ := pos["markPrice"].(float64)
+		quantity, _ := pos["positionAmt"].(float64)
 		if quantity < 0 {
 			quantity = -quantity
 		}
-		unrealizedPnl := pos["unRealizedProfit"].(float64)
-		liquidationPrice := pos["liquidationPrice"].(float64)
+		unrealizedPnl, _ := pos["unRealizedProfit"].(float64)
+		liquidationPrice, _ := pos["liquidationPrice"].(float64)
 
 		leverage := 10
 		if lev, ok := pos["leverage"].(float64); ok {
@@ -276,7 +283,7 @@ func (at *AutoTrader) GetPositions() ([]map[string]interface{}, error) {
 		})
 	}
 
-	return result, nil
+	return result
 }
 
 // recordAndConfirmOrder polls order status for actual fill data and records position
@@ -419,6 +426,7 @@ func (at *AutoTrader) recordPositionChange(orderID, symbol, side, action string,
 			EntryTime:    nowMs,
 			Leverage:     leverage,
 			Status:       "OPEN",
+			Fee:          fee, // open fee; the close fee is added on close
 			CreatedAt:    nowMs,
 			UpdatedAt:    nowMs,
 		}

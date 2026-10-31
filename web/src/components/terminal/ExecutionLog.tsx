@@ -78,6 +78,74 @@ const TONE_COLOR: Record<LogTone, string> = {
 }
 const TONE_GLYPH: Record<LogTone, string> = { ok: '✓', warn: '⚠', risk: '❌', info: '·' }
 
+// Go duration ("1h30m0s", "29m0s") → "1 小时 30 分" / "29 分".
+function zhDuration(d: string): string {
+  const m = d.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?$/)
+  if (!m) return d
+  const [, h, min, s] = m
+  const parts: string[] = []
+  if (h && h !== '0') parts.push(`${h} 小时`)
+  if (min && min !== '0') parts.push(`${min} 分`)
+  if (!parts.length && s) parts.push(`${Math.round(Number(s))} 秒`)
+  return parts.join(' ') || '0 分'
+}
+
+const SIDE_ZH: Record<string, string> = { long: '多单', short: '空单' }
+
+// Translate a throttle reason (trader/auto_trader_throttle.go) to Chinese.
+function zhReason(reason: string): string {
+  let m = reason.match(
+    /has only been held for (\S+) with price PnL (-?[\d.]+)%; min AI-managed hold is (\S+) unless price loss <= (-?[\d.]+)% or price profit >= (-?[\d.]+)%(?:; wait about (\S+))?/
+  )
+  if (m) {
+    const [, held, pnl, min, loss, profit, wait] = m
+    return `持仓仅 ${zhDuration(held)}，价格盈亏 ${pnl}%。持仓不满 ${zhDuration(min)} 时，AI 只有在亏损达 ${loss}% 或盈利达 ${profit}% 时才能平仓${wait ? `，约 ${zhDuration(wait)} 后可平` : ''}`
+  }
+  m = reason.match(
+    /has been held for (\S+) with price PnL (-?[\d.]+)%; it is still inside the noise band (-?[\d.]+)% to (-?[\d.]+)%, so wait about (\S+)/
+  )
+  if (m) {
+    const [, held, pnl, lo, hi, wait] = m
+    return `已持仓 ${zhDuration(held)}，价格盈亏 ${pnl}%，仍在 ${lo}% ~ ${hi}% 的波动区间内，约 ${zhDuration(wait)} 后才允许小幅盈亏平仓`
+  }
+  m = reason.match(/was closed (\S+) ago; wait (\S+) before re-entry/)
+  if (m) return `${zhDuration(m[1])}前刚平仓，需再等 ${zhDuration(m[2])} 才能重新开仓`
+  m = reason.match(/already has an open (long|short) position/i)
+  if (m) return `已有${SIDE_ZH[m[1].toLowerCase()]}持仓，需先处理现有持仓再开反向仓`
+  return reason.replace(/^trade throttle:\s*/, '')
+}
+
+// Translate one backend execution-log line (trader/auto_trader_loop.go) to
+// Chinese. Unknown lines are returned unchanged.
+function zhLog(s: string): string {
+  let m = s.match(/^AI call duration: (\d+) ms$/)
+  if (m) return `AI 响应耗时 ${(Number(m[1]) / 1000).toFixed(1)} 秒`
+  m = s.match(/^(\d+) of (\d+) trade actions failed or were blocked$/)
+  if (m) return `${m[2]} 笔交易操作中有 ${m[1]} 笔失败或被拦截`
+  m = s.match(/^(?:[^\sA-Z0-9]+\s*)?([A-Z0-9:_-]+) (\w+) (succeeded|blocked|failed)(?:: ([\s\S]*))?$/)
+  if (m) {
+    const [, sym, action, result, detail] = m
+    const head = `${baseSymbol(sym)} ${ACTION_ZH[action.toLowerCase()] ?? action}`
+    if (result === 'succeeded') return `${head} · 执行成功`
+    if (result === 'blocked') return `${head} · 被拦截：${zhReason(detail ?? '')}`
+    return `${head} · 执行失败：${formatRequestError(detail ?? '', 'zh')}`
+  }
+  if (s === 'No candidate coins available, cycle skipped') return '没有可用的候选币，跳过本轮'
+  m = s.match(/^Risk control paused, remaining (\d+) minutes$/)
+  if (m) return `风控暂停交易中，还剩 ${m[1]} 分钟`
+  m = s.match(/^Trading blocked: ([\s\S]*)$/)
+  if (m) return `交易被禁止：${m[1]}`
+  m = s.match(/^Failed to build trading context: ([\s\S]*)$/)
+  if (m) return `构建交易上下文失败：${formatRequestError(m[1], 'zh')}`
+  m = s.match(/^Failed to get AI decision: ([\s\S]*)$/)
+  if (m) return `获取 AI 决策失败：${formatRequestError(m[1], 'zh')}`
+  m = s.match(/^AI fee wallet out of funds: balance \$([\d.]+) USDC, next call needs ~\$([\d.]+)/)
+  if (m) return `AI 费用钱包余额不足：余额 $${m[1]} USDC，下次调用约需 $${m[2]}，请充值 Base USDC 钱包`
+  m = s.match(/^Grid cycle completed with (\d+) decisions$/)
+  if (m) return `网格周期完成，共 ${m[1]} 个决策`
+  return formatRequestError(s, 'zh')
+}
+
 /**
  * Tidy a verbose execution-log string to its gist without fabricating data.
  * Strips a leading "└"/glyph the backend may already include (we render our
@@ -86,12 +154,13 @@ const TONE_GLYPH: Record<LogTone, string> = { ok: '✓', warn: '⚠', risk: '❌
  */
 function cleanLog(raw: string, isZh = false): string {
   let s = raw.replace(/^[\s└>•·]*[✓✗⚠❌]?\s*/, '').trim()
+  if (isZh) return zhLog(s)
 
   const throttle = s.match(/closed\s+([0-9smhd.]+)\s+ago;\s*wait\s+([0-9smhd.]+)/i)
   if (throttle) {
     const ago = throttle[1].replace(/(\d)0s$/, '$1').replace(/0s$/, '')
     const wait = throttle[2].replace(/(\d)0s$/, '$1').replace(/0s$/, '')
-    return isZh ? `限流 · ${ago} 前平仓，等待 ${wait}` : `throttle · closed ${ago} ago, wait ${wait}`
+    return `throttle · closed ${ago} ago, wait ${wait}`
   }
   // drop a redundant leading "SYMBOL action" prefix when present
   s = s.replace(/^[A-Z0-9:_-]{2,12}\s+(open_long|open_short|close_long|close_short)\s+/i, '')

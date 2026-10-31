@@ -13,9 +13,13 @@ export const LIMITS = {
   maxPositions: { min: 1, max: 8 },
   marginUsage: { min: 0.1, max: 1 },
   minPositionSize: { min: 10, max: 1000 },
+  // Million USD; mirrors store DefaultMinOIValueMillions / MaxMinOIValueMillions.
+  minOIValue: { min: 0, max: 1000 },
   confidence: { min: 50, max: 100 },
   riskReward: { min: 1, max: 10 },
 } as const
+
+export const DEFAULT_MIN_OI_VALUE = 15
 
 export const timeframeOptions = [
   '1m',
@@ -108,6 +112,8 @@ export interface FreeForm {
   maxPositions: number
   marginUsage: number
   minPositionSize?: number
+  // Candidate OI-value filter in million USD; 0 = off.
+  minOIValue?: number
   minConfidence: number
   minRiskReward: number
   customPrompt: string
@@ -248,6 +254,11 @@ export function formFromStrategy(strategy: Strategy): FreeForm {
       LIMITS.minPositionSize,
       12
     ),
+    minOIValue: clampNumber(
+      risk?.min_oi_value_millions,
+      LIMITS.minOIValue,
+      DEFAULT_MIN_OI_VALUE
+    ),
     minConfidence: clampNumber(
       risk?.min_confidence,
       LIMITS.confidence,
@@ -357,6 +368,10 @@ export function configFromForm(
         max_margin_usage: form.marginUsage,
         min_position_size:
           form.minPositionSize ?? (ai?.risk_control.min_position_size || 12),
+        min_oi_value_millions:
+          form.minOIValue ??
+          ai?.risk_control.min_oi_value_millions ??
+          DEFAULT_MIN_OI_VALUE,
         min_risk_reward_ratio: form.minRiskReward,
         min_confidence: form.minConfidence,
       },

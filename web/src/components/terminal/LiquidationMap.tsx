@@ -255,7 +255,7 @@ export function LiquidationMap({ symbol, marketType = 'core_perp', height = 460,
       {error ? (
         <div role="alert" className="tm-error" style={{ padding: '16px 0' }}>
           {isZh
-            ? `${view.dispSymbol} 的热力图不可用。${formatRequestError(error)}`
+            ? `${view.dispSymbol} 的热力图不可用。${formatRequestError(error, 'zh')}`
             : `Heatmap unavailable for ${view.dispSymbol}. ${formatRequestError(error)}`}
         </div>
       ) : !view.rows.length ? (

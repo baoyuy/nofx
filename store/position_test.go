@@ -136,6 +136,40 @@ func TestGetClosedPositionsByTraderFiltersIncludesLegacyAutopilotIDs(t *testing.
 	}
 }
 
+func TestFullStatsAreNetOfFees(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open in-memory sqlite: %v", err)
+	}
+	positions := NewPositionStore(db)
+	if err := positions.InitTables(); err != nil {
+		t.Fatalf("init position table: %v", err)
+	}
+
+	now := time.Now().UnixMilli()
+	// Gross +10 with 3 in fees is a +7 win; gross +1 with 2 in fees is a -1 loss.
+	for i, row := range []struct{ pnl, fee float64 }{{10, 3}, {1, 2}} {
+		if err := db.Create(&TraderPosition{
+			TraderID: "t", Symbol: "BTCUSDT", Side: "LONG", Quantity: 1, EntryPrice: 100,
+			EntryTime: now - int64(10-i), ExitTime: now - int64(5-i), RealizedPnL: row.pnl, Fee: row.fee,
+			Status: "CLOSED",
+		}).Error; err != nil {
+			t.Fatalf("create position: %v", err)
+		}
+	}
+
+	stats, err := positions.GetFullStats("t", 1000)
+	if err != nil {
+		t.Fatalf("get stats: %v", err)
+	}
+	if stats.TotalPnL != 6 || stats.TotalFee != 5 {
+		t.Fatalf("net pnl/fee = %.2f/%.2f, want 6/5 (gross 11)", stats.TotalPnL, stats.TotalFee)
+	}
+	if stats.WinTrades != 1 || stats.LossTrades != 1 {
+		t.Fatalf("wins/losses = %d/%d, want 1/1 after fees", stats.WinTrades, stats.LossTrades)
+	}
+}
+
 func TestCalculateMaxDrawdownUsesRealBaseline(t *testing.T) {
 	// +50 then -100: peak 550, trough 450 on a 500 account → 100/550 ≈ 18.18%.
 	pnls := []float64{50, -100}

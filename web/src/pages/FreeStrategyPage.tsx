@@ -21,6 +21,7 @@ import type { CoinPool } from '../lib/api/coinPool'
 import { ROUTES } from '../router/paths'
 import {
   DEFAULT_COINS,
+  DEFAULT_MIN_OI_VALUE,
   LIMITS,
   SAFE_DEFAULTS,
   configFromForm,
@@ -235,6 +236,7 @@ export function FreeStrategyPage() {
         btcEthPositionRatio: 3,
         altPositionRatio: 1.5,
         minPositionSize: 12,
+        minOIValue: DEFAULT_MIN_OI_VALUE,
         customPrompt: '',
         rules: rulesDefault,
         indicators: {
@@ -1169,6 +1171,28 @@ export function FreeStrategyPage() {
                       patchForm({ minPositionSize })
                     }
                     suffix="USDT"
+                  />
+                </Field>
+                <Field
+                  language={language}
+                  enforced="code"
+                  label={text(
+                    language,
+                    '候选币最低持仓量',
+                    'Min candidate open interest'
+                  )}
+                  hint={text(
+                    language,
+                    `${LIMITS.minOIValue.min}-${LIMITS.minOIValue.max} 百万美元，默认 ${DEFAULT_MIN_OI_VALUE}。持仓量（OI）低于这个值的候选币不交给 AI 分析，0 = 不过滤。小币流动性差、滑点大，调低前请留意。`,
+                    `${LIMITS.minOIValue.min}-${LIMITS.minOIValue.max} million USD, default ${DEFAULT_MIN_OI_VALUE}. Candidates whose open interest is below this are not sent to the AI; 0 = no filter. Small coins are illiquid with more slippage.`
+                  )}
+                >
+                  <NumberInput
+                    value={form.minOIValue ?? DEFAULT_MIN_OI_VALUE}
+                    range={LIMITS.minOIValue}
+                    step={0.5}
+                    onChange={(minOIValue) => patchForm({ minOIValue })}
+                    suffix="M USD"
                   />
                 </Field>
                 <Field

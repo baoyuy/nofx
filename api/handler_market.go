@@ -80,7 +80,7 @@ func (s *Server) handleMarketDepth(c *gin.Context) {
 	if err != nil {
 		// Binance answers 400 (code -1121) for symbols it doesn't list; pass
 		// that through as a 4xx so the client can fall back to another venue.
-		if strings.Contains(err.Error(), "HTTP 400") {
+		if strings.Contains(err.Error(), `"code":-1121`) {
 			SafeError(c, http.StatusNotFound, "Symbol is not a Binance USDT perpetual.", err)
 			return
 		}

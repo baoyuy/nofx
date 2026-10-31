@@ -27,10 +27,12 @@ function newBucket(label: string): BucketAgg {
 }
 
 function add(bucket: BucketAgg, pos: HistoricalPosition) {
+  // realized_pnl is gross price PnL; the bucket total is after fees
+  const net = (pos.realized_pnl || 0) - (pos.fee || 0)
   bucket.n += 1
-  bucket.net += pos.realized_pnl || 0
+  bucket.net += net
   bucket.fees += pos.fee || 0
-  if ((pos.realized_pnl || 0) > 0) bucket.wins += 1
+  if (net > 0) bucket.wins += 1
 }
 
 function fmtUsd(n: number): string {

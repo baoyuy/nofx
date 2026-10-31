@@ -25,7 +25,7 @@ import { useLanguage } from '../../contexts/LanguageContext'
 
 // fixed height for the three row-1 panels so the row stays balanced at any width
 const ROW1_H = 500
-import { FlowMarkets } from './FlowMarkets'
+import { FlowMarkets, FLOW_ROWS } from './FlowMarkets'
 import './terminal.css'
 
 interface TerminalDashboardProps {
@@ -371,7 +371,7 @@ export function TerminalDashboard({
                     ? '○ 已停止'
                     : '○ stopped'}
             </span>
-            <span className="tm-sc" style={{ color: 'var(--tm-muted)' }}>{isZh ? '周期' : 'cycle'}</span><span className="tm-mono" style={{ color: 'var(--tm-ink)' }}>{status?.call_count ?? '—'}</span>
+            <span className="tm-sc" style={{ color: 'var(--tm-muted)' }}>{isZh ? '周期' : 'cycle'}</span><span className="tm-mono" style={{ color: 'var(--tm-ink)' }}>{status?.cycle_number ?? status?.call_count ?? '—'}</span>
             <span className="tm-px" style={{ fontSize: 12, color: 'var(--tm-ink)' }}>{clock}</span>
           </span>,
           navSlot,
@@ -383,9 +383,11 @@ export function TerminalDashboard({
       <div className="tm-box nofx-dashboard-body" style={{ maxWidth: 1280, margin: '0 auto', border: 'none' }}>
         {!on && status?.trading_blocked && (
           <div role="alert" className="tm-mono" style={{ margin: '8px 14px 0', padding: '12px', fontSize: 12, border: '1px solid var(--tm-dn)', color: 'var(--tm-dn)', background: 'rgba(200,60,40,0.06)' }}>
-            <strong>Trading blocked / 交易已阻断</strong>
-            <div className="tm-error">{formatRequestError(status.trading_error)}</div>
-            <div>自动开仓、平仓不可用；请用主钱包重新签名授权。修复前不会为此决策轮次调用付费 AI 或数据。</div>
+            <strong>{isZh ? '交易已阻断' : 'Trading blocked'}</strong>
+            <div className="tm-error">{formatRequestError(status.trading_error, isZh ? 'zh' : 'en')}</div>
+            <div>{isZh
+              ? '自动开仓、平仓暂不可用，请按上面的错误信息检查交易所账户授权。修复前不会为决策轮次调用付费 AI 或数据。'
+              : 'Automatic opens and closes are unavailable. Check the exchange account authorization shown above. No paid AI or data calls are made for decision cycles until this is fixed.'}</div>
           </div>
         )}
         {/* runtime health banner — AI fee wallet dry / safe mode would otherwise
@@ -436,7 +438,7 @@ export function TerminalDashboard({
             return raw.length > 16 ? raw.slice(0, 16).toUpperCase() : raw.toUpperCase()
           })()}</span>
           <span><span className="tm-sc">{isZh ? '策略 ' : 'strategy '}</span>{config?.strategy_name || selectedTrader?.strategy_name || '—'}</span>
-          <span><span className="tm-sc">{isZh ? '杠杆 ' : 'lev '}</span>{config?.btc_eth_leverage ?? '—'}× / {config?.altcoin_leverage ?? '—'}×</span>
+          <span><span className="tm-sc">{isZh ? '杠杆 ' : 'lev '}</span>{config?.effective_btc_eth_leverage ?? config?.btc_eth_leverage ?? '—'}× / {config?.effective_altcoin_leverage ?? config?.altcoin_leverage ?? '—'}×</span>
           <span><span className="tm-sc">{isZh ? '扫描 ' : 'scan '}</span>{scanMin}m</span>
           <span><span className="tm-sc">{isZh ? '标的池 ' : 'universe '}</span>{candidateCoins.length}</span>
           <span><span className="tm-sc">{isZh ? '持仓 ' : 'positions '}</span>{positions?.length ?? 0}</span>
@@ -536,7 +538,10 @@ export function TerminalDashboard({
                 zh: '信号',
                 items: (signalRank?.items ?? []).map((s) => ({
                   symbol: s.symbol,
-                  dir: (s.bias || '').toLowerCase() === 'bearish' ? ('short' as const) : ('long' as const),
+                  dir: (() => {
+                    const b = (s.bias || '').toLowerCase()
+                    return b === 'bearish' ? ('short' as const) : b === 'bullish' ? ('long' as const) : ('flat' as const)
+                  })(),
                 })),
               },
               {
@@ -682,14 +687,16 @@ export function TerminalDashboard({
                 </thead>
                 <tbody>
                   {recentTrades.map((p) => {
-                    const win = p.realized_pnl >= 0
+                    // realized_pnl is gross price PnL; show it net of open+close fees
+                    const net = (p.realized_pnl || 0) - (p.fee || 0)
+                    const win = net >= 0
                     return (
                       <tr key={p.id} style={{ borderTop: '1px solid var(--tm-hair)' }}>
                         <td style={{ padding: '5px 0', fontWeight: 500 }}>{baseLabel(p.symbol)}</td>
                         <td style={{ padding: '5px 0' }} className={p.side === 'long' || p.side === 'LONG' ? 'tm-up' : 'tm-dn'}>{isZh ? (p.side.toLowerCase() === 'long' ? '做多' : '做空') : p.side.toLowerCase()}</td>
                         <td style={{ padding: '5px 0', textAlign: 'right', color: 'var(--tm-ink-2)' }}>{fmtHold(p.entry_time, p.exit_time)}</td>
                         <td style={{ padding: '5px 0 5px 6px', color: 'var(--tm-muted)' }}>{fmtTime(p.exit_time)}</td>
-                        <td style={{ padding: '5px 0', textAlign: 'right' }} className={win ? 'tm-up' : 'tm-dn'}>{fmtUsd(p.realized_pnl, true)}</td>
+                        <td style={{ padding: '5px 0', textAlign: 'right' }} className={win ? 'tm-up' : 'tm-dn'}>{fmtUsd(net, true)}</td>
                       </tr>
                     )
                   })}
@@ -706,7 +713,7 @@ export function TerminalDashboard({
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
               <span className="tm-px" style={{ fontSize: 12 }}>{isZh ? '市场净流入' : 'Market net inflow'}</span>
               <span className="tm-sc">{isZh ? `主动买入 − 主动卖出 · ${flow?.data?.window || '1h'} · 币安` : `Taker buys − taker sells · ${flow?.data?.window || '1h'} · Binance`}</span>
-              <span className="tm-sc" style={{ marginLeft: 'auto' }}>{isZh ? `${flowItems.length} 个市场` : `${flowItems.length} markets`}</span>
+              <span className="tm-sc" style={{ marginLeft: 'auto' }}>{isZh ? `${Math.min(flowItems.length, FLOW_ROWS)} 个市场` : `${Math.min(flowItems.length, FLOW_ROWS)} markets`}</span>
             </div>
             <FlowMarkets items={flowItems} window={flow?.data?.window} />
           </div>

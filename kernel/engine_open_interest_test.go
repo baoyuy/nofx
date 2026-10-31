@@ -15,21 +15,25 @@ func TestOpenInterestLiquidityFilter(t *testing.T) {
 		oi       *market.OIData
 		price    float64
 		position bool
+		minOI    float64
 		skip     bool
 	}{
-		{"missing data keeps BTC", "BTCUSDT", nil, 50000, false, false},
-		{"missing data keeps ETH", "ETHUSDT", nil, 2000, false, false},
-		{"real zero is filtered", "BTCUSDT", &market.OIData{Latest: 0}, 50000, false, true},
-		{"low liquidity is filtered", "BTCUSDT", &market.OIData{Latest: 299}, 50000, false, true},
-		{"threshold is included", "BTCUSDT", &market.OIData{Latest: 300}, 50000, false, false},
-		{"healthy liquidity is included", "BTCUSDT", &market.OIData{Latest: 1000}, 50000, false, false},
-		{"position is retained", "BTCUSDT", &market.OIData{Latest: 1}, 50000, true, false},
-		{"xyz exemption is retained", "xyz:TSLA", &market.OIData{Latest: 0}, 200, false, false},
-		{"missing price cannot determine OI value", "BTCUSDT", &market.OIData{Latest: 1000}, 0, false, false},
+		{"missing data keeps BTC", "BTCUSDT", nil, 50000, false, 15, false},
+		{"missing data keeps ETH", "ETHUSDT", nil, 2000, false, 15, false},
+		{"real zero is filtered", "BTCUSDT", &market.OIData{Latest: 0}, 50000, false, 15, true},
+		{"low liquidity is filtered", "BTCUSDT", &market.OIData{Latest: 299}, 50000, false, 15, true},
+		{"threshold is included", "BTCUSDT", &market.OIData{Latest: 300}, 50000, false, 15, false},
+		{"healthy liquidity is included", "BTCUSDT", &market.OIData{Latest: 1000}, 50000, false, 15, false},
+		{"position is retained", "BTCUSDT", &market.OIData{Latest: 1}, 50000, true, 15, false},
+		{"xyz exemption is retained", "xyz:TSLA", &market.OIData{Latest: 0}, 200, false, 15, false},
+		{"missing price cannot determine OI value", "BTCUSDT", &market.OIData{Latest: 1000}, 0, false, 15, false},
+		{"lower strategy threshold keeps small coin", "BIRBUSDT", &market.OIData{Latest: 60_000_000}, 0.085, false, 2, false},
+		{"strategy threshold still filters below it", "PUNDIXUSDT", &market.OIData{Latest: 4_000_000}, 0.25, false, 2, true},
+		{"zero threshold disables the filter", "BTCUSDT", &market.OIData{Latest: 0}, 50000, false, 0, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			data := &market.Data{Symbol: tt.symbol, CurrentPrice: tt.price, OpenInterest: tt.oi}
-			if got := skipLowOpenInterest(tt.symbol, data, tt.position); got != tt.skip {
+			if got := skipLowOpenInterest(tt.symbol, data, tt.position, tt.minOI); got != tt.skip {
 				t.Fatalf("skip = %v, want %v", got, tt.skip)
 			}
 		})

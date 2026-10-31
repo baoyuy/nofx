@@ -231,7 +231,7 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 			continue
 		}
 
-		if skipLowOpenInterest(coin.Symbol, data, positionSymbols[coin.Symbol]) {
+		if skipLowOpenInterest(coin.Symbol, data, positionSymbols[coin.Symbol], config.RiskControl.MinOIValueMillionsOrDefault()) {
 			continue
 		}
 
@@ -243,16 +243,17 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 }
 
 // Missing OI must not empty the candidate list; a measured zero remains low OI.
-// Existing positions and xyz assets retain their existing exemptions.
-func skipLowOpenInterest(symbol string, data *market.Data, existingPosition bool) bool {
-	if existingPosition || market.IsXyzDexAsset(symbol) {
+// Existing positions and xyz assets retain their existing exemptions. The
+// threshold comes from the strategy (risk_control.min_oi_value_millions);
+// 0 disables the filter.
+func skipLowOpenInterest(symbol string, data *market.Data, existingPosition bool, minOIThresholdMillions float64) bool {
+	if existingPosition || market.IsXyzDexAsset(symbol) || minOIThresholdMillions <= 0 {
 		return false
 	}
 	if data.OpenInterest == nil {
 		logger.Infof("%s open interest unavailable; OI liquidity filter not evaluated", symbol)
 		return false
 	}
-	const minOIThresholdMillions = 15.0
 	if data.CurrentPrice > 0 {
 		oiValueInMillions := data.OpenInterest.Latest * data.CurrentPrice / 1_000_000
 		if oiValueInMillions < minOIThresholdMillions {

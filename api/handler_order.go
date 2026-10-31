@@ -7,6 +7,7 @@ import (
 
 	"nofx/logger"
 	"nofx/market"
+	"nofx/trader"
 	"nofx/trader/types"
 
 	"github.com/gin-gonic/gin"
@@ -106,6 +107,18 @@ func (s *Server) handleGetTraderConfig(c *gin.Context) {
 		"is_running":            isRunning,
 	}
 
+	// The trader sizes orders from its strategy's risk_control, not the legacy
+	// trader-table leverage, so expose those values for the dashboard.
+	if fullCfg.Strategy != nil {
+		result["strategy_name"] = fullCfg.Strategy.Name
+		if sc, err := fullCfg.Strategy.ParseConfig(); err == nil {
+			sc.ClampLimits()
+			result["effective_btc_eth_leverage"] = sc.RiskControl.BTCETHMaxLeverage
+			result["effective_altcoin_leverage"] = sc.RiskControl.AltcoinMaxLeverage
+			result["max_positions"] = sc.RiskControl.MaxPositions
+		}
+	}
+
 	c.JSON(http.StatusOK, result)
 }
 
@@ -159,22 +172,19 @@ func (s *Server) handleAccount(c *gin.Context) {
 
 // handlePositions Position list
 func (s *Server) handlePositions(c *gin.Context) {
-	trader, err := s.accountReadClient(c.GetString("user_id"), c.Query("trader_id"), c.Query("exchange_id"))
+	client, err := s.accountReadClient(c.GetString("user_id"), c.Query("trader_id"), c.Query("exchange_id"))
 	if err != nil {
 		SafeBadRequest(c, err.Error())
 		return
 	}
 
-	positions, err := trader.GetPositions()
+	positions, err := client.GetPositions()
 	if err != nil {
 		SafeInternalError(c, "Get positions", err)
 		return
 	}
 
-	if positions == nil {
-		positions = make([]map[string]interface{}, 0)
-	}
-	c.JSON(http.StatusOK, positions)
+	c.JSON(http.StatusOK, trader.FormatPositions(positions))
 }
 
 // handlePositionHistory Historical closed positions with statistics

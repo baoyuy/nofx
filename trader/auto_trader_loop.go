@@ -123,6 +123,15 @@ func (at *AutoTrader) runCycle() error {
 	at.logInfof("🤖 Requesting AI analysis and decision... [Strategy Engine]")
 	aiDecision, err := kernel.GetFullDecisionWithStrategy(ctx, at.mcpClient, at.strategyEngine, "balanced")
 
+	// The kernel drops candidates without usable market data or below the OI
+	// filter before prompting; record the coins the AI actually analysed.
+	if aiDecision != nil && aiDecision.UserPrompt != "" {
+		record.CandidateCoins = record.CandidateCoins[:0]
+		for _, coin := range ctx.CandidateCoins {
+			record.CandidateCoins = append(record.CandidateCoins, coin.Symbol)
+		}
+	}
+
 	if aiDecision != nil && aiDecision.AIRequestDurationMs > 0 {
 		record.AIRequestDurationMs = aiDecision.AIRequestDurationMs
 		at.logInfof("⏱️ AI call duration: %.2f seconds", float64(record.AIRequestDurationMs)/1000)

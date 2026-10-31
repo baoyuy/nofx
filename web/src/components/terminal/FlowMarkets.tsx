@@ -33,6 +33,9 @@ const GRID = '64px 96px minmax(120px, 1fr) 80px 96px'
  * window, a buy/sell split bar, trade count, and latest price. Sorted by net
  * inflow descending (the server ordering).
  */
+// Rows the panel renders; the dashboard header shows the same count.
+export const FLOW_ROWS = 10
+
 export function FlowMarkets({ items, window = '1h' }: FlowMarketsProps) {
   const { language } = useLanguage()
   const isZh = language === 'zh'
@@ -40,7 +43,7 @@ export function FlowMarkets({ items, window = '1h' }: FlowMarketsProps) {
   const rows = useMemo(() => {
     if (!items || items.length === 0) return []
     const max = items.reduce((m, it) => Math.max(m, Math.abs(num(it.netFlow))), 1)
-    return items.slice(0, 10).map((it) => {
+    return items.slice(0, FLOW_ROWS).map((it) => {
       const buy = num(it.buyNotional)
       const sell = num(it.sellNotional)
       const tot = buy + sell || 1

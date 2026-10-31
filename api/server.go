@@ -394,6 +394,7 @@ StrategyConfig fields:
   risk_control.altcoin_max_position_value_ratio: default 1
   risk_control.max_margin_usage: 0.5-0.95 (default 0.9 = use up to 90% margin)
   risk_control.min_position_size: minimum USDT per trade (default 12)
+  risk_control.min_oi_value_millions: skip candidates whose open-interest value is below this many million USD (default 15, 0 = off, max 1000)
   risk_control.min_risk_reward_ratio: minimum profit/loss ratio required (default 3 = 3:1)
   risk_control.min_confidence: minimum AI confidence to open position (default 75, range 60-90)
   prompt_sections.role_definition: describe the AI's trading persona and goal

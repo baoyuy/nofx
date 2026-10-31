@@ -49,11 +49,16 @@ function KlineChartSession({ symbol, height = 360, fill = false, demo = false }:
 
   // history seed (resynced occasionally; the WS carries the live bar). Crypto
   // coins Hyperliquid does not list fall back to Binance candles, polled
-  // instead of streamed.
+  // instead of streamed. Once a coin has fallen back, later refreshes go
+  // straight to Binance instead of re-trying Hyperliquid every poll.
   const [binance, setBinance] = useState(false)
+  const binanceRef = useRef(false)
   const { data: seed, isLoading, error } = useSWR(
     coin && !demo ? ['kline', coin, INTERVAL] : null,
     async () => {
+      if (binanceRef.current) {
+        return api.getKlines(`${base}USDT`, INTERVAL, 'binance', MAX_BARS, true)
+      }
       try {
         const rows = await api.getKlines(coin, INTERVAL, 'hyperliquid', MAX_BARS, true)
         setBinance(false)
@@ -61,6 +66,7 @@ function KlineChartSession({ symbol, height = 360, fill = false, demo = false }:
       } catch (err) {
         if (/^xyz:/i.test(coin)) throw err
         const rows = await api.getKlines(`${base}USDT`, INTERVAL, 'binance', MAX_BARS, true)
+        binanceRef.current = true
         setBinance(true)
         return rows
       }

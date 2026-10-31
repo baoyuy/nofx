@@ -283,7 +283,16 @@ func GetPublicDepth(ctx context.Context, symbol string, limit int) (*MarketDepth
 	} else if limit > 50 {
 		limit = 50
 	}
-	path := fmt.Sprintf("/fapi/v1/depth?symbol=%s&limit=%d", symbol, limit)
+	// Binance only accepts limit = 5, 10, 20, 50, ... (code -4021 otherwise),
+	// so request the next valid size up and trim to the requested count.
+	reqLimit := 50
+	for _, v := range []int{5, 10, 20, 50} {
+		if limit <= v {
+			reqLimit = v
+			break
+		}
+	}
+	path := fmt.Sprintf("/fapi/v1/depth?symbol=%s&limit=%d", symbol, reqLimit)
 	var raw struct {
 		Bids [][]string `json:"bids"`
 		Asks [][]string `json:"asks"`
@@ -292,6 +301,9 @@ func GetPublicDepth(ctx context.Context, symbol string, limit int) (*MarketDepth
 		return nil, fmt.Errorf("binance depth: %w", err)
 	}
 	toLevels := func(rows [][]string) [][2]float64 {
+		if len(rows) > limit {
+			rows = rows[:limit]
+		}
 		out := make([][2]float64, 0, len(rows))
 		for _, r := range rows {
 			if len(r) < 2 {

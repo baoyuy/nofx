@@ -125,7 +125,7 @@ func (at *AutoTrader) checkPositionDrawdown() {
 				symbol, side, pricePnLPct, currentPnLPct, peakPnLPct, drawdownPct)
 
 			// Execute close position
-			if err := at.emergencyClosePosition(symbol, side); err != nil {
+			if err := at.emergencyClosePosition(symbol, side, quantity, markPrice, entryPrice); err != nil {
 				logger.Infof("❌ Drawdown close position failed (%s %s): %v", symbol, side, err)
 			} else {
 				logger.Infof("✅ Drawdown close position succeeded: %s %s", symbol, side)
@@ -140,8 +140,10 @@ func (at *AutoTrader) checkPositionDrawdown() {
 	}
 }
 
-// emergencyClosePosition emergency close position function
-func (at *AutoTrader) emergencyClosePosition(symbol, side string) error {
+// emergencyClosePosition emergency close position function. The close is
+// recorded like an AI close so position history and the re-entry cooldown
+// see it.
+func (at *AutoTrader) emergencyClosePosition(symbol, side string, quantity, markPrice, entryPrice float64) error {
 	switch side {
 	case "long":
 		order, err := at.trader.CloseLong(symbol, 0) // 0 = close all
@@ -149,12 +151,14 @@ func (at *AutoTrader) emergencyClosePosition(symbol, side string) error {
 			return err
 		}
 		logger.Infof("✅ Emergency close long position succeeded, order ID: %v", order["orderId"])
+		at.recordAndConfirmOrder(order, symbol, "close_long", quantity, markPrice, 0, entryPrice)
 	case "short":
 		order, err := at.trader.CloseShort(symbol, 0) // 0 = close all
 		if err != nil {
 			return err
 		}
 		logger.Infof("✅ Emergency close short position succeeded, order ID: %v", order["orderId"])
+		at.recordAndConfirmOrder(order, symbol, "close_short", quantity, markPrice, 0, entryPrice)
 	default:
 		return fmt.Errorf("unknown position direction: %s", side)
 	}
