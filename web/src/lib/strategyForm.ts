@@ -21,6 +21,15 @@ export const LIMITS = {
 
 export const DEFAULT_MIN_OI_VALUE = 15
 
+// Live Bollinger horn source; mirrors store.HornIntervals / DefaultHornInterval.
+export const hornIntervals = ['15m', '1h', '4h'] as const
+export type HornInterval = (typeof hornIntervals)[number]
+export const DEFAULT_HORN_INTERVAL: HornInterval = '1h'
+const toHornInterval = (v?: string): HornInterval =>
+  (hornIntervals as readonly string[]).includes(v || '')
+    ? (v as HornInterval)
+    : DEFAULT_HORN_INTERVAL
+
 export const timeframeOptions = [
   '1m',
   '3m',
@@ -93,9 +102,11 @@ export type RuleSection = (typeof ruleSections)[number]
 export interface FreeForm {
   name: string
   description: string
-  // "pool" trades a saved coin pool from the Coin pool page.
-  coinSource?: 'static' | 'pool'
+  // "pool" trades a saved coin pool from the Coin pool page; "horn"
+  // re-screens Binance for the Bollinger horn every cycle.
+  coinSource?: 'static' | 'pool' | 'horn'
   coinPoolID?: string
+  hornInterval?: HornInterval
   // Snapshot of the pool's coins, sent with the strategy.
   poolCoins?: string[]
   coinsInput: string
@@ -181,7 +192,7 @@ export function usesPaidSource(config?: StrategyConfig | null): boolean {
   if (!ai) return false
   const source = ai.coin_source
   return (
-    !['static', 'coin_pool', 'hyper_all', 'hyper_main', 'hyper_rank'].includes(
+    !['static', 'coin_pool', 'bollinger_horn', 'hyper_all', 'hyper_main', 'hyper_rank'].includes(
       source.source_type
     ) ||
     source.use_ai500 ||
@@ -200,6 +211,7 @@ export function formFromStrategy(strategy: Strategy): FreeForm {
   const risk = ai?.risk_control
   const pool =
     ai?.coin_source.source_type === 'coin_pool' && ai.coin_source.coin_pool_id
+  const horn = ai?.coin_source.source_type === 'bollinger_horn'
   const timeframe = timeframeOptions.includes(
     ind?.klines.primary_timeframe || ''
   )
@@ -214,7 +226,8 @@ export function formFromStrategy(strategy: Strategy): FreeForm {
   return {
     name: strategy.name,
     description: strategy.description || '',
-    coinSource: pool ? 'pool' : 'static',
+    coinSource: horn ? 'horn' : pool ? 'pool' : 'static',
+    hornInterval: toHornInterval(ai?.coin_source.horn_interval),
     coinPoolID: pool ? ai!.coin_source.coin_pool_id : '',
     poolCoins: pool ? coins : [],
     coinsInput: coins.length > 0 ? coins.join(', ') : DEFAULT_COINS,
@@ -300,6 +313,7 @@ export function configFromForm(
   const defaultAI = getAIConfig(defaultConfig)
   const leverage = form.leverage
   const pool = form.coinSource === 'pool' && Boolean(form.coinPoolID)
+  const horn = form.coinSource === 'horn'
   const extra = (form.extraTimeframes || [])
     .filter((tf) => tf !== form.timeframe)
     .slice(0, LIMITS.maxExtraTimeframes)
@@ -319,12 +333,16 @@ export function configFromForm(
     language,
     ai_config: {
       coin_source: {
-        source_type: pool ? 'coin_pool' : 'static',
+        source_type: horn ? 'bollinger_horn' : pool ? 'coin_pool' : 'static',
         coin_pool_id: pool ? form.coinPoolID : '',
-        // For a pool the backend refreshes this snapshot from the pool.
-        static_coins: pool
-          ? (form.poolCoins || []).slice(0, LIMITS.maxCoins)
-          : parseCoins(form.coinsInput),
+        horn_interval: horn ? toHornInterval(form.hornInterval) : undefined,
+        // For a pool the backend refreshes this snapshot from the pool; the
+        // horn source picks its coins live every cycle.
+        static_coins: horn
+          ? []
+          : pool
+            ? (form.poolCoins || []).slice(0, LIMITS.maxCoins)
+            : parseCoins(form.coinsInput),
         excluded_coins: ai?.coin_source.excluded_coins || [],
         use_ai500: false,
         use_oi_top: false,

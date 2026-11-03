@@ -3,6 +3,7 @@ package main
 import (
 	"nofx/api"
 	"nofx/auth"
+	"nofx/coinpool"
 	"nofx/config"
 	"nofx/crypto"
 	"nofx/kernel"
@@ -92,8 +93,10 @@ func main() {
 	// Initialize installation ID for experience improvement (anonymous statistics)
 	initInstallationID(st)
 
-	// Strategies with coin source "coin_pool" read saved pools each cycle.
+	// Strategies with coin source "coin_pool" read saved pools each cycle;
+	// "bollinger_horn" re-screens Binance each cycle.
 	kernel.CoinPoolResolver = st.CoinPool().Symbols
+	kernel.HornResolver = coinpool.Shared.HornSymbols
 
 	// Set JWT secret
 	auth.SetJWTSecret(cfg.JWTSecret)

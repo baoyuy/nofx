@@ -35,6 +35,15 @@ const (
 	MaxMinOIValueMillions     = 1000.0
 )
 
+// Live Bollinger horn coin source (source_type "bollinger_horn"). Intervals
+// mirror coinpool.Intervals; store cannot import coinpool.
+var HornIntervals = map[string]bool{"15m": true, "1h": true, "4h": true}
+
+const (
+	DefaultHornInterval = "1h"
+	HornCoinLimit       = MaxCandidateCoins
+)
+
 const (
 	AutopilotDefaultMaxPositions          = 8
 	AutopilotMaxPositionValueRatio        = 5.0
@@ -250,6 +259,16 @@ func (c *StrategyConfig) NormalizeProductSchema() {
 		c.CoinSource.UseHyperMain = false
 		if strings.TrimSpace(c.CoinSource.CoinPoolID) == "" {
 			c.CoinSource.SourceType = "static"
+		}
+	case "bollinger_horn":
+		c.CoinSource.UseAI500 = false
+		c.CoinSource.UseOITop = false
+		c.CoinSource.UseOILow = false
+		c.CoinSource.UseHyperAll = false
+		c.CoinSource.UseHyperMain = false
+		c.CoinSource.CoinPoolID = ""
+		if !HornIntervals[c.CoinSource.HornInterval] {
+			c.CoinSource.HornInterval = DefaultHornInterval
 		}
 	case "hyper_all":
 		c.CoinSource.UseAI500 = false
@@ -854,6 +873,10 @@ type CoinSourceConfig struct {
 	// saved coin pool traded when source_type = "coin_pool"; StaticCoins
 	// keeps a snapshot used if the pool is missing
 	CoinPoolID string `json:"coin_pool_id,omitempty"`
+	// Bollinger horn interval when source_type = "bollinger_horn": the
+	// Binance top gainers are re-screened every cycle on this interval
+	// (15m | 1h | 4h, default 1h) and the top HornCoinLimit matches are traded.
+	HornInterval string `json:"horn_interval,omitempty"`
 	// static coin list (used when source_type = "static")
 	StaticCoins []string `json:"static_coins,omitempty"`
 	// excluded coins list (filtered out from all sources)
@@ -1576,6 +1599,8 @@ func (c *StrategyConfig) getEffectiveCoinCount() int {
 	switch c.CoinSource.SourceType {
 	case "static", "coin_pool":
 		count = len(c.CoinSource.StaticCoins)
+	case "bollinger_horn":
+		count = HornCoinLimit
 	case "ai500":
 		count = c.CoinSource.AI500Limit
 	case "oi_top":

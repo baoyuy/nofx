@@ -13,8 +13,9 @@ import (
 	"nofx/store"
 )
 
-// coinPoolScreener is shared by every user: screens read public data only.
-var coinPoolScreener = coinpool.NewScreener()
+// coinPoolScreener is shared by every user and by live horn strategies:
+// screens read public data only.
+var coinPoolScreener = coinpool.Shared
 
 func (s *Server) registerCoinPoolRoutes(protected *gin.RouterGroup) {
 	s.route(protected, "GET", "/coin-pool/screen/bollinger", "Bollinger horn screen of the Binance top 50 gainers (?interval=15m|1h|4h&refresh=1)", s.handleCoinPoolBollinger)

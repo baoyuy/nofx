@@ -105,8 +105,9 @@ export interface GridStrategyConfig {
 }
 
 export interface CoinSourceConfig {
-  source_type: 'static' | 'coin_pool' | 'ai500' | 'oi_top' | 'oi_low' | 'hyper_all' | 'hyper_main' | 'hyper_rank' | 'vergex_signal';
+  source_type: 'static' | 'coin_pool' | 'bollinger_horn' | 'ai500' | 'oi_top' | 'oi_low' | 'hyper_all' | 'hyper_main' | 'hyper_rank' | 'vergex_signal';
   coin_pool_id?: string;       // Saved coin pool traded when source_type = 'coin_pool'
+  horn_interval?: string;      // Bollinger horn interval (15m | 1h | 4h) when source_type = 'bollinger_horn'
   static_coins?: string[];
   excluded_coins?: string[];   // List of excluded coins
   use_ai500: boolean;

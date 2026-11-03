@@ -33,11 +33,35 @@ type Ticker struct {
 	QuoteVolume float64 `json:"quote_volume"`
 }
 
-// HornRow is one market on the horn board.
+// HornRow is one market on the horn board. For a match, MatchedBars counts
+// the consecutive closed candles (newest included) on which the pattern has
+// held, and MatchedSince is when the first of them closed: 1 bar means it
+// joined the board with the latest candle.
 type HornRow struct {
 	Ticker
 	HornResult
-	Error string `json:"error,omitempty"`
+	MatchedBars  int        `json:"matched_bars,omitempty"`
+	MatchedSince *time.Time `json:"matched_since,omitempty"`
+	Error        string     `json:"error,omitempty"`
+}
+
+// intervalDuration is the candle length of each supported interval.
+var intervalDuration = map[string]time.Duration{"15m": 15 * time.Minute, "1h": time.Hour, "4h": 4 * time.Hour}
+
+// maxMatchedBars caps the look-back for how long a match has held.
+const maxMatchedBars = 48
+
+// matchedRun counts how many of the newest closed candles in a row have
+// matched the horn, newest first.
+func matchedRun(closes []float64) int {
+	run := 0
+	for end := len(closes); end > 0 && run < maxMatchedBars; end-- {
+		if !AnalyzeHorn(closes[:end]).Match {
+			break
+		}
+		run++
+	}
+	return run
 }
 
 // HornBoard is the horn screen of the top gainers on one interval.
@@ -64,6 +88,29 @@ type Screener struct {
 
 func NewScreener() *Screener {
 	return &Screener{BaseURL: "https://fapi.binance.com", HTTP: &http.Client{Timeout: 15 * time.Second}, boards: map[string]HornBoard{}}
+}
+
+// Shared is the screener used by the coin pool page and by strategies with a
+// live horn coin source, so both reuse one cached board per interval.
+var Shared = NewScreener()
+
+// HornSymbols returns up to limit symbols that currently match the Bollinger
+// horn on interval, best score first. Non-matching markets are never padded in.
+func (s *Screener) HornSymbols(ctx context.Context, interval string, limit int) ([]string, error) {
+	board, err := s.HornBoard(ctx, interval, false)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, limit)
+	for _, r := range board.Rows {
+		if len(out) >= limit {
+			break
+		}
+		if r.Match && r.Error == "" {
+			out = append(out, r.Symbol)
+		}
+	}
+	return out, nil
 }
 
 func (s *Screener) get(ctx context.Context, path string, out any) error {
@@ -141,33 +188,39 @@ func (s *Screener) Gainers(ctx context.Context, n int) ([]Ticker, error) {
 	return out, nil
 }
 
-// closedCloses returns closes of finished candles, oldest first.
-func (s *Screener) closedCloses(ctx context.Context, symbol, interval string) ([]float64, error) {
+// closedCloses returns closes and open times (ms) of finished candles, oldest first.
+func (s *Screener) closedCloses(ctx context.Context, symbol, interval string) ([]float64, []int64, error) {
 	var rows [][]json.RawMessage
 	q := url.Values{"symbol": {symbol}, "interval": {interval}, "limit": {strconv.Itoa(klineLimit)}}
 	if err := s.get(ctx, "/fapi/v1/klines?"+q.Encode(), &rows); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(rows) < 2 {
-		return nil, errors.New("not enough candles")
+		return nil, nil, errors.New("not enough candles")
 	}
 	rows = rows[:len(rows)-1] // the newest candle is still forming
 	out := make([]float64, 0, len(rows))
+	opens := make([]int64, 0, len(rows))
 	for _, r := range rows {
 		if len(r) < 5 {
-			return nil, errors.New("invalid candle")
+			return nil, nil, errors.New("invalid candle")
+		}
+		var openMs int64
+		if json.Unmarshal(r[0], &openMs) != nil {
+			return nil, nil, errors.New("invalid candle open time")
 		}
 		var raw string
 		if json.Unmarshal(r[4], &raw) != nil {
-			return nil, errors.New("invalid candle close")
+			return nil, nil, errors.New("invalid candle close")
 		}
 		v, err := strconv.ParseFloat(raw, 64)
 		if err != nil || v <= 0 {
-			return nil, errors.New("invalid candle close")
+			return nil, nil, errors.New("invalid candle close")
 		}
 		out = append(out, v)
+		opens = append(opens, openMs)
 	}
-	return out, nil
+	return out, opens, nil
 }
 
 // HornBoard screens the top 50 gainers for the Bollinger horn on interval.
@@ -216,7 +269,7 @@ func (s *Screener) scanHorn(ctx context.Context, interval string) (HornBoard, er
 			slots <- struct{}{}
 			defer func() { <-slots }()
 			rows[i] = HornRow{Ticker: t, HornResult: HornResult{Direction: "neutral", Stage: "none"}}
-			closes, err := s.closedCloses(ctx, t.Symbol, interval)
+			closes, opens, err := s.closedCloses(ctx, t.Symbol, interval)
 			if err != nil {
 				rows[i].Error = "candles unavailable"
 				mu.Lock()
@@ -225,6 +278,12 @@ func (s *Screener) scanHorn(ctx context.Context, interval string) (HornBoard, er
 				return
 			}
 			rows[i].HornResult = AnalyzeHorn(closes)
+			if rows[i].Match {
+				run := matchedRun(closes)
+				first := len(closes) - run
+				since := time.UnixMilli(opens[first]).Add(intervalDuration[interval]).UTC()
+				rows[i].MatchedBars, rows[i].MatchedSince = run, &since
+			}
 		}(i, t)
 	}
 	wg.Wait()

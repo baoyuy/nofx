@@ -1,6 +1,9 @@
 import {
+  DEFAULT_HORN_INTERVAL,
   DEFAULT_MIN_OI_VALUE,
   LIMITS,
+  hornIntervals,
+  type HornInterval,
   clampNumber,
   indicatorOptions,
   parseCoins,
@@ -26,7 +29,9 @@ export function strategyToJsonc(form: FreeForm, language: 'zh' | 'en'): string {
   const coins =
     form.coinSource === 'pool'
       ? form.poolCoins || []
-      : parseCoins(form.coinsInput)
+      : form.coinSource === 'horn'
+        ? []
+        : parseCoins(form.coinsInput)
   const ind = (key: IndicatorKey) => form.indicators[key]
   const rule = (key: RuleSection) => form.rules?.[key] || ''
   const lines = [
@@ -65,7 +70,8 @@ export function strategyToJsonc(form: FreeForm, language: 'zh' | 'en'): string {
     '',
     `  // ${t('—— 交易哪些币 ——', '—— Coins to trade ——')}`,
     '  "coins": {',
-    `    "source": ${s(form.coinSource === 'pool' ? 'pool' : 'static')}, // ${t('"static" = 固定列表；"pool" = 每轮读取「币池」页保存的币池', '"static" = fixed list; "pool" = read a saved coin pool each cycle')}`,
+    `    "source": ${s(form.coinSource || 'static')}, // ${t('"static" = 固定列表；"pool" = 每轮读取「币池」页保存的币池；"horn" = 每轮实时筛选布林喇叭口，取前 10 个', '"static" = fixed list; "pool" = read a saved coin pool each cycle; "horn" = re-screen the Bollinger horn every cycle, top 10')}`,
+    `    "horn_interval": ${s(form.hornInterval || DEFAULT_HORN_INTERVAL)}, // ${t(`source 为 horn 时用哪个周期的布林线筛选。可选 ${hornIntervals.join(' ')}`, `Bollinger interval used when source is horn. Options ${hornIntervals.join(' ')}`)}`,
     `    "list": ${s(coins)}, // ${t(`币安 U 本位永续合约代码，最多 ${LIMITS.maxCoins} 个。source 为 pool 时这是保存时的快照`, `Binance USDT-M perpetual symbols, at most ${LIMITS.maxCoins}. For a pool this is the snapshot at save time`)}`,
     `    "pool_id": ${s(form.coinSource === 'pool' ? form.coinPoolID || '' : '')} // ${t('币池 ID，只在本账户有效；在别的账户导入时会改用上面的 list', 'Coin pool ID, valid only in this account; elsewhere the list above is used')}`,
     '  },',
@@ -253,7 +259,20 @@ export function parseStrategyFile(
     )
   }
   const pool = availablePools.find((p) => p.id === coins.pool_id)
-  if (coins.source === 'pool' && pool) {
+  if (coins.source === 'horn') {
+    patch.coinSource = 'horn'
+    if (typeof coins.horn_interval === 'string') {
+      if ((hornIntervals as readonly string[]).includes(coins.horn_interval))
+        patch.hornInterval = coins.horn_interval as HornInterval
+      else
+        warnings.push(
+          t(
+            `布林喇叭口周期 ${coins.horn_interval} 不支持，已用 ${DEFAULT_HORN_INTERVAL}`,
+            `Horn interval ${coins.horn_interval} is not supported; using ${DEFAULT_HORN_INTERVAL}`
+          )
+        )
+    }
+  } else if (coins.source === 'pool' && pool) {
     patch.coinSource = 'pool'
     patch.coinPoolID = pool.id
     patch.poolCoins = pool.coins.map((c) => c.symbol)

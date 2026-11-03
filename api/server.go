@@ -361,7 +361,8 @@ CRITICAL: Always use the "id" field for strategy_id.`,
 IMPORTANT: For most use cases just POST {"name":"<name>"} — the backend fills everything in. Only include "config" when the user explicitly requests custom settings (specific coins, custom leverage, custom timeframes).
 
 StrategyConfig fields:
-  coin_source.source_type: "static" (fixed coin list, free; default and recommended) | "hyper_all" | "hyper_main" | "hyper_rank" (free Hyperliquid public data)
+  coin_source.source_type: "static" (fixed coin list, free; default and recommended) | "bollinger_horn" (free Binance; re-screens the top gainers for the Bollinger horn every cycle and trades the top 10 matches) | "hyper_all" | "hyper_main" | "hyper_rank" (free Hyperliquid public data)
+  coin_source.horn_interval: Bollinger horn interval when source_type is "bollinger_horn": "15m"|"1h"|"4h" (default "1h")
   coin_source.static_coins: e.g. ["BTCUSDT","ETHUSDT","SOLUSDT"]
   indicators.klines.primary_timeframe: "1m"|"3m"|"5m"|"15m"|"1h"|"4h" — scalping→"5m", trend/swing→"1h"/"4h"
   indicators.klines.primary_count: number of candles (20-100)

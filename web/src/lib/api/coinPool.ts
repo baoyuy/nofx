@@ -3,7 +3,7 @@ import { API_BASE, httpClient } from './helpers'
 // Coin pool page: screeners over Binance USDT-M perpetuals and saved pools
 // that strategies can trade (coin source "coin_pool").
 
-export type HornStage = 'opening' | 'mature' | 'closing' | 'none'
+export type HornStage = 'starting' | 'opening' | 'mature' | 'closing' | 'none'
 export type PoolDirection = 'long' | 'short' | 'neutral'
 
 export interface HornRow {
@@ -20,7 +20,35 @@ export interface HornRow {
   percent_b: number
   bars_since: number
   bandwidth: number
+  /** Consecutive closed candles the match has held (1 = joined with the latest candle). */
+  matched_bars?: number
+  /** When the first candle of the current match closed (ISO time). */
+  matched_since?: string
   error?: string
+}
+
+/**
+ * How long a horn match has been on the board, e.g. "新上榜 · 15 分钟前" or
+ * "已 3 根 · 2 小时前". Empty for rows that do not match.
+ */
+export function hornOnBoard(
+  row: Pick<HornRow, 'matched_bars' | 'matched_since'>,
+  zh: boolean,
+  now: number = Date.now()
+): { label: string; isNew: boolean } {
+  if (!row.matched_bars || !row.matched_since) return { label: '', isNew: false }
+  const mins = Math.max(0, Math.round((now - Date.parse(row.matched_since)) / 60000))
+  const ago =
+    mins < 60
+      ? zh ? `${mins} 分钟前` : `${mins}m ago`
+      : mins < 48 * 60
+        ? zh ? `${Math.round(mins / 60)} 小时前` : `${Math.round(mins / 60)}h ago`
+        : zh ? `${Math.round(mins / 1440)} 天前` : `${Math.round(mins / 1440)}d ago`
+  const isNew = row.matched_bars === 1
+  const bars = isNew
+    ? zh ? '新上榜' : 'New'
+    : zh ? `已 ${row.matched_bars} 根` : `${row.matched_bars} bars`
+  return { label: `${bars} · ${ago}`, isNew }
 }
 
 export interface HornBoard {

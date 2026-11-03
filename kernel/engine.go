@@ -294,6 +294,9 @@ func (e *StrategyEngine) GetCandidateCoins() ([]CandidateCoin, error) {
 	case "coin_pool":
 		return e.filterExcludedCoins(coinPoolCandidates(coinSource)), nil
 
+	case "bollinger_horn":
+		return e.filterExcludedCoins(hornCandidates(coinSource)), nil
+
 	case "static":
 		for _, symbol := range coinSource.StaticCoins {
 			symbol = market.Normalize(symbol)

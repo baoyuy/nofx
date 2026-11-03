@@ -108,6 +108,16 @@ describe('strategy file', () => {
     })
   })
 
+  it('round-trips the live Bollinger horn source and its interval', () => {
+    const text = strategyToJsonc(
+      { ...form, coinSource: 'horn', hornInterval: '4h' },
+      'zh'
+    )
+    const { patch, warnings } = parseStrategyFile(text, [], 'zh')
+    expect(warnings).toEqual([])
+    expect(patch).toMatchObject({ coinSource: 'horn', hornInterval: '4h' })
+  })
+
   it('rejects files that are not NOFX strategies', () => {
     expect(() => parseStrategyFile('{"a":1}', [], 'en')).toThrow(
       'Not a NOFX strategy file'

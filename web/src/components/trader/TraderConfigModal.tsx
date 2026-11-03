@@ -85,7 +85,7 @@ interface TraderConfigModalProps {
 
 // coinSourceLabel names a strategy's coin source for the summary card.
 function coinSourceLabel(
-  source: { source_type: string; static_coins?: string[] },
+  source: { source_type: string; static_coins?: string[]; horn_interval?: string },
   language: string
 ): string {
   const zh = language === 'zh'
@@ -96,6 +96,10 @@ function coinSourceLabel(
     }
     case 'coin_pool':
       return zh ? '我的币池' : 'My coin pool'
+    case 'bollinger_horn':
+      return zh
+        ? `布林喇叭口（实时，${source.horn_interval || '1h'}）`
+        : `Bollinger horn (live, ${source.horn_interval || '1h'})`
     case 'vergex_signal':
       return zh
         ? 'Vergex 信号榜（付费，已停用）'

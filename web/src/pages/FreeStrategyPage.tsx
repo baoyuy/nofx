@@ -17,12 +17,15 @@ import { DeepVoidBackground } from '../components/common/DeepVoidBackground'
 import { api } from '../lib/api'
 import { confirmToast, notify } from '../lib/notify'
 import type { AIModel, Strategy, StrategyConfig, TraderInfo } from '../types'
-import type { CoinPool } from '../lib/api/coinPool'
+import type { CoinPool, HornBoard } from '../lib/api/coinPool'
+import { hornOnBoard } from '../lib/api/coinPool'
 import { ROUTES } from '../router/paths'
 import {
   DEFAULT_COINS,
+  DEFAULT_HORN_INTERVAL,
   DEFAULT_MIN_OI_VALUE,
   LIMITS,
+  hornIntervals,
   SAFE_DEFAULTS,
   configFromForm,
   defaultRules,
@@ -85,7 +88,28 @@ export function FreeStrategyPage() {
     [form]
   )
   const usingPool = form?.coinSource === 'pool'
+  const usingHorn = form?.coinSource === 'horn'
+  const hornInterval = form?.hornInterval || DEFAULT_HORN_INTERVAL
   const selectedPool = pools.find((p) => p.id === form?.coinPoolID)
+  // Preview of what the live horn source would trade right now.
+  const [hornBoard, setHornBoard] = useState<HornBoard | null>(null)
+  const [hornError, setHornError] = useState('')
+  useEffect(() => {
+    if (!usingHorn || !token) return
+    let alive = true
+    setHornBoard(null)
+    setHornError('')
+    api
+      .screenBollinger(hornInterval)
+      .then((b) => alive && setHornBoard(b))
+      .catch((e) => alive && setHornError(String(e?.message || e)))
+    return () => {
+      alive = false
+    }
+  }, [usingHorn, hornInterval, token])
+  const hornMatches = (hornBoard?.rows || [])
+    .filter((r) => r.match && !r.error)
+    .slice(0, LIMITS.maxCoins)
   const rulesDefault = useMemo(
     () => defaultRules(defaultConfig),
     [defaultConfig]
@@ -177,7 +201,7 @@ export function FreeStrategyPage() {
       notify.error(text(language, '请选择一个币池', 'Choose a coin pool'))
       return false
     }
-    if (!usingPool && parsedCoins.length === 0) {
+    if (!usingPool && !usingHorn && parsedCoins.length === 0) {
       notify.error(
         text(
           language,
@@ -286,7 +310,10 @@ export function FreeStrategyPage() {
       if (!ok) return
     }
     try {
-      const copy = await api.duplicateStrategy(selected.id)
+      const copy = await api.duplicateStrategy(
+        selected.id,
+        `${selected.name}${text(language, '（副本）', ' (copy)')}`
+      )
       notify.success(text(language, '已复制策略', 'Strategy duplicated'))
       await loadStrategies(copy?.id)
     } catch (err) {
@@ -652,7 +679,7 @@ export function FreeStrategyPage() {
                 </Field>
               </div>
               <div
-                className="flex gap-2"
+                className="flex flex-col gap-2 sm:flex-row"
                 role="radiogroup"
                 aria-label={text(language, '币种来源', 'Coin source')}
               >
@@ -676,6 +703,15 @@ export function FreeStrategyPage() {
                         'Read a saved pool each cycle'
                       ),
                     ],
+                    [
+                      'horn',
+                      text(language, '布林喇叭口（实时）', 'Bollinger horn (live)'),
+                      text(
+                        language,
+                        `每轮重新筛选，取前 ${LIMITS.maxCoins} 个`,
+                        `Re-screened every cycle, top ${LIMITS.maxCoins}`
+                      ),
+                    ],
                   ] as const
                 ).map(([value, label, hint]) => (
                   <button
@@ -695,7 +731,77 @@ export function FreeStrategyPage() {
                   </button>
                 ))}
               </div>
-              {usingPool ? (
+              {usingHorn ? (
+                <>
+                  <Field
+                    language={language}
+                    label={text(language, '布林线周期', 'Bollinger interval')}
+                    hint={text(
+                      language,
+                      `每轮决策前，从币安涨幅前 50 的合约里重新筛选布林喇叭口（收口后开口），按得分取前 ${LIMITS.maxCoins} 个交给 AI。形态不符的币不会凑数，所以有时少于 ${LIMITS.maxCoins} 个。持仓中的币掉出名单后，AI 仍会继续管理直到平仓。`,
+                      `Before each cycle, the top 50 Binance gainers are re-screened for the Bollinger horn (squeeze then expansion) and the top ${LIMITS.maxCoins} by score go to the AI. Non-matching coins are never padded in, so there can be fewer. Held coins that drop off are still managed by the AI until closed.`
+                    )}
+                  >
+                    <div className="flex gap-2" role="radiogroup" aria-label={text(language, '布林线周期', 'Bollinger interval')}>
+                      {hornIntervals.map((iv) => (
+                        <button
+                          key={iv}
+                          type="button"
+                          role="radio"
+                          aria-checked={hornInterval === iv}
+                          onClick={() => patchForm({ hornInterval: iv })}
+                          className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${hornInterval === iv ? 'border-nofx-gold bg-nofx-gold/10 text-nofx-text' : 'border-[rgba(25,36,52,0.14)] text-nofx-text-muted'}`}
+                        >
+                          {iv}
+                        </button>
+                      ))}
+                    </div>
+                  </Field>
+                  <div className="flex flex-wrap items-center gap-2" aria-live="polite">
+                    <span className="text-xs text-nofx-text-muted">
+                      {text(language, '当前会交易：', 'Would trade now:')}
+                    </span>
+                    {hornError ? (
+                      <span className="text-xs text-nofx-danger">
+                        {text(language, '筛选失败，请稍后再试。', 'Screening failed; try again later.')}
+                      </span>
+                    ) : !hornBoard ? (
+                      <span className="text-xs text-nofx-text-muted">
+                        {text(language, '正在筛选币安合约…', 'Screening Binance futures…')}
+                      </span>
+                    ) : hornMatches.length === 0 ? (
+                      <span className="text-xs text-nofx-text-muted">
+                        {text(language, '现在没有符合喇叭口形态的币，本轮只会管理已有持仓。', 'No coin shows the horn right now; the cycle only manages open positions.')}
+                      </span>
+                    ) : (
+                      hornMatches.map((r) => {
+                        const onBoard = hornOnBoard(r, language === 'zh')
+                        return (
+                        <span
+                          key={r.symbol}
+                          className="rounded-md bg-nofx-gold/10 px-2 py-1 text-xs font-medium text-nofx-gold"
+                          title={text(language, `得分 ${r.score.toFixed(0)}`, `score ${r.score.toFixed(0)}`)}
+                        >
+                          {r.symbol}
+                          {onBoard.label ? (
+                            <span className={onBoard.isNew ? 'ml-1 font-semibold text-nofx-success' : 'ml-1 font-normal text-nofx-text-muted'}>
+                              {onBoard.label}
+                            </span>
+                          ) : null}
+                        </span>
+                        )
+                      })
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => navigate(ROUTES.coinPool)}
+                      className="text-xs text-nofx-gold underline"
+                    >
+                      {text(language, '在币池页查看完整筛选', 'See the full screen on the Coin pool page')}
+                    </button>
+                  </div>
+                </>
+              ) : usingPool ? (
                 <>
                   <Field
                     language={language}
