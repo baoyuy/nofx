@@ -64,7 +64,7 @@ func (s *Server) registerCopyTradeRoutes(protected *gin.RouterGroup) {
 	s.route(protected, "POST", "/copytrade/follows", "Follow a lead trader (body: id = portfolio ID or copy-trading page URL)", s.handleCopyTradeFollow)
 	s.route(protected, "GET", "/copytrade/follows/:id", "One followed trader with positions and actions", s.handleCopyTradeFollowDetail)
 	s.route(protected, "DELETE", "/copytrade/follows/:id", "Unfollow a lead trader", s.handleCopyTradeUnfollow)
-	s.route(protected, "GET", "/copytrade/feed", "Actions of followed traders, newest first (?portfolio_id=&symbol=&action=open|add|reduce|close&min_value=&limit=)", s.handleCopyTradeFeed)
+	s.route(protected, "GET", "/copytrade/feed", "Actions of followed traders, newest first, paged (?portfolio_id=&symbol=&action=open|add|reduce|close&min_value=&page=1&page_size=50)", s.handleCopyTradeFeed)
 	s.route(protected, "GET", "/copytrade/symbols", "Long/short totals per coin across followed traders", s.handleCopyTradeSymbols)
 	s.route(protected, "GET", "/copytrade/symbols/:symbol", "Followed traders' positions in one coin with entry prices", s.handleCopyTradeSymbol)
 	s.route(protected, "GET", "/copytrade/hit-rate", "How often hourly coin confidence signals moved the called way after 4h and 24h (?days=30)", s.handleCopyTradeHitRate)
@@ -220,7 +220,14 @@ func (s *Server) handleCopyTradeFeed(c *gin.Context) {
 		return
 	}
 	minValue, _ := strconv.ParseFloat(c.Query("min_value"), 64)
-	limit, _ := strconv.Atoi(c.Query("limit"))
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	size, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
+	if page < 1 {
+		page = 1
+	}
+	if size < 10 || size > 200 {
+		size = 50
+	}
 	action := c.Query("action")
 	switch action {
 	case "", "open", "add", "reduce", "close":
@@ -228,9 +235,11 @@ func (s *Server) handleCopyTradeFeed(c *gin.Context) {
 		SafeBadRequest(c, "action must be open, add, reduce or close")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": copytrade.Feed(s.copyTrade.Snapshots(), copytrade.FeedFilter{
-		PortfolioID: c.Query("portfolio_id"), Symbol: c.Query("symbol"), Action: action, MinValue: minValue, Limit: limit,
-	})})
+	items, total := copytrade.FeedPage(s.copyTrade.Snapshots(), copytrade.FeedFilter{
+		PortfolioID: c.Query("portfolio_id"), Symbol: c.Query("symbol"), Action: action, MinValue: minValue,
+		Limit: size, Offset: (page - 1) * size,
+	})
+	c.JSON(http.StatusOK, gin.H{"items": items, "total": total, "page": page, "page_size": size})
 }
 
 func (s *Server) handleCopyTradeSymbols(c *gin.Context) {

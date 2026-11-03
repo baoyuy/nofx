@@ -107,3 +107,18 @@ func TestSymbolsAveragesEntryBySize(t *testing.T) {
 		t.Fatalf("summary = %+v", s)
 	}
 }
+
+func TestFeedPages(t *testing.T) {
+	var events []Event
+	for i := 0; i < 25; i++ {
+		events = append(events, Event{Time: int64(100 - i), Symbol: "BTCUSDT", Side: "long", Action: "open", Value: 10})
+	}
+	snaps := []Snapshot{{Events: events}}
+	page, total := FeedPage(snaps, FeedFilter{Limit: 10, Offset: 20})
+	if total != 25 || len(page) != 5 || page[0].Time != 80 {
+		t.Fatalf("page 3 = %d items from %v, total %d", len(page), page[0].Time, total)
+	}
+	if page, total := FeedPage(snaps, FeedFilter{Limit: 10, Offset: 40}); total != 25 || len(page) != 0 {
+		t.Fatalf("past the end = %d items, total %d", len(page), total)
+	}
+}

@@ -179,7 +179,8 @@ export interface FeedQuery {
   symbol?: string
   action?: TradeAction | ''
   min_value?: number
-  limit?: number
+  page?: number
+  page_size?: number
 }
 
 function unwrap<T>(
@@ -237,10 +238,13 @@ export const copyTradeApi = {
   },
 
   getFeed: (q: FeedQuery) =>
-    get<{ items: FeedItem[] }>('/copytrade/feed', {
-      ...q,
-      action: q.action || undefined,
-    }),
+    get<{ items: FeedItem[]; total: number; page: number; page_size: number }>(
+      '/copytrade/feed',
+      {
+        ...q,
+        action: q.action || undefined,
+      }
+    ),
 
   getCopyTradeSymbols: () =>
     get<{ symbols: SymbolSummary[] }>('/copytrade/symbols'),

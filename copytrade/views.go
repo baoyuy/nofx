@@ -21,10 +21,18 @@ type FeedFilter struct {
 	Action      string // open | add | reduce | close
 	MinValue    float64
 	Limit       int
+	// Offset skips that many newest matches (for paging).
+	Offset int
 }
 
 // Feed merges every followed trader's actions, newest first.
 func Feed(snaps []Snapshot, f FeedFilter) []FeedItem {
+	items, _ := FeedPage(snaps, f)
+	return items
+}
+
+// FeedPage returns one page of the merged actions and how many match in all.
+func FeedPage(snaps []Snapshot, f FeedFilter) ([]FeedItem, int) {
 	if f.Limit <= 0 || f.Limit > 500 {
 		f.Limit = 200
 	}
@@ -43,10 +51,9 @@ func Feed(snaps []Snapshot, f FeedFilter) []FeedItem {
 		}
 	}
 	sort.SliceStable(out, func(a, b int) bool { return out[a].Time > out[b].Time })
-	if len(out) > f.Limit {
-		out = out[:f.Limit]
-	}
-	return out
+	total := len(out)
+	start := min(max(0, f.Offset), total)
+	return out[start:min(start+f.Limit, total)], total
 }
 
 // SideSummary totals one side of a coin across followed traders.

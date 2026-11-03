@@ -33,7 +33,18 @@ export function FeedTab({
   const [action, setAction] = useState<TradeAction | ''>('')
   const [minValue, setMinValue] = useState(0)
   const [items, setItems] = useState<FeedItem[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [error, setError] = useState('')
+  const pages = Math.max(1, Math.ceil(total / pageSize))
+  // Changing a filter starts again from the newest page.
+  const filter =
+    <T,>(set: (v: T) => void) =>
+    (v: T) => {
+      set(v)
+      setPage(1)
+    }
 
   useEffect(() => {
     let cancelled = false
@@ -45,12 +56,17 @@ export function FeedTab({
           : undefined,
         action,
         min_value: minValue || undefined,
-        limit: 300,
+        page,
+        page_size: pageSize,
       })
       .then((r) => {
         if (!cancelled) {
           setItems(r.items || [])
+          setTotal(r.total || 0)
           setError('')
+          // Keep the page in range when the list shrinks.
+          const last = Math.max(1, Math.ceil((r.total || 0) / pageSize))
+          if (page > last) setPage(last)
         }
       })
       .catch(
@@ -60,7 +76,66 @@ export function FeedTab({
     return () => {
       cancelled = true
     }
-  }, [trader, symbol, action, minValue, version])
+  }, [trader, symbol, action, minValue, page, pageSize, version])
+
+  const pager = (where: string) =>
+    total > pageSize ? (
+      <div
+        className={`${where} flex flex-wrap items-center justify-center gap-2 text-sm`}
+      >
+        <button
+          type="button"
+          className={ui.btnGhost}
+          disabled={page <= 1}
+          onClick={() => setPage(1)}
+        >
+          {tr(language, '最新', 'Newest')}
+        </button>
+        <button
+          type="button"
+          className={ui.btnGhost}
+          disabled={page <= 1}
+          onClick={() => setPage((p) => p - 1)}
+        >
+          {tr(language, '上一页', 'Previous')}
+        </button>
+        <span className={ui.muted}>
+          {tr(
+            language,
+            `第 ${page} / ${pages} 页 · 共 ${total} 条`,
+            `Page ${page} / ${pages} · ${total} actions`
+          )}
+        </span>
+        <button
+          type="button"
+          className={ui.btnGhost}
+          disabled={page >= pages}
+          onClick={() => setPage((p) => p + 1)}
+        >
+          {tr(language, '下一页', 'Next')}
+        </button>
+        <button
+          type="button"
+          className={ui.btnGhost}
+          disabled={page >= pages}
+          onClick={() => setPage(pages)}
+        >
+          {tr(language, '最早', 'Oldest')}
+        </button>
+        <select
+          className={`${ui.inputInline} py-0.5 text-xs`}
+          value={pageSize}
+          onChange={(e) => filter(setPageSize)(Number(e.target.value))}
+          aria-label={tr(language, '每页条数', 'Per page')}
+        >
+          {[20, 50, 100].map((n) => (
+            <option key={n} value={n}>
+              {tr(language, `每页 ${n} 条`, `${n} per page`)}
+            </option>
+          ))}
+        </select>
+      </div>
+    ) : null
 
   return (
     <section className={ui.panel}>
@@ -70,7 +145,7 @@ export function FeedTab({
           <select
             className={`${ui.inputInline}`}
             value={trader}
-            onChange={(e) => setTrader(e.target.value)}
+            onChange={(e) => filter(setTrader)(e.target.value)}
           >
             <option value="">{tr(language, '全部', 'All')}</option>
             {snaps.map((s) => (
@@ -85,7 +160,7 @@ export function FeedTab({
           <input
             className={`${ui.inputInline} w-28`}
             value={symbol}
-            onChange={(e) => setSymbol(e.target.value)}
+            onChange={(e) => filter(setSymbol)(e.target.value)}
             placeholder="BTC"
           />
         </label>
@@ -94,7 +169,9 @@ export function FeedTab({
           <select
             className={`${ui.inputInline}`}
             value={action}
-            onChange={(e) => setAction(e.target.value as TradeAction | '')}
+            onChange={(e) =>
+              filter(setAction)(e.target.value as TradeAction | '')
+            }
           >
             <option value="">{tr(language, '全部', 'All')}</option>
             <option value="open">{tr(language, '开仓', 'Open')}</option>
@@ -110,7 +187,7 @@ export function FeedTab({
           <select
             className={`${ui.inputInline}`}
             value={minValue}
-            onChange={(e) => setMinValue(Number(e.target.value))}
+            onChange={(e) => filter(setMinValue)(Number(e.target.value))}
           >
             {[0, 100, 1000, 10000, 100000].map((v) => (
               <option key={v} value={v}>
@@ -120,6 +197,7 @@ export function FeedTab({
           </select>
         </label>
       </div>
+      {pager('mb-3')}
       {error ? (
         <p role="alert" className="py-4 text-sm text-nofx-danger">
           {error}
@@ -204,6 +282,7 @@ export function FeedTab({
           )}
         </p>
       )}
+      {pager('mt-3')}
     </section>
   )
 }
