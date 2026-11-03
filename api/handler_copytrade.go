@@ -240,7 +240,16 @@ func (s *Server) handleCopyTradeSymbol(c *gin.Context) {
 			break
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"symbol": symbol, "summary": summary, "holders": copytrade.Holders(snaps, symbol)})
+	// Traders' 30-day results for the chart's avatar cards, including traders
+	// who have since closed this coin.
+	traders := map[string]gin.H{}
+	for _, sn := range snaps {
+		f := sn.Follow
+		traders[f.PortfolioID] = gin.H{"nickname": f.Nickname, "avatar_url": f.AvatarURL, "roi_30d": f.ROI,
+			"pnl_30d": f.PnL, "win_rate_30d": f.WinRate}
+	}
+	c.JSON(http.StatusOK, gin.H{"symbol": symbol, "summary": summary, "holders": copytrade.Holders(snaps, symbol),
+		"events": copytrade.Feed(snaps, copytrade.FeedFilter{Symbol: symbol, Limit: 500}), "traders": traders})
 }
 
 func (s *Server) handleCopyTradeProxyGet(c *gin.Context) {

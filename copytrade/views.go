@@ -10,6 +10,7 @@ type FeedItem struct {
 	Event
 	PortfolioID string `json:"portfolio_id"`
 	Nickname    string `json:"nickname"`
+	AvatarURL   string `json:"avatar_url"`
 }
 
 // FeedFilter narrows the action feed. Zero values match everything.
@@ -36,7 +37,8 @@ func Feed(snaps []Snapshot, f FeedFilter) []FeedItem {
 			if (sym != "" && e.Symbol != sym) || (f.Action != "" && e.Action != f.Action) || e.Value < f.MinValue {
 				continue
 			}
-			out = append(out, FeedItem{Event: e, PortfolioID: s.Follow.PortfolioID, Nickname: s.Follow.Nickname})
+			out = append(out, FeedItem{Event: e, PortfolioID: s.Follow.PortfolioID, Nickname: s.Follow.Nickname,
+				AvatarURL: s.Follow.AvatarURL})
 		}
 	}
 	sort.SliceStable(out, func(a, b int) bool { return out[a].Time > out[b].Time })
@@ -61,11 +63,16 @@ type SymbolSummary struct {
 	Short  SideSummary `json:"short"`
 }
 
-// Holder is one followed trader's position in a coin.
+// Holder is one followed trader's position in a coin, with the trader's
+// 30-day results.
 type Holder struct {
 	Position
-	PortfolioID string `json:"portfolio_id"`
-	Nickname    string `json:"nickname"`
+	PortfolioID string  `json:"portfolio_id"`
+	Nickname    string  `json:"nickname"`
+	AvatarURL   string  `json:"avatar_url"`
+	ROI30       float64 `json:"roi_30d"`
+	PnL30       float64 `json:"pnl_30d"`
+	WinRate30   float64 `json:"win_rate_30d"`
 }
 
 // Symbols sums positions per coin, most traders first.
@@ -120,7 +127,9 @@ func Holders(snaps []Snapshot, symbol string) []Holder {
 	for _, s := range snaps {
 		for _, p := range s.Positions {
 			if p.Symbol == symbol {
-				out = append(out, Holder{Position: p, PortfolioID: s.Follow.PortfolioID, Nickname: s.Follow.Nickname})
+				f := s.Follow
+				out = append(out, Holder{Position: p, PortfolioID: f.PortfolioID, Nickname: f.Nickname, AvatarURL: f.AvatarURL,
+					ROI30: f.ROI, PnL30: f.PnL, WinRate30: f.WinRate})
 			}
 		}
 	}

@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../lib/api'
-import type { Holder, SymbolSummary } from '../../lib/api/copyTrade'
+import type {
+  FeedItem,
+  Holder,
+  SymbolSummary,
+  TraderBrief,
+} from '../../lib/api/copyTrade'
 import type { MarketKline } from '../../lib/api/market'
 import { BinanceChart, BN, type PriceMarker } from '../market/BinanceChart'
 import { tr, ui } from '../market/marketUi'
 import { priceDecimals } from '../../utils/marketIndicators'
+import { buildMarks } from './chartMarks'
+import { EntryOverlay } from './EntryOverlay'
 import {
   ago,
   base,
@@ -17,8 +24,42 @@ import {
 } from './format'
 
 const intervals = ['15m', '1h', '4h', '1d']
-// More lines than this make the chart unreadable.
-const MAX_MARKERS = 20
+
+export type CoinSort = 'traders' | 'long' | 'short' | 'value' | 'consensus'
+export type CoinBias = 'all' | 'long' | 'short'
+
+const traderCount = (s: SymbolSummary) => s.long.traders + s.short.traders
+/** 1 = everyone on one side, 0 = evenly split. */
+const consensus = (s: SymbolSummary) =>
+  Math.abs(s.long.traders - s.short.traders) / Math.max(1, traderCount(s))
+
+export function sortCoins(
+  list: SymbolSummary[],
+  sort: CoinSort,
+  bias: CoinBias
+): SymbolSummary[] {
+  const key: Record<CoinSort, (s: SymbolSummary) => number> = {
+    traders: traderCount,
+    long: (s) => s.long.traders,
+    short: (s) => s.short.traders,
+    value: (s) => s.long.value + s.short.value,
+    consensus,
+  }
+  return list
+    .filter(
+      (s) =>
+        bias === 'all' ||
+        (bias === 'long'
+          ? s.long.traders > s.short.traders
+          : s.short.traders > s.long.traders)
+    )
+    .sort(
+      (a, b) =>
+        key[sort](b) - key[sort](a) ||
+        traderCount(b) - traderCount(a) ||
+        b.long.value + b.short.value - (a.long.value + a.short.value)
+    )
+}
 
 function Bar({ s }: { s: SymbolSummary }) {
   const total = s.long.value + s.short.value || 1
@@ -50,6 +91,19 @@ function CoinDetail({
   const [chartError, setChartError] = useState('')
   const [holders, setHolders] = useState<Holder[]>([])
   const [summary, setSummary] = useState<SymbolSummary | null>(null)
+  const [events, setEvents] = useState<FeedItem[]>([])
+  const [traders, setTraders] = useState<Record<string, TraderBrief>>({})
+  const [showAvg, setShowAvg] = useState(false)
+  const [openKey, setOpenKey] = useState('')
+
+  // A click anywhere outside an avatar card closes it.
+  useEffect(() => {
+    if (!openKey) return
+    const close = () => setOpenKey('')
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [openKey])
+  useEffect(() => setOpenKey(''), [symbol, interval])
 
   useEffect(() => {
     let cancelled = false
@@ -80,6 +134,8 @@ function CoinDetail({
         if (!cancelled) {
           setHolders(r.holders || [])
           setSummary(r.summary)
+          setEvents(r.events || [])
+          setTraders(r.traders || {})
         }
       })
       .catch(() => {})
@@ -90,14 +146,8 @@ function CoinDetail({
 
   const last = candles[candles.length - 1]?.close || 0
   const markers = useMemo<PriceMarker[]>(() => {
-    const top = holders.slice(0, MAX_MARKERS)
-    const maxValue = Math.max(1, ...top.map((h) => h.entry_value))
-    const lines: PriceMarker[] = top.map((h) => ({
-      price: h.entry_price,
-      color: h.side === 'long' ? BN.up : BN.down,
-      width: 1 + Math.round((h.entry_value / maxValue) * 3),
-      title: `${h.nickname.slice(0, 8)} ${usd(h.entry_value)}`,
-    }))
+    if (!showAvg) return []
+    const lines: PriceMarker[] = []
     if (summary?.long.avg_entry)
       lines.push({
         price: summary.long.avg_entry,
@@ -113,7 +163,16 @@ function CoinDetail({
         title: tr(language, '空头均价', 'Short avg'),
       })
     return lines
-  }, [holders, summary, language])
+  }, [showAvg, summary, language])
+  const marks = useMemo(
+    () =>
+      buildMarks(
+        events,
+        holders,
+        candles.map((c) => c.time)
+      ),
+    [events, holders, candles]
+  )
 
   return (
     <div className="space-y-3">
@@ -167,10 +226,22 @@ function CoinDetail({
         <p className={`${ui.muted} mb-2`}>
           {tr(
             language,
-            `图上每条线是一位带单员的开仓价，绿色做多、红色做空，线越粗仓位越大（最多显示前 ${MAX_MARKERS} 位）；橙色和紫色是多空的平均开仓价。`,
-            `Each line is a trader's entry: green long, red short, thicker = larger (top ${MAX_MARKERS}); orange and purple are the long and short average entries.`
+            '头像标在带单员开仓、加仓的那根 K 线和价格上：绿框做多，红框做空，点头像看入场价和收益。小三角是减仓或平仓（绿色赚、红色亏）。虚线框头像在最左边，表示入场早于图上的时间，换大周期可以看到。',
+            'Avatars sit on the candle and price where a trader opened or added: green border long, red short. Click one for the entry and results. Small triangles are reductions and closes (green profit, red loss). Dashed avatars at the left entered before the chart; switch to a longer interval.'
           )}
         </p>
+        <label className="mb-2 flex items-center gap-1.5 text-xs text-nofx-text">
+          <input
+            type="checkbox"
+            checked={showAvg}
+            onChange={(e) => setShowAvg(e.target.checked)}
+          />
+          {tr(
+            language,
+            '显示多空平均开仓价（橙色做多、紫色做空）',
+            'Show long/short average entries (orange long, purple short)'
+          )}
+        </label>
         {chartError ? (
           <p
             role="alert"
@@ -185,8 +256,21 @@ function CoinDetail({
             main="NONE"
             subs={['VOL']}
             markers={markers}
+            overlay={(p) => (
+              <EntryOverlay
+                p={p}
+                entries={marks.entries}
+                exits={marks.exits}
+                events={events}
+                traders={traders}
+                lastPrice={last}
+                language={language}
+                openKey={openKey}
+                onOpen={setOpenKey}
+              />
+            )}
             resetKey={`${symbol}:${interval}`}
-            height={520}
+            height={560}
           />
         )}
       </section>
@@ -315,6 +399,12 @@ export function CoinsTab({
   onSelect: (symbol: string) => void
 }) {
   const [symbols, setSymbols] = useState<SymbolSummary[]>([])
+  const [sort, setSort] = useState<CoinSort>('traders')
+  const [bias, setBias] = useState<CoinBias>('all')
+  const shown = useMemo(
+    () => sortCoins(symbols, sort, bias),
+    [symbols, sort, bias]
+  )
   useEffect(() => {
     let cancelled = false
     api
@@ -325,7 +415,7 @@ export function CoinsTab({
       cancelled = true
     }
   }, [version])
-  const current = selected || symbols[0]?.symbol || ''
+  const current = selected || shown[0]?.symbol || ''
 
   return (
     <div className="grid gap-3 lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -333,9 +423,45 @@ export function CoinsTab({
         <h2 className={ui.title}>
           {tr(language, '关注的人在做的币', 'Coins followed traders hold')}
         </h2>
-        {symbols.length ? (
+        <div className="mb-2 grid grid-cols-2 gap-2">
+          <select
+            className={ui.input}
+            value={sort}
+            onChange={(e) => setSort(e.target.value as CoinSort)}
+            aria-label={tr(language, '排序', 'Sort')}
+          >
+            <option value="traders">
+              {tr(language, '关注的人最多', 'Most traders')}
+            </option>
+            <option value="long">
+              {tr(language, '做多人数最多', 'Most long')}
+            </option>
+            <option value="short">
+              {tr(language, '做空人数最多', 'Most short')}
+            </option>
+            <option value="value">
+              {tr(language, '持仓金额最大', 'Largest value')}
+            </option>
+            <option value="consensus">
+              {tr(language, '多空最一致', 'Most one-sided')}
+            </option>
+          </select>
+          <select
+            className={ui.input}
+            value={bias}
+            onChange={(e) => setBias(e.target.value as CoinBias)}
+            aria-label={tr(language, '方向', 'Direction')}
+          >
+            <option value="all">{tr(language, '全部方向', 'All sides')}</option>
+            <option value="long">{tr(language, '偏多', 'Mostly long')}</option>
+            <option value="short">
+              {tr(language, '偏空', 'Mostly short')}
+            </option>
+          </select>
+        </div>
+        {shown.length ? (
           <ul className="space-y-1">
-            {symbols.map((s) => (
+            {shown.map((s) => (
               <li key={s.symbol}>
                 <button
                   type="button"
@@ -369,11 +495,17 @@ export function CoinsTab({
           </ul>
         ) : (
           <p className={ui.muted}>
-            {tr(
-              language,
-              '关注的带单员现在都没有持仓。',
-              'No followed trader holds anything now.'
-            )}
+            {symbols.length
+              ? tr(
+                  language,
+                  '没有符合这个方向的币。',
+                  'No coin leans this way.'
+                )
+              : tr(
+                  language,
+                  '关注的带单员现在都没有持仓。',
+                  'No followed trader holds anything now.'
+                )}
           </p>
         )}
       </aside>

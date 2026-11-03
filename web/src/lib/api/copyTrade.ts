@@ -108,6 +108,16 @@ export interface TraderSnapshot {
 export interface FeedItem extends TradeEvent {
   portfolio_id: string
   nickname: string
+  avatar_url: string
+}
+
+/** A trader's identity and 30-day results. */
+export interface TraderBrief {
+  nickname: string
+  avatar_url: string
+  roi_30d: number
+  pnl_30d: number
+  win_rate_30d: number
 }
 
 export interface SideSummary {
@@ -122,9 +132,8 @@ export interface SymbolSummary {
   short: SideSummary
 }
 
-export interface Holder extends TraderPosition {
+export interface Holder extends TraderPosition, TraderBrief {
   portfolio_id: string
-  nickname: string
 }
 
 export interface FeedQuery {
@@ -203,6 +212,8 @@ export const copyTradeApi = {
       symbol: string
       summary: SymbolSummary | null
       holders: Holder[] | null
+      events: FeedItem[] | null
+      traders: Record<string, TraderBrief>
     }>(`/copytrade/symbols/${encodeURIComponent(symbol)}`),
 
   getCopyTradeProxy: () =>

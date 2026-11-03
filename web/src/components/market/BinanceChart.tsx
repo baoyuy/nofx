@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ReactNode,
 } from 'react'
 import {
   CandlestickSeries,
@@ -72,8 +73,21 @@ interface Props {
   subs: SubIndicator[]
   levels?: ChartLevels
   markers?: PriceMarker[]
+  /** Draws on top of the K-line pane, re-rendered on pan, zoom and resize. */
+  overlay?: (p: ChartProjector) => ReactNode
   resetKey: string // changes when symbol/interval changes, to refit the view
   height?: number
+}
+
+/** Maps candle time and price to pixels in the K-line pane. */
+export interface ChartProjector {
+  /** x of the candle at unix seconds `time` (must be a candle's time) */
+  x: (time: number) => number | null
+  y: (price: number) => number | null
+  width: number
+  height: number
+  /** pixels per candle */
+  barSpacing: number
 }
 
 interface LegendItem {
@@ -190,6 +204,7 @@ export function BinanceChart({
   subs,
   levels,
   markers,
+  overlay,
   resetKey,
   height = 620,
 }: Props) {
@@ -211,6 +226,8 @@ export function BinanceChart({
     maps: [],
   })
   const [legends, setLegends] = useState<LegendItem[][]>([])
+  // Bumped when the view moves so the overlay re-projects.
+  const [viewTick, setViewTick] = useState(0)
   const [paneTops, setPaneTops] = useState<number[]>([])
 
   const fmtPrice = useCallback((v: number) => v.toFixed(decimals), [decimals])
@@ -445,15 +462,26 @@ export function BinanceChart({
     chart.subscribeCrosshairMove((param: MouseEventParams<Time>) =>
       legendRef.current(param.time as number | undefined)
     )
+    let raf = 0
+    const bump = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => setViewTick((t) => t + 1))
+    }
+    chart.timeScale().subscribeVisibleLogicalRangeChange(bump)
+    chart.timeScale().subscribeSizeChange(bump)
 
     seriesRef.current = { candle, main: mainSeries, subs: subSeries }
     fittedKeyRef.current = ''
     applyRef.current()
-    const ro = new ResizeObserver(() => measurePanes())
+    const ro = new ResizeObserver(() => {
+      measurePanes()
+      bump()
+    })
     ro.observe(el)
     const timer = window.setTimeout(measurePanes, 0)
     return () => {
       window.clearTimeout(timer)
+      cancelAnimationFrame(raf)
       ro.disconnect()
       chart.remove()
       chartRef.current = null
@@ -524,9 +552,47 @@ export function BinanceChart({
     // markersKey stands for markers; main/subs/decimals rebuild the series.
   }, [markersKey, main, subsKey, decimals])
 
+  // The price scale autoscales to new data on the next frame; re-project then.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setViewTick((t) => t + 1))
+    return () => cancelAnimationFrame(id)
+  }, [candles])
+
+  // Re-project after every view move and data change (the chart updates
+  // its coordinates synchronously in setData and range changes).
+  const [proj, setProj] = useState<ChartProjector | null>(null)
+  const hasOverlay = Boolean(overlay)
+  useEffect(() => {
+    const chart = chartRef.current
+    const s = seriesRef.current
+    const pane = chart?.panes()[0]
+    if (!hasOverlay || !chart || !s || !pane || !candles.length) {
+      setProj(null)
+      return
+    }
+    const ts = chart.timeScale()
+    const range = ts.getVisibleLogicalRange()
+    const width = ts.width()
+    setProj({
+      x: (time) => ts.timeToCoordinate(toTime(time)),
+      y: (price) => s.candle.priceToCoordinate(price),
+      width,
+      height: pane.getHeight(),
+      barSpacing: range ? width / Math.max(1, range.to - range.from) : 6,
+    })
+  }, [hasOverlay, viewTick, candles, main, subsKey, decimals])
+
   return (
     <div className="relative w-full" style={{ height, background: BN.bg }}>
       <div ref={containerRef} className="absolute inset-0" />
+      {overlay && proj ? (
+        <div
+          className="pointer-events-none absolute left-0 top-0 z-20 overflow-hidden"
+          style={{ width: proj.width, height: proj.height }}
+        >
+          {overlay(proj)}
+        </div>
+      ) : null}
       {legends.map((items, i) => (
         <div
           key={i}
