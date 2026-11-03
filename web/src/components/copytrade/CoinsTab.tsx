@@ -13,6 +13,11 @@ import { priceDecimals } from '../../utils/marketIndicators'
 import { buildMarks } from './chartMarks'
 import { EntryOverlay } from './EntryOverlay'
 import {
+  ConfidenceBadge,
+  explainConfidence,
+  HitRatePanel,
+} from './ConfidenceUi'
+import {
   ago,
   base,
   clock,
@@ -25,7 +30,13 @@ import {
 
 const intervals = ['15m', '1h', '4h', '1d']
 
-export type CoinSort = 'traders' | 'long' | 'short' | 'value' | 'consensus'
+export type CoinSort =
+  | 'confidence'
+  | 'traders'
+  | 'long'
+  | 'short'
+  | 'value'
+  | 'consensus'
 export type CoinBias = 'all' | 'long' | 'short'
 
 const traderCount = (s: SymbolSummary) => s.long.traders + s.short.traders
@@ -39,6 +50,7 @@ export function sortCoins(
   bias: CoinBias
 ): SymbolSummary[] {
   const key: Record<CoinSort, (s: SymbolSummary) => number> = {
+    confidence: (s) => s.confidence?.score || 0,
     traders: traderCount,
     long: (s) => s.long.traders,
     short: (s) => s.short.traders,
@@ -192,6 +204,9 @@ function CoinDetail({
           </h2>
           <span className="tabular-nums text-nofx-text">{price(last)}</span>
           {summary ? (
+            <ConfidenceBadge c={summary.confidence} language={language} />
+          ) : null}
+          {summary ? (
             <span className={ui.muted}>
               <span className="text-nofx-success">
                 {tr(
@@ -232,6 +247,17 @@ function CoinDetail({
             ))}
           </div>
         </div>
+        {summary && explainConfidence(language, summary) ? (
+          <p className="mb-2 rounded bg-nofx-bg-deeper px-2 py-1 text-xs text-nofx-text">
+            {tr(language, '置信度：', 'Confidence: ')}
+            {explainConfidence(language, summary)}
+            {tr(
+              language,
+              '。置信度表示关注的人看法有多一致、记录有多可信，不是胜率。',
+              '. It measures how much followed traders agree and how trustworthy they are, not a win probability.'
+            )}
+          </p>
+        ) : null}
         <p className={`${ui.muted} mb-2`}>
           {tr(
             language,
@@ -408,7 +434,7 @@ export function CoinsTab({
   onSelect: (symbol: string) => void
 }) {
   const [symbols, setSymbols] = useState<SymbolSummary[]>([])
-  const [sort, setSort] = useState<CoinSort>('traders')
+  const [sort, setSort] = useState<CoinSort>('confidence')
   const [bias, setBias] = useState<CoinBias>('all')
   const shown = useMemo(
     () => sortCoins(symbols, sort, bias),
@@ -428,96 +454,113 @@ export function CoinsTab({
 
   return (
     <div className="grid gap-3 lg:grid-cols-[280px_minmax(0,1fr)]">
-      <aside className={`${ui.panel} max-h-[900px] overflow-y-auto`}>
-        <h2 className={ui.title}>
-          {tr(language, '关注的人在做的币', 'Coins followed traders hold')}
-        </h2>
-        <div className="mb-2 grid grid-cols-2 gap-2">
-          <select
-            className={ui.input}
-            value={sort}
-            onChange={(e) => setSort(e.target.value as CoinSort)}
-            aria-label={tr(language, '排序', 'Sort')}
-          >
-            <option value="traders">
-              {tr(language, '关注的人最多', 'Most traders')}
-            </option>
-            <option value="long">
-              {tr(language, '做多人数最多', 'Most long')}
-            </option>
-            <option value="short">
-              {tr(language, '做空人数最多', 'Most short')}
-            </option>
-            <option value="value">
-              {tr(language, '持仓金额最大', 'Largest value')}
-            </option>
-            <option value="consensus">
-              {tr(language, '多空最一致', 'Most one-sided')}
-            </option>
-          </select>
-          <select
-            className={ui.input}
-            value={bias}
-            onChange={(e) => setBias(e.target.value as CoinBias)}
-            aria-label={tr(language, '方向', 'Direction')}
-          >
-            <option value="all">{tr(language, '全部方向', 'All sides')}</option>
-            <option value="long">{tr(language, '偏多', 'Mostly long')}</option>
-            <option value="short">
-              {tr(language, '偏空', 'Mostly short')}
-            </option>
-          </select>
-        </div>
-        {shown.length ? (
-          <ul className="space-y-1">
-            {shown.map((s) => (
-              <li key={s.symbol}>
-                <button
-                  type="button"
-                  aria-pressed={s.symbol === current}
-                  onClick={() => onSelect(s.symbol)}
-                  className={`w-full rounded-lg border px-2 py-1.5 text-left ${s.symbol === current ? 'border-nofx-gold bg-nofx-gold/10' : 'border-transparent hover:border-nofx-gold'}`}
-                >
-                  <div className="mb-1 flex items-center justify-between text-sm">
-                    <span className="font-medium text-nofx-text">
-                      {base(s.symbol)}
-                    </span>
-                    <span className="text-xs">
-                      <span className="text-nofx-success">
-                        {s.long.traders}
-                        {tr(language, '多', 'L')}
+      <div>
+        <aside className={`${ui.panel} max-h-[760px] overflow-y-auto`}>
+          <h2 className={ui.title}>
+            {tr(language, '关注的人在做的币', 'Coins followed traders hold')}
+          </h2>
+          <div className="mb-2 grid grid-cols-2 gap-2">
+            <select
+              className={ui.input}
+              value={sort}
+              onChange={(e) => setSort(e.target.value as CoinSort)}
+              aria-label={tr(language, '排序', 'Sort')}
+            >
+              <option value="confidence">
+                {tr(language, '置信度最高', 'Highest confidence')}
+              </option>
+              <option value="traders">
+                {tr(language, '关注的人最多', 'Most traders')}
+              </option>
+              <option value="long">
+                {tr(language, '做多人数最多', 'Most long')}
+              </option>
+              <option value="short">
+                {tr(language, '做空人数最多', 'Most short')}
+              </option>
+              <option value="value">
+                {tr(language, '持仓金额最大', 'Largest value')}
+              </option>
+              <option value="consensus">
+                {tr(language, '多空最一致', 'Most one-sided')}
+              </option>
+            </select>
+            <select
+              className={ui.input}
+              value={bias}
+              onChange={(e) => setBias(e.target.value as CoinBias)}
+              aria-label={tr(language, '方向', 'Direction')}
+            >
+              <option value="all">
+                {tr(language, '全部方向', 'All sides')}
+              </option>
+              <option value="long">
+                {tr(language, '偏多', 'Mostly long')}
+              </option>
+              <option value="short">
+                {tr(language, '偏空', 'Mostly short')}
+              </option>
+            </select>
+          </div>
+          {shown.length ? (
+            <ul className="space-y-1">
+              {shown.map((s) => (
+                <li key={s.symbol}>
+                  <button
+                    type="button"
+                    aria-pressed={s.symbol === current}
+                    onClick={() => onSelect(s.symbol)}
+                    className={`w-full rounded-lg border px-2 py-1.5 text-left ${s.symbol === current ? 'border-nofx-gold bg-nofx-gold/10' : 'border-transparent hover:border-nofx-gold'}`}
+                  >
+                    <div className="mb-1 flex items-center justify-between text-sm">
+                      <span className="font-medium text-nofx-text">
+                        {base(s.symbol)}
                       </span>
-                      {' / '}
-                      <span className="text-nofx-danger">
-                        {s.short.traders}
-                        {tr(language, '空', 'S')}
+                      <span className="text-xs">
+                        <span className="text-nofx-success">
+                          {s.long.traders}
+                          {tr(language, '多', 'L')}
+                        </span>
+                        {' / '}
+                        <span className="text-nofx-danger">
+                          {s.short.traders}
+                          {tr(language, '空', 'S')}
+                        </span>
                       </span>
-                    </span>
-                  </div>
-                  <Bar s={s} />
-                  <div className={`${ui.muted} mt-0.5`}>
-                    {usd(s.long.value + s.short.value)}
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className={ui.muted}>
-            {symbols.length
-              ? tr(
-                  language,
-                  '没有符合这个方向的币。',
-                  'No coin leans this way.'
-                )
-              : tr(
-                  language,
-                  '关注的带单员现在都没有持仓。',
-                  'No followed trader holds anything now.'
-                )}
-          </p>
-        )}
-      </aside>
+                    </div>
+                    <Bar s={s} />
+                    <div
+                      className={`${ui.muted} mt-1 flex items-center justify-between`}
+                    >
+                      {usd(s.long.value + s.short.value)}
+                      <ConfidenceBadge
+                        c={s.confidence}
+                        language={language}
+                        compact
+                      />
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className={ui.muted}>
+              {symbols.length
+                ? tr(
+                    language,
+                    '没有符合这个方向的币。',
+                    'No coin leans this way.'
+                  )
+                : tr(
+                    language,
+                    '关注的带单员现在都没有持仓。',
+                    'No followed trader holds anything now.'
+                  )}
+            </p>
+          )}
+        </aside>
+        <HitRatePanel language={language} />
+      </div>
       <div className="min-w-0">
         {current ? (
           <CoinDetail language={language} symbol={current} version={version} />

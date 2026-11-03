@@ -121,11 +121,21 @@ describe('coin list sorting', () => {
     symbol: string,
     l: number,
     s: number,
-    value = 100
+    value = 100,
+    confidence = 0
   ): SymbolSummary => ({
     symbol,
     long: { traders: l, value, avg_entry: 0 },
     short: { traders: s, value: 0, avg_entry: 0 },
+    confidence: {
+      direction: l > s ? 'long' : s > l ? 'short' : 'neutral',
+      score: confidence,
+      agreement: 0,
+      long_share: 0,
+      count_factor: 0,
+      quality: 0,
+      traders: l + s,
+    },
   })
   const list = [
     coin('A', 3, 2),
@@ -148,6 +158,17 @@ describe('coin list sorting', () => {
       'D',
     ])
     expect(sortCoins(list, 'value', 'all')[0].symbol).toBe('D')
+  })
+
+  it('sorts by confidence', () => {
+    const scored = [
+      coin('X', 1, 0, 10, 20),
+      coin('Y', 4, 0, 10, 75),
+      coin('Z', 2, 1, 10, 40),
+    ]
+    expect(sortCoins(scored, 'confidence', 'all').map((c) => c.symbol)).toEqual(
+      ['Y', 'Z', 'X']
+    )
   })
 
   it('filters by side', () => {

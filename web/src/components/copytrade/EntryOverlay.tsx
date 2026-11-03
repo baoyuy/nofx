@@ -5,6 +5,7 @@ import type { ChartProjector } from '../market/BinanceChart'
 import { tr } from '../market/marketUi'
 import type { EntryMark, ExitMark } from './chartMarks'
 import { positionResult } from './chartMarks'
+import { ScoreBadge } from './ConfidenceUi'
 import {
   actionLabel,
   clock,
@@ -186,6 +187,11 @@ function Card({
         )}
         {t ? (
           <div className="text-nofx-text-muted">
+            {t.score !== undefined ? (
+              <>
+                <ScoreBadge score={t.score} language={language} />{' '}
+              </>
+            ) : null}
             {tr(language, '近 30 天', '30 days')}{' '}
             <span className={tone(t.roi_30d)}>{pct(t.roi_30d)}</span> ·{' '}
             {tr(language, '盈利', 'PnL')}{' '}

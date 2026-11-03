@@ -68,7 +68,7 @@ export function FeedTab({
         <label>
           <span className={ui.label}>{tr(language, '带单员', 'Trader')}</span>
           <select
-            className={`${ui.input} w-auto`}
+            className={`${ui.inputInline}`}
             value={trader}
             onChange={(e) => setTrader(e.target.value)}
           >
@@ -83,7 +83,7 @@ export function FeedTab({
         <label>
           <span className={ui.label}>{tr(language, '币种', 'Coin')}</span>
           <input
-            className={`${ui.input} w-28`}
+            className={`${ui.inputInline} w-28`}
             value={symbol}
             onChange={(e) => setSymbol(e.target.value)}
             placeholder="BTC"
@@ -92,7 +92,7 @@ export function FeedTab({
         <label>
           <span className={ui.label}>{tr(language, '动作', 'Action')}</span>
           <select
-            className={`${ui.input} w-auto`}
+            className={`${ui.inputInline}`}
             value={action}
             onChange={(e) => setAction(e.target.value as TradeAction | '')}
           >
@@ -108,7 +108,7 @@ export function FeedTab({
             {tr(language, '金额不低于', 'Min value')}
           </span>
           <select
-            className={`${ui.input} w-auto`}
+            className={`${ui.inputInline}`}
             value={minValue}
             onChange={(e) => setMinValue(Number(e.target.value))}
           >

@@ -103,6 +103,7 @@ export interface TraderSnapshot {
   updated_at: string
   error?: string
   hot: boolean
+  score: TraderScore
 }
 
 export interface FeedItem extends TradeEvent {
@@ -118,6 +119,7 @@ export interface TraderBrief {
   roi_30d: number
   pnl_30d: number
   win_rate_30d: number
+  score: number
 }
 
 export interface SideSummary {
@@ -126,10 +128,46 @@ export interface SideSummary {
   avg_entry: number
 }
 
+/** A coin's direction among followed traders. */
+export interface Confidence {
+  direction: TradeSide | 'neutral'
+  /** 0-100 */
+  score: number
+  /** |long − short| / total weight */
+  agreement: number
+  long_share: number
+  /** penalty for few traders, 0-1 */
+  count_factor: number
+  /** mean trader score of the holders, 0-1 */
+  quality: number
+  traders: number
+}
+
+/** How far a lead trader's record can be trusted, 0-100, and its parts (0-1). */
+export interface TraderScore {
+  score: number
+  quality: number
+  drawdown: number
+  win_rate: number
+  tenure: number
+  scale: number
+  reliability: number
+}
+
+export interface HitRate {
+  band: 'high' | 'mid' | 'low' | 'all'
+  horizon: '4h' | '24h'
+  samples: number
+  hits: number
+  rate: number
+  avg_return: number
+}
+
 export interface SymbolSummary {
   symbol: string
   long: SideSummary
   short: SideSummary
+  confidence: Confidence
 }
 
 export interface Holder extends TraderPosition, TraderBrief {
@@ -215,6 +253,9 @@ export const copyTradeApi = {
       events: FeedItem[] | null
       traders: Record<string, TraderBrief>
     }>(`/copytrade/symbols/${encodeURIComponent(symbol)}`),
+
+  getHitRate: (days = 30) =>
+    get<{ days: number; rows: HitRate[] }>('/copytrade/hit-rate', { days }),
 
   getCopyTradeProxy: () =>
     get<{ proxy: string; configured: boolean }>('/copytrade/proxy'),

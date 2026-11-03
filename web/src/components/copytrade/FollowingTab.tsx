@@ -1,8 +1,10 @@
+import { useMemo, useState } from 'react'
 import { Loader2, Trash2 } from 'lucide-react'
 import { api } from '../../lib/api'
 import type { TraderSnapshot } from '../../lib/api/copyTrade'
 import { confirmToast, notify } from '../../lib/notify'
 import { tr, ui } from '../market/marketUi'
+import { ScoreBadge } from './ConfidenceUi'
 import {
   actionClass,
   actionLabel,
@@ -83,6 +85,7 @@ function TraderCard({
           {tr(language, '回撤', 'MDD')} {t.mdd.toFixed(1)}% ·{' '}
           {tr(language, '胜率', 'Win')} {t.win_rate.toFixed(0)}%
         </span>
+        <ScoreBadge score={snap.score} language={language} />
         {t.status && t.status !== 'ACTIVE' ? (
           <span className="rounded bg-nofx-danger/10 px-1.5 text-[11px] text-nofx-danger">
             {t.status}
@@ -218,6 +221,14 @@ export function FollowingTab({
   onChanged: () => void
   onSymbol: (symbol: string) => void
 }) {
+  const [sort, setSort] = useState<'followed' | 'score' | 'roi'>('score')
+  const sorted = useMemo(() => {
+    const list = [...snaps]
+    if (sort === 'score')
+      list.sort((a, b) => (b.score?.score || 0) - (a.score?.score || 0))
+    if (sort === 'roi') list.sort((a, b) => b.trader.roi - a.trader.roi)
+    return list
+  }, [snaps, sort])
   if (!snaps.length) {
     return (
       <p className={`${ui.panel} py-10 text-center ${ui.muted}`}>
@@ -230,16 +241,43 @@ export function FollowingTab({
     )
   }
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
-      {snaps.map((s) => (
-        <TraderCard
-          key={s.trader.portfolio_id}
-          snap={s}
-          language={language}
-          onChanged={onChanged}
-          onSymbol={onSymbol}
-        />
-      ))}
+    <div>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <select
+          className={`${ui.inputInline}`}
+          value={sort}
+          onChange={(e) => setSort(e.target.value as typeof sort)}
+          aria-label={tr(language, '排序', 'Sort')}
+        >
+          <option value="score">
+            {tr(language, '可信度最高', 'Highest score')}
+          </option>
+          <option value="roi">
+            {tr(language, '30 天收益最高', 'Best 30-day ROI')}
+          </option>
+          <option value="followed">
+            {tr(language, '关注时间', 'Follow order')}
+          </option>
+        </select>
+        <span className={ui.muted}>
+          {tr(
+            language,
+            '可信度按 30 天收益与回撤之比、回撤、胜率、带单时长、资金规模、是否公开持仓打分（0–100），鼠标放在分数上看各项得分。',
+            'Score (0–100) weighs 30-day ROI vs drawdown, drawdown, win rate, tenure, scale and whether positions are public. Hover a score for its parts.'
+          )}
+        </span>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {sorted.map((s) => (
+          <TraderCard
+            key={s.trader.portfolio_id}
+            snap={s}
+            language={language}
+            onChanged={onChanged}
+            onSymbol={onSymbol}
+          />
+        ))}
+      </div>
     </div>
   )
 }

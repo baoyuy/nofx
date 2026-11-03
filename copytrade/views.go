@@ -1,6 +1,7 @@
 package copytrade
 
 import (
+	"math"
 	"sort"
 	"strings"
 )
@@ -58,9 +59,10 @@ type SideSummary struct {
 
 // SymbolSummary is how followed traders hold one coin.
 type SymbolSummary struct {
-	Symbol string      `json:"symbol"`
-	Long   SideSummary `json:"long"`
-	Short  SideSummary `json:"short"`
+	Symbol     string      `json:"symbol"`
+	Long       SideSummary `json:"long"`
+	Short      SideSummary `json:"short"`
+	Confidence Confidence  `json:"confidence"`
 }
 
 // Holder is one followed trader's position in a coin, with the trader's
@@ -73,15 +75,29 @@ type Holder struct {
 	ROI30       float64 `json:"roi_30d"`
 	PnL30       float64 `json:"pnl_30d"`
 	WinRate30   float64 `json:"win_rate_30d"`
+	Score       float64 `json:"score"`
 }
 
-// Symbols sums positions per coin, most traders first.
+// Symbols sums positions per coin with each coin's direction confidence,
+// most traders first. Snapshots must carry their Score.
 func Symbols(snaps []Snapshot) []SymbolSummary {
 	by := map[string]*SymbolSummary{}
 	qty := map[string]float64{}
+	// One vote per trader and side: value-weighted stake times trader score.
+	votes := map[string]map[string]*vote{}
 	for _, s := range snaps {
 		seen := map[string]bool{}
 		for _, p := range s.Positions {
+			if votes[p.Symbol] == nil {
+				votes[p.Symbol] = map[string]*vote{}
+			}
+			vk := s.Follow.PortfolioID + p.Side
+			v := votes[p.Symbol][vk]
+			if v == nil {
+				v = &vote{trader: s.Follow.PortfolioID, side: p.Side, score: s.Score.Score}
+				votes[p.Symbol][vk] = v
+			}
+			v.weight += p.EntryValue
 			sum := by[p.Symbol]
 			if sum == nil {
 				sum = &SymbolSummary{Symbol: p.Symbol}
@@ -100,8 +116,18 @@ func Symbols(snaps []Snapshot) []SymbolSummary {
 			qty[p.Symbol+p.Side] += p.Qty
 		}
 	}
+	balance := map[string]float64{}
+	for _, s := range snaps {
+		balance[s.Follow.PortfolioID] = s.Follow.MarginBalance
+	}
 	out := make([]SymbolSummary, 0, len(by))
 	for _, s := range by {
+		var list []vote
+		for _, v := range votes[s.Symbol] {
+			list = append(list, vote{trader: v.trader, side: v.side, score: v.score,
+				weight: math.Max(1, v.score) * stakeFactor(v.weight, balance[v.trader])})
+		}
+		s.Confidence = confidence(list)
 		if q := qty[s.Symbol+"long"]; q > 0 {
 			s.Long.AvgEntry = s.Long.Value / q
 		}
@@ -129,7 +155,7 @@ func Holders(snaps []Snapshot, symbol string) []Holder {
 			if p.Symbol == symbol {
 				f := s.Follow
 				out = append(out, Holder{Position: p, PortfolioID: f.PortfolioID, Nickname: f.Nickname, AvatarURL: f.AvatarURL,
-					ROI30: f.ROI, PnL30: f.PnL, WinRate30: f.WinRate})
+					ROI30: f.ROI, PnL30: f.PnL, WinRate30: f.WinRate, Score: s.Score.Score})
 			}
 		}
 	}

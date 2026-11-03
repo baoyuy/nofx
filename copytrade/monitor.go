@@ -27,6 +27,9 @@ const (
 	profileInterval = 6 * time.Hour
 	hotWindow       = 2 * time.Hour
 	maxEventsKept   = 300
+	// profileVersion bumps when the stored profile gains fields, so older
+	// profiles are fetched again once (2 = start time and balance).
+	profileVersion = 2
 )
 
 // Snapshot is the rebuilt view of one followed trader.
@@ -37,10 +40,11 @@ type Snapshot struct {
 	Events []Event `json:"events"`
 	// PositionsSource: "public" when Binance shows the positions, else
 	// "inferred" from fills since monitoring started.
-	PositionsSource string    `json:"positions_source"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	Error           string    `json:"error,omitempty"`
-	Hot             bool      `json:"hot"`
+	PositionsSource string      `json:"positions_source"`
+	UpdatedAt       time.Time   `json:"updated_at"`
+	Error           string      `json:"error,omitempty"`
+	Hot             bool        `json:"hot"`
+	Score           TraderScore `json:"score"`
 
 	nextDue time.Time
 }
@@ -48,7 +52,9 @@ type Snapshot struct {
 // Monitor polls followed traders in the background.
 type Monitor struct {
 	Client *Client
-	store  *store.CopyTradeStore
+	// Bars prices the hourly confidence signals; nil disables them.
+	Bars  BarsFunc
+	store *store.CopyTradeStore
 
 	mu    sync.RWMutex
 	snaps map[string]*Snapshot
@@ -83,6 +89,7 @@ func (m *Monitor) Run(ctx context.Context) {
 		m.snaps[f.PortfolioID] = snap
 		m.mu.Unlock()
 	}
+	go m.signalLoop(ctx)
 	prune := time.NewTicker(time.Hour)
 	defer prune.Stop()
 	for {
@@ -182,7 +189,7 @@ func (m *Monitor) refresh(ctx context.Context, id string) {
 }
 
 func (m *Monitor) syncProfile(ctx context.Context, f *store.CopyTradeFollow) error {
-	if time.Since(time.UnixMilli(f.ProfileAt)) < profileInterval {
+	if time.Since(time.UnixMilli(f.ProfileAt)) < profileInterval && f.ProfileVersion >= profileVersion {
 		return nil
 	}
 	d, err := m.Client.Detail(ctx, f.PortfolioID)
@@ -195,13 +202,14 @@ func (m *Monitor) syncProfile(ctx context.Context, f *store.CopyTradeFollow) err
 		return err
 	}
 	f.ROI, f.PnL, f.MDD, f.WinRate = float64(perf.ROI), float64(perf.PnL), float64(perf.MDD), float64(perf.WinRate)
-	f.ProfileAt = time.Now().UnixMilli()
+	f.ProfileAt, f.ProfileVersion = time.Now().UnixMilli(), profileVersion
 	return m.store.SaveFollow(f)
 }
 
 func applyDetail(f *store.CopyTradeFollow, d Detail) {
 	f.Nickname, f.AvatarURL, f.Status, f.PositionShow = d.Nickname, d.AvatarURL, d.Status, d.PositionShow
 	f.AUM, f.CopyCount, f.MaxCopyCount = float64(d.AUM), d.CopyCount, d.MaxCopyCount
+	f.MarginBalance, f.StartTime = float64(d.MarginBalance), d.StartTime
 	if d.LastTradeTime > 0 {
 		f.LastTradeTime = d.LastTradeTime
 	}
@@ -338,8 +346,11 @@ func (m *Monitor) Unfollow(id string) error {
 func (m *Monitor) Snapshots() []Snapshot {
 	m.mu.RLock()
 	out := make([]Snapshot, 0, len(m.snaps))
+	now := time.Now()
 	for _, s := range m.snaps {
-		out = append(out, *s)
+		snap := *s
+		snap.Score = ScoreTrader(snap.Follow, now)
+		out = append(out, snap)
 	}
 	m.mu.RUnlock()
 	sort.Slice(out, func(a, b int) bool { return out[a].Follow.CreatedAt.Before(out[b].Follow.CreatedAt) })
@@ -353,7 +364,9 @@ func (m *Monitor) Snapshot(id string) (Snapshot, bool) {
 	if !ok {
 		return Snapshot{}, false
 	}
-	return *s, true
+	snap := *s
+	snap.Score = ScoreTrader(snap.Follow, time.Now())
+	return snap, true
 }
 
 // Leaderboard serves Binance's leaderboard, cached for 10 minutes per query.

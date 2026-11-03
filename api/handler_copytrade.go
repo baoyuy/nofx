@@ -13,6 +13,7 @@ import (
 
 	"nofx/copytrade"
 	"nofx/logger"
+	"nofx/trader/binance"
 )
 
 // copyTradeProxyKey stores the encrypted proxy URL in system_config.
@@ -24,6 +25,21 @@ var leadIDPattern = regexp.MustCompile(`\d{15,22}`)
 // until ctx ends.
 func (s *Server) StartCopyTrade(ctx context.Context) {
 	m := copytrade.NewMonitor(s.store.CopyTrade())
+	m.Bars = func(ctx context.Context, symbol string, limit int) ([]copytrade.Bar, error) {
+		rows, err := binance.GetPublicKlines(ctx, symbol, "1h", limit)
+		if err != nil {
+			return nil, err
+		}
+		// The last candle is still forming.
+		if len(rows) > 0 && time.Unix(rows[len(rows)-1].Time, 0).Add(time.Hour).After(time.Now()) {
+			rows = rows[:len(rows)-1]
+		}
+		bars := make([]copytrade.Bar, len(rows))
+		for i, r := range rows {
+			bars[i] = copytrade.Bar{Time: r.Time, Close: r.Close}
+		}
+		return bars, nil
+	}
 	if proxy, err := s.loadCopyTradeProxy(); err != nil {
 		logger.Warnf("copy-trade: saved proxy not used: %v", err)
 	} else if err := m.Client.SetProxy(proxy); err != nil {
@@ -51,6 +67,7 @@ func (s *Server) registerCopyTradeRoutes(protected *gin.RouterGroup) {
 	s.route(protected, "GET", "/copytrade/feed", "Actions of followed traders, newest first (?portfolio_id=&symbol=&action=open|add|reduce|close&min_value=&limit=)", s.handleCopyTradeFeed)
 	s.route(protected, "GET", "/copytrade/symbols", "Long/short totals per coin across followed traders", s.handleCopyTradeSymbols)
 	s.route(protected, "GET", "/copytrade/symbols/:symbol", "Followed traders' positions in one coin with entry prices", s.handleCopyTradeSymbol)
+	s.route(protected, "GET", "/copytrade/hit-rate", "How often hourly coin confidence signals moved the called way after 4h and 24h (?days=30)", s.handleCopyTradeHitRate)
 	// The proxy URL may carry a password: keep these out of the AI route catalog.
 	protected.GET("/copytrade/proxy", s.handleCopyTradeProxyGet)
 	protected.PUT("/copytrade/proxy", s.handleCopyTradeProxyPut)
@@ -246,10 +263,27 @@ func (s *Server) handleCopyTradeSymbol(c *gin.Context) {
 	for _, sn := range snaps {
 		f := sn.Follow
 		traders[f.PortfolioID] = gin.H{"nickname": f.Nickname, "avatar_url": f.AvatarURL, "roi_30d": f.ROI,
-			"pnl_30d": f.PnL, "win_rate_30d": f.WinRate}
+			"pnl_30d": f.PnL, "win_rate_30d": f.WinRate, "score": sn.Score.Score}
 	}
 	c.JSON(http.StatusOK, gin.H{"symbol": symbol, "summary": summary, "holders": copytrade.Holders(snaps, symbol),
 		"events": copytrade.Feed(snaps, copytrade.FeedFilter{Symbol: symbol, Limit: 500}), "traders": traders})
+}
+
+func (s *Server) handleCopyTradeHitRate(c *gin.Context) {
+	if !s.copyTradeReady(c) {
+		return
+	}
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+	if days < 1 || days > 120 {
+		SafeBadRequest(c, "days must be 1-120")
+		return
+	}
+	rows, err := s.copyTrade.HitRates(time.Now().Add(-time.Duration(days) * 24 * time.Hour).Unix())
+	if err != nil {
+		SafeInternalError(c, "Copy-trade hit rate", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"days": days, "rows": rows})
 }
 
 func (s *Server) handleCopyTradeProxyGet(c *gin.Context) {

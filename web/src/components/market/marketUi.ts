@@ -7,6 +7,9 @@ export const ui = {
   label: 'mb-1 block text-xs text-nofx-text-muted',
   input:
     'w-full rounded-lg border border-[rgba(25,36,52,0.14)] bg-nofx-bg-deeper px-2 py-1.5 text-sm text-nofx-text outline-hidden focus:border-nofx-gold',
+  // Same look as input without the full width, for inline selects.
+  inputInline:
+    'rounded-lg border border-[rgba(25,36,52,0.14)] bg-nofx-bg-deeper px-2 py-1.5 text-sm text-nofx-text outline-hidden focus:border-nofx-gold',
   btnGold:
     'w-full rounded-lg bg-nofx-gold px-3 py-2 text-sm font-semibold text-white hover:bg-nofx-gold-highlight disabled:cursor-not-allowed disabled:opacity-50',
   btnGhost:

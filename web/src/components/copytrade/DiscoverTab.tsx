@@ -108,7 +108,7 @@ export function DiscoverTab({
     options: [string, string][]
   ) => (
     <select
-      className={`${ui.input} w-auto`}
+      className={`${ui.inputInline}`}
       value={value}
       onChange={(e) => {
         set(e.target.value)
@@ -137,7 +137,7 @@ export function DiscoverTab({
           }}
         >
           <input
-            className={`${ui.input} min-w-[260px] flex-1`}
+            className={`${ui.inputInline} min-w-[260px] flex-1`}
             value={idInput}
             onChange={(e) => setIdInput(e.target.value)}
             placeholder={tr(
@@ -181,7 +181,7 @@ export function DiscoverTab({
               {tr(language, '最大回撤不超过', 'Max drawdown ≤')}
             </span>
             <select
-              className={`${ui.input} w-auto`}
+              className={`${ui.inputInline}`}
               value={maxMdd}
               onChange={(e) => setMaxMdd(Number(e.target.value))}
             >
@@ -197,7 +197,7 @@ export function DiscoverTab({
               {tr(language, '胜率不低于', 'Win rate ≥')}
             </span>
             <select
-              className={`${ui.input} w-auto`}
+              className={`${ui.inputInline}`}
               value={minWin}
               onChange={(e) => setMinWin(Number(e.target.value))}
             >
