@@ -64,6 +64,9 @@ export interface PriceMarker {
   title: string
   /** 1-4 px */
   width?: number
+  dashed?: boolean
+  /** only the price-axis label, no line across the chart */
+  labelOnly?: boolean
 }
 
 interface Props {
@@ -544,7 +547,8 @@ export function BinanceChart({
             | 2
             | 3
             | 4,
-          lineStyle: LineStyle.Solid,
+          lineStyle: m.dashed ? LineStyle.Dashed : LineStyle.Solid,
+          lineVisible: !m.labelOnly,
           axisLabelVisible: true,
           title: m.title,
         })

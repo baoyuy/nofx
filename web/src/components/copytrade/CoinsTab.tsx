@@ -145,9 +145,27 @@ function CoinDetail({
   }, [symbol, version])
 
   const last = candles[candles.length - 1]?.close || 0
+  const marks = useMemo(
+    () =>
+      buildMarks(
+        events,
+        holders,
+        candles.map((c) => c.time)
+      ),
+    [events, holders, candles]
+  )
+  const openMark = marks.entries.find((m) => m.key === openKey)
   const markers = useMemo<PriceMarker[]>(() => {
-    if (!showAvg) return []
     const lines: PriceMarker[] = []
+    // The clicked avatar's entry on the price axis; the overlay draws the line.
+    if (openMark)
+      lines.push({
+        price: openMark.price,
+        color: openMark.side === 'long' ? BN.up : BN.down,
+        title: tr(language, '入场', 'Entry'),
+        labelOnly: true,
+      })
+    if (!showAvg) return lines
     if (summary?.long.avg_entry)
       lines.push({
         price: summary.long.avg_entry,
@@ -163,16 +181,7 @@ function CoinDetail({
         title: tr(language, '空头均价', 'Short avg'),
       })
     return lines
-  }, [showAvg, summary, language])
-  const marks = useMemo(
-    () =>
-      buildMarks(
-        events,
-        holders,
-        candles.map((c) => c.time)
-      ),
-    [events, holders, candles]
-  )
+  }, [showAvg, summary, language, openMark])
 
   return (
     <div className="space-y-3">

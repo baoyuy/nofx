@@ -36,7 +36,7 @@ function Avatar({
   const usable = url && !/default-avatar/i.test(url)
   return (
     <span
-      className="flex items-center justify-center overflow-hidden rounded-full bg-white text-[10px] font-semibold shadow"
+      className="relative flex items-center justify-center overflow-hidden rounded-full bg-white text-[10px] font-semibold shadow"
       style={{
         width: AVATAR,
         height: AVATAR,
@@ -44,17 +44,17 @@ function Avatar({
         color,
       }}
     >
+      {/* The letter shows until (or if never) the picture loads. */}
+      {(name || '?').slice(0, 1)}
       {usable && !broken ? (
         <img
           src={url}
           alt=""
-          className="h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full object-cover"
           referrerPolicy="no-referrer"
           onError={() => setBroken(true)}
         />
-      ) : (
-        (name || '?').slice(0, 1)
-      )}
+      ) : null}
     </span>
   )
 }
@@ -198,6 +198,21 @@ function Card({
   )
 }
 
+const CARD_W = 250
+const CARD_H = 175
+
+// Keeps the card off the entry line: below it (or above when there is no
+// room), and left of the avatar near the right edge.
+function cardPosition(x: number, lineY: number, p: ChartProjector) {
+  const right = x + AVATAR
+  const left =
+    right + CARD_W <= p.width - 4 ? right : Math.max(4, x - AVATAR - CARD_W)
+  const below = lineY + 14
+  const top =
+    below + CARD_H <= p.height - 4 ? below : Math.max(4, lineY - 14 - CARD_H)
+  return { left, top }
+}
+
 export function EntryOverlay({
   p,
   entries,
@@ -305,13 +320,53 @@ export function EntryOverlay({
           </button>
         )
       })}
+      {open
+        ? (() => {
+            // The chosen entry's price, from its candle to now.
+            const py = p.y(open.m.price)
+            if (py === null) return null
+            const left = open.m.kind === 'pinned' ? 0 : Math.max(0, open.x)
+            const color = open.m.side === 'long' ? UP : DOWN
+            return (
+              <>
+                <div
+                  className="absolute"
+                  style={{
+                    left,
+                    top: py,
+                    width: Math.max(0, p.width - left),
+                    borderTop: `1.5px dashed ${color}`,
+                  }}
+                />
+                {Math.abs(open.y - py) > 1 ? (
+                  <div
+                    className="absolute"
+                    style={{
+                      left: open.x,
+                      top: Math.min(open.y, py),
+                      height: Math.abs(open.y - py),
+                      borderLeft: `1.5px dashed ${color}`,
+                    }}
+                  />
+                ) : null}
+                <span
+                  className="absolute rounded px-1 text-[10px] font-semibold text-white"
+                  style={{
+                    left: Math.min(left + AVATAR, p.width - 110),
+                    top: py - 16,
+                    background: color,
+                  }}
+                >
+                  {tr(language, '入场', 'Entry')} {price(open.m.price)}
+                </span>
+              </>
+            )
+          })()
+        : null}
       {open ? (
         <div
           className="pointer-events-auto absolute z-30"
-          style={{
-            left: Math.min(Math.max(4, open.x + AVATAR), p.width - 258),
-            top: Math.min(Math.max(4, open.y - 40), p.height - 190),
-          }}
+          style={cardPosition(open.x, p.y(open.m.price) ?? open.y, p)}
           onClick={(ev) => ev.stopPropagation()}
         >
           <Card
