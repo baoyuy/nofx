@@ -2,6 +2,7 @@ export type Page =
   | 'planning'
   | 'market'
   | 'coin-pool'
+  | 'copy-trade'
   | 'competition'
   | 'traders'
   | 'trader'
@@ -30,12 +31,14 @@ export const ROUTES = {
   strategyMarket: '/strategy-market',
   market: '/market',
   coinPool: '/coin-pool',
+  copyTrade: '/copy-trade',
 } as const
 
 export const PAGE_PATHS: Record<Page, string> = {
   planning: ROUTES.planning,
   market: ROUTES.market,
   'coin-pool': ROUTES.coinPool,
+  'copy-trade': ROUTES.copyTrade,
   competition: ROUTES.competition,
   traders: ROUTES.traders,
   trader: ROUTES.dashboard,
@@ -72,6 +75,8 @@ export function getCurrentPageForPath(pathname: string): Page | undefined {
       return 'market'
     case ROUTES.coinPool:
       return 'coin-pool'
+    case ROUTES.copyTrade:
+      return 'copy-trade'
     case ROUTES.strategy:
       return 'strategy'
     case ROUTES.strategyMarket:

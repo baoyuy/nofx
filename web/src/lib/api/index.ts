@@ -6,6 +6,7 @@ import { telegramApi } from './telegram'
 import { walletApi } from './wallet'
 import { marketApi } from './market'
 import { coinPoolApi } from './coinPool'
+import { copyTradeApi } from './copyTrade'
 
 export const api = {
   ...traderApi,
@@ -16,4 +17,5 @@ export const api = {
   ...walletApi,
   ...marketApi,
   ...coinPoolApi,
+  ...copyTradeApi,
 }

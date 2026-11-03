@@ -10,15 +10,17 @@ import {
   ChevronRight,
   Plus,
   Pencil,
+  Globe,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { api } from '../lib/api'
 import { ExchangeConfigModal } from '../components/trader/ExchangeConfigModal'
 import { ModelConfigModal } from '../components/trader/ModelConfigModal'
+import { ProxySettings } from '../components/copytrade/ProxySettings'
 import type { Exchange, AIModel, ExchangeAccountState } from '../types'
 
-type Tab = 'account' | 'models' | 'exchanges'
+type Tab = 'account' | 'models' | 'exchanges' | 'data'
 
 function configBadge(label: string, active: boolean) {
   return (
@@ -43,7 +45,9 @@ export function SettingsPage() {
   const [searchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const tab = searchParams.get('tab')
-    return tab === 'models' || tab === 'exchanges' ? tab : 'account'
+    return tab === 'models' || tab === 'exchanges' || tab === 'data'
+      ? tab
+      : 'account'
   })
 
   // Account state
@@ -341,6 +345,11 @@ export function SettingsPage() {
       key: 'exchanges',
       label: tt('Exchanges', '交易所'),
       icon: <Building2 size={16} />,
+    },
+    {
+      key: 'data',
+      label: tt('Data proxy', '数据代理'),
+      icon: <Globe size={16} />,
     },
   ]
 
@@ -645,6 +654,9 @@ export function SettingsPage() {
               )}
             </div>
           )}
+
+          {/* Data source Tab */}
+          {activeTab === 'data' && <ProxySettings tt={tt} />}
         </div>
       </div>
 

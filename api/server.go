@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"nofx/auth"
+	"nofx/copytrade"
 	"nofx/crypto"
 	"nofx/logger"
 	"nofx/manager"
@@ -34,6 +35,9 @@ type Server struct {
 	port                      int
 	telegramReloadCh          chan<- struct{} // signal Telegram bot to reload
 	authLimiter               *ipRateLimiter  // per-IP throttle for login/register
+	copyTrade                 *copytrade.Monitor
+	proxyTestMu               sync.Mutex
+	proxyTestAt               time.Time
 }
 
 // NewServer Creates API server
@@ -208,6 +212,7 @@ func (s *Server) setupRoutes() {
 		s.registerMarketRoutes(api, protected)
 		s.registerCoinPoolRoutes(protected)
 		s.registerMarketBoardRoutes(protected)
+		s.registerCopyTradeRoutes(protected)
 		// UI-only secret export: do not register in the AI route/tool catalog.
 		protected.POST("/wallet/export", s.handleWalletExport)
 		{

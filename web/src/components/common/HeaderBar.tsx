@@ -79,6 +79,12 @@ export default function HeaderBar({
       auth: true,
     },
     {
+      page: 'copy-trade',
+      path: ROUTES.copyTrade,
+      label: language === 'zh' ? '带单' : 'Copy trade',
+      auth: true,
+    },
+    {
       page: 'traders',
       path: ROUTES.traders,
       label: t('configNav', language),

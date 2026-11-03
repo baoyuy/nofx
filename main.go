@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"nofx/api"
 	"nofx/auth"
 	"nofx/coinpool"
@@ -144,6 +145,9 @@ func main() {
 
 	// Start API server
 	server := api.NewServer(traderManager, st, cryptoService, cfg.APIServerPort)
+	copyTradeCtx, stopCopyTrade := context.WithCancel(context.Background())
+	defer stopCopyTrade()
+	server.StartCopyTrade(copyTradeCtx)
 
 	go func() {
 		if err := server.Start(); err != nil {

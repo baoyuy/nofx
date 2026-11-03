@@ -56,12 +56,22 @@ export interface ChartLevels {
   takeProfit?: number
 }
 
+/** An extra horizontal price line, e.g. a lead trader's entry. */
+export interface PriceMarker {
+  price: number
+  color: string
+  title: string
+  /** 1-4 px */
+  width?: number
+}
+
 interface Props {
   candles: Candle[]
   decimals: number
   main: MainIndicator
   subs: SubIndicator[]
   levels?: ChartLevels
+  markers?: PriceMarker[]
   resetKey: string // changes when symbol/interval changes, to refit the view
   height?: number
 }
@@ -179,6 +189,7 @@ export function BinanceChart({
   main,
   subs,
   levels,
+  markers,
   resetKey,
   height = 620,
 }: Props) {
@@ -186,6 +197,7 @@ export function BinanceChart({
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<SeriesRefs | null>(null)
   const priceLinesRef = useRef<IPriceLine[]>([])
+  const markerLinesRef = useRef<IPriceLine[]>([])
   const fittedKeyRef = useRef('')
   const specRef = useRef<{
     main: Line[]
@@ -447,6 +459,7 @@ export function BinanceChart({
       chartRef.current = null
       seriesRef.current = null
       priceLinesRef.current = []
+      markerLinesRef.current = []
     }
   }, [main, subsKey, decimals, measurePanes])
 
@@ -485,6 +498,31 @@ export function BinanceChart({
     subsKey,
     decimals,
   ])
+
+  // Extra price lines (e.g. lead traders' entries), solid.
+  const markersKey = JSON.stringify(markers || [])
+  useEffect(() => {
+    const s = seriesRef.current
+    if (!s) return
+    markerLinesRef.current.forEach((l) => s.candle.removePriceLine(l))
+    markerLinesRef.current = (markers || [])
+      .filter((m) => m.price > 0)
+      .map((m) =>
+        s.candle.createPriceLine({
+          price: m.price,
+          color: m.color,
+          lineWidth: Math.min(4, Math.max(1, Math.round(m.width || 1))) as
+            | 1
+            | 2
+            | 3
+            | 4,
+          lineStyle: LineStyle.Solid,
+          axisLabelVisible: true,
+          title: m.title,
+        })
+      )
+    // markersKey stands for markers; main/subs/decimals rebuild the series.
+  }, [markersKey, main, subsKey, decimals])
 
   return (
     <div className="relative w-full" style={{ height, background: BN.bg }}>

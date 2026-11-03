@@ -31,6 +31,7 @@ type Store struct {
 	aiCharge       *AIChargeStore
 	marketAnalysis *MarketAnalysisStore
 	coinPool       *CoinPoolStore
+	copyTrade      *CopyTradeStore
 	telegramConfig TelegramConfigStore
 
 	mu sync.RWMutex
@@ -171,6 +172,9 @@ func (s *Store) initTables() error {
 	}
 	if err := s.CoinPool().initTables(); err != nil {
 		return fmt.Errorf("failed to initialize coin pool tables: %w", err)
+	}
+	if err := s.CopyTrade().initTables(); err != nil {
+		return fmt.Errorf("failed to initialize copy-trade tables: %w", err)
 	}
 	return nil
 }
@@ -323,6 +327,16 @@ func (s *Store) CoinPool() *CoinPoolStore {
 		s.coinPool = NewCoinPoolStore(s.gdb)
 	}
 	return s.coinPool
+}
+
+// CopyTrade gets the copy-trade monitor storage
+func (s *Store) CopyTrade() *CopyTradeStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.copyTrade == nil {
+		s.copyTrade = NewCopyTradeStore(s.gdb)
+	}
+	return s.copyTrade
 }
 
 // TelegramConfig gets Telegram bot configuration storage

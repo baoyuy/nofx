@@ -1,0 +1,329 @@
+package api
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+
+	"nofx/copytrade"
+	"nofx/logger"
+)
+
+// copyTradeProxyKey stores the encrypted proxy URL in system_config.
+const copyTradeProxyKey = "copytrade_proxy"
+
+var leadIDPattern = regexp.MustCompile(`\d{15,22}`)
+
+// StartCopyTrade starts the copy-trade monitor with the saved proxy. It runs
+// until ctx ends.
+func (s *Server) StartCopyTrade(ctx context.Context) {
+	m := copytrade.NewMonitor(s.store.CopyTrade())
+	if proxy, err := s.loadCopyTradeProxy(); err != nil {
+		logger.Warnf("copy-trade: saved proxy not used: %v", err)
+	} else if err := m.Client.SetProxy(proxy); err != nil {
+		logger.Warnf("copy-trade: saved proxy not used: %v", err)
+	}
+	s.copyTrade = m
+	go m.Run(ctx)
+}
+
+func (s *Server) loadCopyTradeProxy() (string, error) {
+	stored, err := s.store.GetSystemConfig(copyTradeProxyKey)
+	if err != nil || stored == "" {
+		return "", err
+	}
+	return s.cryptoHandler.cryptoService.DecryptFromStorage(stored, copyTradeProxyKey)
+}
+
+func (s *Server) registerCopyTradeRoutes(protected *gin.RouterGroup) {
+	s.route(protected, "GET", "/copytrade/status", "Copy-trade monitor status: rate limiting, proxy, followed traders", s.handleCopyTradeStatus)
+	s.route(protected, "GET", "/copytrade/leaderboard", "Binance copy-trading lead traders (?time_range=7D|30D|90D&sort=ROI|PNL|COPIER_PNL&page=1)", s.handleCopyTradeLeaderboard)
+	s.route(protected, "GET", "/copytrade/follows", "Followed lead traders with their positions and latest actions", s.handleCopyTradeFollows)
+	s.route(protected, "POST", "/copytrade/follows", "Follow a lead trader (body: id = portfolio ID or copy-trading page URL)", s.handleCopyTradeFollow)
+	s.route(protected, "GET", "/copytrade/follows/:id", "One followed trader with positions and actions", s.handleCopyTradeFollowDetail)
+	s.route(protected, "DELETE", "/copytrade/follows/:id", "Unfollow a lead trader", s.handleCopyTradeUnfollow)
+	s.route(protected, "GET", "/copytrade/feed", "Actions of followed traders, newest first (?portfolio_id=&symbol=&action=open|add|reduce|close&min_value=&limit=)", s.handleCopyTradeFeed)
+	s.route(protected, "GET", "/copytrade/symbols", "Long/short totals per coin across followed traders", s.handleCopyTradeSymbols)
+	s.route(protected, "GET", "/copytrade/symbols/:symbol", "Followed traders' positions in one coin with entry prices", s.handleCopyTradeSymbol)
+	// The proxy URL may carry a password: keep these out of the AI route catalog.
+	protected.GET("/copytrade/proxy", s.handleCopyTradeProxyGet)
+	protected.PUT("/copytrade/proxy", s.handleCopyTradeProxyPut)
+	protected.POST("/copytrade/proxy/test", s.handleCopyTradeProxyTest)
+}
+
+func (s *Server) copyTradeReady(c *gin.Context) bool {
+	if s.copyTrade == nil {
+		SafeError(c, http.StatusServiceUnavailable, "Copy-trade monitor is not running", nil)
+		return false
+	}
+	return true
+}
+
+// copyTradeError turns monitor errors into readable responses.
+func copyTradeError(c *gin.Context, err error) {
+	if errors.Is(err, copytrade.ErrPaused) {
+		SafeError(c, http.StatusServiceUnavailable, "Binance is rate limiting copy-trade requests; paused, retry later", err)
+		return
+	}
+	SafeError(c, http.StatusBadGateway, "Could not read Binance copy-trading data: "+err.Error(), err)
+}
+
+func (s *Server) handleCopyTradeStatus(c *gin.Context) {
+	if !s.copyTradeReady(c) {
+		return
+	}
+	snaps := s.copyTrade.Snapshots()
+	hot, failing := 0, 0
+	var oldest time.Time
+	for _, sn := range snaps {
+		if sn.Hot {
+			hot++
+		}
+		if sn.Error != "" {
+			failing++
+		}
+		if !sn.UpdatedAt.IsZero() && (oldest.IsZero() || sn.UpdatedAt.Before(oldest)) {
+			oldest = sn.UpdatedAt
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"client": s.copyTrade.Client.Status(), "follows": len(snaps), "max_follows": copytrade.MaxFollows,
+		"hot": hot, "failing": failing, "oldest_update": oldest,
+	})
+}
+
+func (s *Server) handleCopyTradeLeaderboard(c *gin.Context) {
+	if !s.copyTradeReady(c) {
+		return
+	}
+	q := copytrade.LeaderQuery{TimeRange: c.DefaultQuery("time_range", "30D"), SortBy: c.DefaultQuery("sort", "COPIER_PNL")}
+	switch q.TimeRange {
+	case "7D", "30D", "90D":
+	default:
+		SafeBadRequest(c, "time_range must be 7D, 30D or 90D")
+		return
+	}
+	switch q.SortBy {
+	case "ROI", "PNL", "COPIER_PNL":
+	default:
+		SafeBadRequest(c, "sort must be ROI, PNL or COPIER_PNL")
+		return
+	}
+	q.Page, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
+	if q.Page < 1 || q.Page > 50 {
+		SafeBadRequest(c, "page must be 1-50")
+		return
+	}
+	page, err := s.copyTrade.Leaderboard(c.Request.Context(), q)
+	if err != nil {
+		copyTradeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, page)
+}
+
+func (s *Server) handleCopyTradeFollows(c *gin.Context) {
+	if !s.copyTradeReady(c) {
+		return
+	}
+	snaps := s.copyTrade.Snapshots()
+	for i := range snaps {
+		if len(snaps[i].Events) > 5 {
+			snaps[i].Events = snaps[i].Events[:5]
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"follows": snaps, "max_follows": copytrade.MaxFollows})
+}
+
+func (s *Server) handleCopyTradeFollow(c *gin.Context) {
+	if !s.copyTradeReady(c) {
+		return
+	}
+	var req struct {
+		ID string `json:"id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.ID) > 500 {
+		SafeBadRequest(c, "id is required")
+		return
+	}
+	id := leadIDPattern.FindString(req.ID)
+	if id == "" {
+		SafeBadRequest(c, "Enter a lead trader ID or the link of their Binance copy-trading page")
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
+	defer cancel()
+	f, err := s.copyTrade.Follow(ctx, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "already following") || strings.Contains(err.Error(), "at most") || strings.Contains(err.Error(), "no lead trader") {
+			SafeBadRequest(c, err.Error())
+			return
+		}
+		copyTradeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, f)
+}
+
+func (s *Server) handleCopyTradeFollowDetail(c *gin.Context) {
+	if !s.copyTradeReady(c) {
+		return
+	}
+	snap, ok := s.copyTrade.Snapshot(c.Param("id"))
+	if !ok {
+		SafeNotFound(c, "Followed trader")
+		return
+	}
+	c.JSON(http.StatusOK, snap)
+}
+
+func (s *Server) handleCopyTradeUnfollow(c *gin.Context) {
+	if !s.copyTradeReady(c) {
+		return
+	}
+	if _, ok := s.copyTrade.Snapshot(c.Param("id")); !ok {
+		SafeNotFound(c, "Followed trader")
+		return
+	}
+	if err := s.copyTrade.Unfollow(c.Param("id")); err != nil {
+		SafeInternalError(c, "Unfollow lead trader", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (s *Server) handleCopyTradeFeed(c *gin.Context) {
+	if !s.copyTradeReady(c) {
+		return
+	}
+	minValue, _ := strconv.ParseFloat(c.Query("min_value"), 64)
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	action := c.Query("action")
+	switch action {
+	case "", "open", "add", "reduce", "close":
+	default:
+		SafeBadRequest(c, "action must be open, add, reduce or close")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": copytrade.Feed(s.copyTrade.Snapshots(), copytrade.FeedFilter{
+		PortfolioID: c.Query("portfolio_id"), Symbol: c.Query("symbol"), Action: action, MinValue: minValue, Limit: limit,
+	})})
+}
+
+func (s *Server) handleCopyTradeSymbols(c *gin.Context) {
+	if !s.copyTradeReady(c) {
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"symbols": copytrade.Symbols(s.copyTrade.Snapshots())})
+}
+
+func (s *Server) handleCopyTradeSymbol(c *gin.Context) {
+	if !s.copyTradeReady(c) {
+		return
+	}
+	symbol := strings.ToUpper(strings.TrimSpace(c.Param("symbol")))
+	if !marketBoardSymbol.MatchString(symbol) {
+		SafeBadRequest(c, "invalid symbol")
+		return
+	}
+	snaps := s.copyTrade.Snapshots()
+	var summary *copytrade.SymbolSummary
+	for _, sum := range copytrade.Symbols(snaps) {
+		if sum.Symbol == symbol {
+			summary = &sum
+			break
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"symbol": symbol, "summary": summary, "holders": copytrade.Holders(snaps, symbol)})
+}
+
+func (s *Server) handleCopyTradeProxyGet(c *gin.Context) {
+	proxy, err := s.loadCopyTradeProxy()
+	if err != nil {
+		SafeInternalError(c, "Read copy-trade proxy", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"proxy": copytrade.MaskProxy(proxy), "configured": proxy != ""})
+}
+
+func (s *Server) handleCopyTradeProxyPut(c *gin.Context) {
+	if !s.copyTradeReady(c) {
+		return
+	}
+	var req struct {
+		Proxy string `json:"proxy"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.Proxy) > 500 {
+		SafeBadRequest(c, "proxy must be a URL")
+		return
+	}
+	proxy := strings.TrimSpace(req.Proxy)
+	stored := ""
+	if proxy != "" {
+		if _, err := copytrade.ParseProxy(proxy); err != nil {
+			SafeBadRequest(c, err.Error())
+			return
+		}
+		enc, err := s.cryptoHandler.cryptoService.EncryptForStorage(proxy, copyTradeProxyKey)
+		if err != nil {
+			SafeInternalError(c, "Encrypt copy-trade proxy", err)
+			return
+		}
+		stored = enc
+	}
+	if err := s.store.SetSystemConfig(copyTradeProxyKey, stored); err != nil {
+		SafeInternalError(c, "Save copy-trade proxy", err)
+		return
+	}
+	if err := s.copyTrade.Client.SetProxy(proxy); err != nil {
+		SafeBadRequest(c, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"proxy": copytrade.MaskProxy(proxy), "configured": proxy != ""})
+}
+
+// handleCopyTradeProxyTest sends one leaderboard request through the given
+// proxy (or the server's own IP when empty) on a separate client, so it does
+// not wait behind the monitor.
+func (s *Server) handleCopyTradeProxyTest(c *gin.Context) {
+	var req struct {
+		Proxy string `json:"proxy"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.Proxy) > 500 {
+		SafeBadRequest(c, "proxy must be a URL")
+		return
+	}
+	s.proxyTestMu.Lock()
+	tooSoon := time.Since(s.proxyTestAt) < 5*time.Second
+	if !tooSoon {
+		s.proxyTestAt = time.Now()
+	}
+	s.proxyTestMu.Unlock()
+	if tooSoon {
+		SafeError(c, http.StatusTooManyRequests, "Wait a few seconds between tests", nil)
+		return
+	}
+	proxy := strings.TrimSpace(req.Proxy)
+	client := copytrade.NewClient()
+	if err := client.SetProxy(proxy); err != nil {
+		SafeBadRequest(c, err.Error())
+		return
+	}
+	client.Spacing = 0
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 25*time.Second)
+	defer cancel()
+	start := time.Now()
+	page, err := client.Leaderboard(ctx, copytrade.LeaderQuery{TimeRange: "30D", SortBy: "COPIER_PNL", Page: 1})
+	latency := time.Since(start).Milliseconds()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"ok": false, "error": err.Error(), "latency_ms": latency})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "latency_ms": latency, "traders": page.Total})
+}
