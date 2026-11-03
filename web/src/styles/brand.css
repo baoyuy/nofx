@@ -1639,3 +1639,85 @@ html {
     border-right: none !important;
   }
 }
+
+/* Config on phones: the .nofx-shell rules above out-rank the breakpoints in
+   ConfigPage.css, so the single-column layout must be restated here. */
+@media (max-width: 1200px) {
+  .nofx-shell .config-layout {
+    grid-template-columns: 190px minmax(0, 1fr);
+    gap: 22px;
+  }
+}
+@media (max-width: 700px) {
+  .nofx-shell .config-page {
+    padding: 22px 14px 40px;
+  }
+  .nofx-shell .config-page-heading {
+    margin-bottom: 20px;
+  }
+  .nofx-shell .config-page-heading h1 {
+    font-size: 24px;
+  }
+  .nofx-shell .config-page-heading p {
+    font-size: 12px;
+  }
+  .nofx-shell .config-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+  .nofx-shell .config-sidebar > button {
+    padding: 9px 11px;
+  }
+  .nofx-shell .config-card > header {
+    padding: 16px;
+  }
+  .nofx-shell .config-card-body {
+    padding: 14px;
+  }
+}
+
+/* Footer on phones: stack logo, notice and links instead of one squeezed row. */
+@media (max-width: 700px) {
+  .nofx-site-footer {
+    margin-top: 32px;
+  }
+  .nofx-site-footer-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 22px 16px;
+  }
+  .nofx-site-footer-links {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+}
+
+/* Header on phones: tighter spacing so the dashboard trader picker fits
+   between the logo and the account menu. */
+@media (max-width: 700px) {
+  .nofx-navigation-inner {
+    gap: 10px;
+    padding: 0 14px;
+  }
+  #dash-header-slot {
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+  #dash-header-slot .tm-navslot {
+    border-left: 0 !important;
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+  }
+}
+
+/* Strategy on phones: drop the desktop gutter; the page already pads itself. */
+@media (max-width: 700px) {
+  .nofx-shell .nofx-strategy {
+    padding: 12px 0 32px;
+  }
+  .nofx-shell .nofx-strategy > div:last-child {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}

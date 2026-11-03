@@ -194,9 +194,22 @@ export function TerminalDashboard({
     // animation is client-side and stays fast regardless
     { refreshInterval: 120000, shouldRetryOnError: false }
   )
+  // The signal matrix (and through it the cost/liquidation map and the
+  // topology's signal column) follows the AI: it scores only this cycle's
+  // candidates plus whatever the trader still holds. Hyperliquid synthetic
+  // (xyz:) markets have no Binance data, so they are left out.
+  const aiSymbols = useMemo(() => {
+    const raw = [...(propPositions ?? []).map((p) => p.symbol), ...(propDecisions?.[0]?.candidate_coins ?? [])]
+    const seen = new Set<string>()
+    return raw
+      .filter((s) => s && !/^xyz:/i.test(s))
+      .map((s) => baseLabel(s).toUpperCase())
+      .filter((s) => s && !seen.has(s) && (seen.add(s), true))
+      .sort()
+  }, [propPositions, propDecisions])
   const { data: realSignalRank } = useSWR(
-    traderId ? ['signal-rank', traderId] : null,
-    () => api.getDirectionChangeLeaderboard(30, true),
+    traderId && aiSymbols.length ? ['signal-rank', traderId, aiSymbols.join(',')] : null,
+    () => api.getDirectionChangeLeaderboard(30, true, aiSymbols),
     { refreshInterval: 120000, shouldRetryOnError: false }
   )
 
@@ -350,8 +363,8 @@ export function TerminalDashboard({
           embedded) but bounded so the aspect-ratio SVGs don't balloon on wide screens */}
       {navSlot &&
         createPortal(
-          <span className="nofx-terminal" style={{ background: 'transparent', display: 'flex', alignItems: 'center', gap: 12, marginLeft: 16, paddingLeft: 16, borderLeft: '1px solid rgba(25,36,52,0.15)', fontSize: 11 }}>
-            <span className="tm-sc" style={{ color: 'var(--tm-muted)' }}>{isZh ? '编排' : 'orchestration'}</span>
+          <span className="nofx-terminal tm-navslot" style={{ background: 'transparent', display: 'flex', alignItems: 'center', gap: 12, marginLeft: 16, paddingLeft: 16, borderLeft: '1px solid rgba(25,36,52,0.15)', fontSize: 11 }}>
+            <span className="tm-sc tm-navslot-extra" style={{ color: 'var(--tm-muted)' }}>{isZh ? '编排' : 'orchestration'}</span>
             {traders && traders.length > 0 && (
               <select value={traderId || ''} onChange={(e) => onTraderSelect(e.target.value)} className="tm-mono"
                 style={{ background: 'var(--tm-panel)', color: 'var(--tm-ink)', border: '1px solid var(--tm-hair)', borderRadius: 0, fontSize: 11, padding: '3px 6px' }}>
@@ -371,8 +384,8 @@ export function TerminalDashboard({
                     ? '○ 已停止'
                     : '○ stopped'}
             </span>
-            <span className="tm-sc" style={{ color: 'var(--tm-muted)' }}>{isZh ? '周期' : 'cycle'}</span><span className="tm-mono" style={{ color: 'var(--tm-ink)' }}>{status?.cycle_number ?? status?.call_count ?? '—'}</span>
-            <span className="tm-px" style={{ fontSize: 12, color: 'var(--tm-ink)' }}>{clock}</span>
+            <span className="tm-sc tm-navslot-extra" style={{ color: 'var(--tm-muted)' }}>{isZh ? '周期' : 'cycle'}</span><span className="tm-mono tm-navslot-extra" style={{ color: 'var(--tm-ink)' }}>{status?.cycle_number ?? status?.call_count ?? '—'}</span>
+            <span className="tm-px tm-navslot-extra" style={{ fontSize: 12, color: 'var(--tm-ink)' }}>{clock}</span>
           </span>,
           navSlot,
         )}
@@ -613,7 +626,7 @@ export function TerminalDashboard({
               )}
             </div>
             {positions && positions.length > 0 ? (
-              <table className="tm-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+              <div className="tm-pos-scroll"><table className="tm-mono tm-pos-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
                   <tr className="tm-sc" style={{ fontSize: 9 }}>
                     <td style={{ padding: '0 0 3px' }}>{isZh ? '币种' : 'symbol'}</td>
@@ -665,7 +678,7 @@ export function TerminalDashboard({
                     )
                   })}
                 </tbody>
-              </table>
+              </table></div>
             ) : <div className="tm-sc" style={{ padding: '8px 0' }}>{isZh ? '暂无持仓。' : 'No open positions.'}</div>}
 
             <div className="tm-rule" style={{ margin: '12px 0 10px' }} />
@@ -675,7 +688,7 @@ export function TerminalDashboard({
               <span className="tm-sc">{isZh ? '最近平仓 · 币种/方向/持仓时长/盈亏' : 'Recent closes · symbol/side/hold/pnl'}</span>
             </div>
             {recentTrades.length > 0 ? (
-              <table className="tm-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+              <div className="tm-pos-scroll"><table className="tm-mono tm-pos-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
                   <tr className="tm-sc" style={{ fontSize: 9 }}>
                     <td style={{ padding: '0 0 3px' }}>{isZh ? '币种' : 'symbol'}</td>
@@ -701,7 +714,7 @@ export function TerminalDashboard({
                     )
                   })}
                 </tbody>
-              </table>
+              </table></div>
             ) : <div className="tm-sc" style={{ padding: '8px 0' }}>{isZh ? '暂无已平仓交易。' : 'No closed trades yet.'}</div>}
           </div>
         </div>

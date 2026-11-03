@@ -143,3 +143,34 @@
     font-size: 13px;
   }
 }
+
+/* Tables: keep columns apart and scroll sideways instead of colliding. */
+.tm-pos-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.tm-pos-table td {
+  white-space: nowrap;
+}
+.tm-pos-table td + td {
+  padding-left: 10px !important;
+}
+.tm-navslot > span {
+  white-space: nowrap;
+}
+
+/* Phone: the header only has room for the trader picker and its status. */
+@media (max-width: 700px) {
+  .tm-navslot {
+    gap: 6px !important;
+    margin-left: 8px !important;
+    padding-left: 8px !important;
+    min-width: 0;
+  }
+  .tm-navslot-extra {
+    display: none;
+  }
+  .tm-navslot select {
+    max-width: 96px;
+  }
+}
