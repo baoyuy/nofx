@@ -74,11 +74,25 @@ export interface TraderPosition {
   entry_value: number
   /** ms; 0 = opened before monitoring started */
   opened_at: number
+  /** ms of the latest open or add; 0 = not seen */
+  last_add_at: number
   source: 'public' | 'inferred'
+  /** Binance's for public positions, from the latest mark price otherwise */
   mark_price?: number
   leverage?: number
   margin?: number
   unrealized_pnl?: number
+  /** unrealized result in %, of margin when pct_of_margin, else of entry */
+  return_pct: number
+  pct_of_margin: boolean
+  /** a mark price was available */
+  priced: boolean
+  /** losing 20%+ of margin (2%+ of price when leverage is unknown) */
+  trapped: boolean
+  /** inferred position whose loss reached the trader's balance */
+  liquidated: boolean
+  /** opened or added to within 24 hours */
+  fresh: boolean
 }
 
 export interface TradeEvent {
@@ -126,6 +140,10 @@ export interface SideSummary {
   traders: number
   value: number
   avg_entry: number
+  /** holders deep in loss, among traders */
+  trapped: number
+  /** holders who opened or added within 24 hours, among traders */
+  fresh: number
 }
 
 /** A coin's direction among followed traders. */
@@ -168,6 +186,8 @@ export interface SymbolSummary {
   long: SideSummary
   short: SideSummary
   confidence: Confidence
+  /** traders likely liquidated here; not in long, short or confidence */
+  liquidated: number
 }
 
 export interface Holder extends TraderPosition, TraderBrief {

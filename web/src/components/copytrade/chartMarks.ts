@@ -15,7 +15,8 @@ export interface EntryMark {
   event?: FeedItem
   /** set only while this entry's position is still held */
   holder?: Holder
-  /** the position this entry opened or added to has been closed */
+  /** the position this entry opened or added to has been closed, or was
+   * likely liquidated */
   closed: boolean
 }
 
@@ -82,7 +83,7 @@ export function buildMarks(
         price: e.price,
         event: e,
         holder,
-        closed: !holder,
+        closed: !holder || !!holder.liquidated,
       })
     } else if (exits.length < MAX_ENTRY_MARKS) {
       exits.push({ key, bar, price: e.price, event: e })
@@ -103,7 +104,7 @@ export function buildMarks(
         bar: 0,
         price: h.entry_price,
         holder: h,
-        closed: false,
+        closed: !!h.liquidated,
       })
     }
   }

@@ -4,6 +4,7 @@ import type {
   Confidence,
   HitRate,
   SymbolSummary,
+  TraderPosition,
   TraderScore,
 } from '../../lib/api/copyTrade'
 import { tr, ui } from '../market/marketUi'
@@ -67,12 +68,40 @@ export function explainConfidence(language: string, s: SymbolSummary): string {
       `按可信度和仓位加权，多方 ${longPct}%、空方 ${100 - longPct}%`,
       `weighted by score and stake: ${longPct}% long, ${100 - longPct}% short`
     ),
+  ]
+  const trapped = (s.long.trapped || 0) + (s.short.trapped || 0)
+  const fresh = (s.long.fresh || 0) + (s.short.fresh || 0)
+  if (trapped)
+    parts.push(
+      tr(
+        language,
+        `${trapped} 人被套，权重按亏损打折（可能只是在扛单）`,
+        `${trapped} trapped in loss, weighted down (may just be holding on)`
+      )
+    )
+  if (fresh)
+    parts.push(
+      tr(
+        language,
+        `${fresh} 人 24 小时内开仓或加仓，权重加 30%`,
+        `${fresh} opened or added within 24h, weighted up 30%`
+      )
+    )
+  if (s.liquidated)
+    parts.push(
+      tr(
+        language,
+        `${s.liquidated} 人可能已被强平，不计入`,
+        `${s.liquidated} likely liquidated, left out`
+      )
+    )
+  parts.push(
     tr(
       language,
       `持仓者平均可信度 ${Math.round(c.quality * 100)}`,
       `holders' average score ${Math.round(c.quality * 100)}`
-    ),
-  ]
+    )
+  )
   if (c.traders < 3)
     parts.push(
       tr(
@@ -234,5 +263,53 @@ export function HitRatePanel({ language }: { language: string }) {
             )}
       </p>
     </section>
+  )
+}
+
+/** Trapped / new / likely-liquidated tags of a held position. */
+export function HealthTag({
+  h,
+  language,
+}: {
+  h: TraderPosition
+  language: string
+}) {
+  const tag = (cls: string, text: string, title: string) => (
+    <span title={title} className={`mr-1 rounded px-1.5 text-[10px] ${cls}`}>
+      {text}
+    </span>
+  )
+  return (
+    <>
+      {h.liquidated
+        ? tag(
+            'bg-nofx-text-muted/15 text-nofx-text-muted',
+            tr(language, '可能已强平', 'Likely liquidated'),
+            tr(
+              language,
+              '推算的亏损已超过账户余额，不计入多空和置信度',
+              'Inferred loss exceeds the balance; left out of counts and confidence'
+            )
+          )
+        : null}
+      {h.trapped
+        ? tag(
+            'bg-nofx-danger/10 text-nofx-danger',
+            tr(language, '被套', 'Trapped'),
+            tr(
+              language,
+              '亏损较深，可能只是在扛单，置信度里权重打折',
+              'Deep in loss, may just be holding on; weighted down in confidence'
+            )
+          )
+        : null}
+      {h.fresh && !h.liquidated
+        ? tag(
+            'bg-nofx-success/10 text-nofx-success',
+            tr(language, '新开', 'New'),
+            tr(language, '24 小时内开仓或加仓', 'Opened or added within 24h')
+          )
+        : null}
+    </>
   )
 }

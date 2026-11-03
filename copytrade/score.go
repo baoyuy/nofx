@@ -81,6 +81,8 @@ type vote struct {
 	side   string
 	weight float64
 	score  float64
+	// Summed while collecting: entry value, and entry value × health.
+	stake, health float64
 }
 
 func confidence(votes []vote) Confidence {

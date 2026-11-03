@@ -3,6 +3,7 @@ import { api } from '../../lib/api'
 import type {
   FeedItem,
   Holder,
+  SideSummary,
   SymbolSummary,
   TraderBrief,
 } from '../../lib/api/copyTrade'
@@ -15,6 +16,7 @@ import { EntryOverlay } from './EntryOverlay'
 import {
   ConfidenceBadge,
   explainConfidence,
+  HealthTag,
   HitRatePanel,
 } from './ConfidenceUi'
 import {
@@ -29,6 +31,14 @@ import {
 } from './format'
 
 const intervals = ['15m', '1h', '4h', '1d']
+
+function sideHealth(language: string, s: SideSummary): string {
+  const parts = []
+  if (s.trapped)
+    parts.push(tr(language, `${s.trapped} 人被套`, `${s.trapped} trapped`))
+  if (s.fresh) parts.push(tr(language, `${s.fresh} 人新开`, `${s.fresh} new`))
+  return parts.length ? `（${parts.join('，')}）` : ''
+}
 
 export type CoinSort =
   | 'confidence'
@@ -225,6 +235,7 @@ function CoinDetail({
                 {summary.long.avg_entry
                   ? ` · ${tr(language, '均价', 'avg')} ${price(summary.long.avg_entry)}`
                   : ''}
+                {sideHealth(language, summary.long)}
               </span>
               {'　'}
               <span className="text-nofx-danger">
@@ -237,7 +248,24 @@ function CoinDetail({
                 {summary.short.avg_entry
                   ? ` · ${tr(language, '均价', 'avg')} ${price(summary.short.avg_entry)}`
                   : ''}
+                {sideHealth(language, summary.short)}
               </span>
+              {summary.liquidated ? (
+                <span
+                  className="ml-2 text-nofx-text-muted"
+                  title={tr(
+                    language,
+                    '推算的仓位亏损已超过他的账户余额，应该已经被强平，但成交记录里看不出强平，所以单独列出，不算进多空和置信度。',
+                    'The inferred loss exceeds the trader’s balance, so the position was most likely liquidated; trade history does not mark liquidations. Left out of the counts and confidence.'
+                  )}
+                >
+                  {tr(
+                    language,
+                    `· ${summary.liquidated} 人可能已被强平`,
+                    `· ${summary.liquidated} likely liquidated`
+                  )}
+                </span>
+              ) : null}
               {closedRecently.length ? (
                 <span
                   className="ml-2 text-nofx-text-muted"
@@ -365,6 +393,9 @@ function CoinDetail({
                     {tr(language, '浮盈亏', 'uPnL')}
                   </th>
                   <th className="font-normal">
+                    {tr(language, '状态', 'State')}
+                  </th>
+                  <th className="font-normal">
                     {tr(language, '入场时间', 'Opened')}
                   </th>
                   <th className="font-normal">
@@ -374,7 +405,7 @@ function CoinDetail({
               </thead>
               <tbody className="text-nofx-text">
                 {holders.map((h) => {
-                  // Inferred positions have no exchange PnL; estimate from the last candle.
+                  // Unpriced inferred positions: estimate from the last candle.
                   const upnl =
                     h.unrealized_pnl ||
                     (last
@@ -385,7 +416,7 @@ function CoinDetail({
                   return (
                     <tr
                       key={h.portfolio_id + h.side}
-                      className={`border-t ${ui.border}`}
+                      className={`border-t ${ui.border} ${h.liquidated ? 'opacity-50' : ''}`}
                     >
                       <td className="py-1.5">{h.nickname}</td>
                       <td className={sideClass(h.side)}>
@@ -401,6 +432,19 @@ function CoinDetail({
                         className={`tabular-nums ${upnl >= 0 ? 'text-nofx-success' : 'text-nofx-danger'}`}
                       >
                         {upnl ? signedUsd(upnl) : '--'}
+                        {h.priced ? (
+                          <span className="ml-1 text-xs">
+                            ({h.return_pct >= 0 ? '+' : ''}
+                            {h.return_pct.toFixed(1)}%
+                            {h.pct_of_margin
+                              ? ''
+                              : tr(language, ' 价格', ' price')}
+                            )
+                          </span>
+                        ) : null}
+                      </td>
+                      <td>
+                        <HealthTag h={h} language={language} />
                       </td>
                       <td
                         className="tabular-nums"
@@ -437,8 +481,13 @@ function CoinDetail({
         <p className={`${ui.muted} mt-2`}>
           {tr(
             language,
-            '「推算」的仓位由成交记录算出：开仓价和金额是准确的，但看不到杠杆和保证金，浮盈亏按最新 K 线估算。',
-            '"Inferred" positions come from trades: entry and value are exact, leverage and margin are unknown, and uPnL is estimated from the latest candle.'
+            '「推算」的仓位由成交记录算出：开仓价和金额是准确的，但看不到杠杆和保证金，浮盈亏按最新标记价格估算。',
+            '"Inferred" positions come from trades: entry and value are exact, leverage and margin are unknown, and uPnL is estimated from the latest mark price.'
+          )}
+          {tr(
+            language,
+            '「被套」：亏掉保证金 20% 以上（推算仓位看不到杠杆，按价格反向 2% 以上算）。「新开」：24 小时内开仓或加仓。「可能已强平」：推算仓位的亏损已超过他的账户余额。',
+            ' "Trapped": lost 20%+ of margin (2%+ adverse price move when leverage is unknown). "New": opened or added within 24h. "Likely liquidated": the inferred loss exceeds the trader’s balance.'
           )}
         </p>
       </section>
@@ -556,7 +605,18 @@ export function CoinsTab({
                     <div
                       className={`${ui.muted} mt-1 flex items-center justify-between`}
                     >
-                      {usd(s.long.value + s.short.value)}
+                      <span>
+                        {usd(s.long.value + s.short.value)}
+                        {s.long.trapped + s.short.trapped ? (
+                          <span className="ml-1 text-nofx-gold">
+                            {tr(
+                              language,
+                              `${s.long.trapped + s.short.trapped} 人被套`,
+                              `${s.long.trapped + s.short.trapped} trapped`
+                            )}
+                          </span>
+                        ) : null}
+                      </span>
                       <ConfidenceBadge
                         c={s.confidence}
                         language={language}

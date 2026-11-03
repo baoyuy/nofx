@@ -315,3 +315,22 @@ func GetPublicDepth(ctx context.Context, symbol string, limit int) (*MarketDepth
 	}
 	return &MarketDepth{Bids: toLevels(raw.Bids), Asks: toLevels(raw.Asks)}, nil
 }
+
+// GetPublicMarkPrices returns every perpetual's mark price by symbol, in one
+// request.
+func GetPublicMarkPrices(ctx context.Context) (map[string]float64, error) {
+	var rows []struct {
+		Symbol    string `json:"symbol"`
+		MarkPrice string `json:"markPrice"`
+	}
+	if err := publicGet(ctx, "/fapi/v1/premiumIndex", &rows); err != nil {
+		return nil, err
+	}
+	out := make(map[string]float64, len(rows))
+	for _, r := range rows {
+		if p := parseF(r.MarkPrice); p > 0 {
+			out[r.Symbol] = p
+		}
+	}
+	return out, nil
+}

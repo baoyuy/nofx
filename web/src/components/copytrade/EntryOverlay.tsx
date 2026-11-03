@@ -5,7 +5,7 @@ import type { ChartProjector } from '../market/BinanceChart'
 import { tr } from '../market/marketUi'
 import type { EntryMark, ExitMark } from './chartMarks'
 import { positionResult } from './chartMarks'
-import { ScoreBadge } from './ConfidenceUi'
+import { HealthTag, ScoreBadge } from './ConfidenceUi'
 import {
   actionLabel,
   clock,
@@ -26,6 +26,7 @@ function Avatar({
   side,
   dashed,
   closed,
+  trapped,
 }: {
   url?: string
   name: string
@@ -33,32 +34,39 @@ function Avatar({
   dashed?: boolean
   /** the position is no longer held: faded with a grey border */
   closed?: boolean
+  /** held at a deep loss: a small amber dot */
+  trapped?: boolean
 }) {
   const [broken, setBroken] = useState(false)
   const color = closed ? '#9aa3b2' : side === 'long' ? UP : DOWN
   // Binance's blank default picture tells traders apart worse than a letter.
   const usable = url && !/default-avatar/i.test(url)
   return (
-    <span
-      className="relative flex items-center justify-center overflow-hidden rounded-full bg-white text-[10px] font-semibold shadow"
-      style={{
-        width: AVATAR,
-        height: AVATAR,
-        border: `2px ${dashed ? 'dashed' : 'solid'} ${color}`,
-        color,
-        opacity: closed ? 0.45 : 1,
-      }}
-    >
-      {/* The letter shows until (or if never) the picture loads. */}
-      {(name || '?').slice(0, 1)}
-      {usable && !broken ? (
-        <img
-          src={url}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-          referrerPolicy="no-referrer"
-          onError={() => setBroken(true)}
-        />
+    <span className="relative block">
+      <span
+        className="relative flex items-center justify-center overflow-hidden rounded-full bg-white text-[10px] font-semibold shadow"
+        style={{
+          width: AVATAR,
+          height: AVATAR,
+          border: `2px ${dashed ? 'dashed' : 'solid'} ${color}`,
+          color,
+          opacity: closed ? 0.45 : 1,
+        }}
+      >
+        {/* The letter shows until (or if never) the picture loads. */}
+        {(name || '?').slice(0, 1)}
+        {usable && !broken ? (
+          <img
+            src={url}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            referrerPolicy="no-referrer"
+            onError={() => setBroken(true)}
+          />
+        ) : null}
+      </span>
+      {trapped && !closed ? (
+        <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border border-white bg-nofx-gold" />
       ) : null}
     </span>
   )
@@ -152,6 +160,11 @@ function Card({
               {price(h.entry_price)}
               {h.leverage ? ` · ${h.leverage}x` : ''}
             </div>
+            {h.trapped || h.fresh || h.liquidated ? (
+              <div>
+                <HealthTag h={h} language={language} />
+              </div>
+            ) : null}
             <div>
               {tr(language, '浮盈亏', 'Unrealized')}{' '}
               <span className={`font-semibold ${tone(r.pnl)}`}>
@@ -164,9 +177,9 @@ function Card({
                   {r.pctOfMargin ? tr(language, ' 保证金', ' of margin') : ''})
                 </span>
               ) : null}
-              {!h.unrealized_pnl ? (
+              {h.source !== 'public' ? (
                 <span className="text-nofx-text-muted">
-                  {tr(language, ' · 按最新价估算', ' · est. from last price')}
+                  {tr(language, ' · 按标记价估算', ' · est. from mark price')}
                 </span>
               ) : null}
             </div>
@@ -313,13 +326,25 @@ export function EntryOverlay({
                     `${t?.nickname || ''}：入场不在图上显示的时间内`,
                     `${t?.nickname || ''}: entry is before the chart`
                   )
-                : m.closed
+                : m.holder?.liquidated
                   ? tr(
                       language,
-                      `${t?.nickname || ''}：这笔仓位已平`,
-                      `${t?.nickname || ''}: position closed`
+                      `${t?.nickname || ''}：这笔仓位可能已被强平`,
+                      `${t?.nickname || ''}: likely liquidated`
                     )
-                  : t?.nickname
+                  : m.closed
+                    ? tr(
+                        language,
+                        `${t?.nickname || ''}：这笔仓位已平`,
+                        `${t?.nickname || ''}: position closed`
+                      )
+                    : m.holder?.trapped
+                      ? tr(
+                          language,
+                          `${t?.nickname || ''}：被套中`,
+                          `${t?.nickname || ''}: trapped in loss`
+                        )
+                      : t?.nickname
             }
             aria-label={t?.nickname || m.portfolioId}
             onClick={(ev) => {
@@ -333,6 +358,7 @@ export function EntryOverlay({
               side={m.side}
               dashed={m.kind === 'pinned'}
               closed={m.closed}
+              trapped={m.holder?.trapped}
             />
           </button>
         )

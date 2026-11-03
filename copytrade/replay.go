@@ -31,13 +31,18 @@ type Position struct {
 	EntryValue float64 `json:"entry_value"`
 	// OpenedAt is the first fill of the position in ms; 0 if it opened
 	// before monitoring started.
-	OpenedAt int64  `json:"opened_at"`
-	Source   string `json:"source"`
-	// Public positions only.
+	OpenedAt int64 `json:"opened_at"`
+	// LastAddAt is the latest open or add in ms; 0 if not seen.
+	LastAddAt int64  `json:"last_add_at"`
+	Source    string `json:"source"`
+	// Leverage and Margin are known for public positions only; MarkPrice and
+	// UnrealizedPnL are Binance's for public ones, estimated from the latest
+	// mark price for inferred ones.
 	MarkPrice     float64 `json:"mark_price,omitempty"`
 	Leverage      float64 `json:"leverage,omitempty"`
 	Margin        float64 `json:"margin,omitempty"`
 	UnrealizedPnL float64 `json:"unrealized_pnl,omitempty"`
+	Health
 }
 
 // Event is one trading action: the fills of one order merged.
@@ -67,6 +72,7 @@ type bucket struct {
 	q        float64 // signed: long > 0, short < 0
 	cost     float64 // |q| × average entry
 	openedAt int64
+	addedAt  int64
 }
 
 func sideOf(q float64) string {
@@ -154,6 +160,7 @@ func Replay(fills []Fill) ([]Position, []Event) {
 			}
 			b.q += delta
 			b.cost += f.Qty * f.Price
+			b.addedAt = f.Time
 			base.Side, base.Action, base.PositionQty = sideOf(b.q), action, math.Abs(b.q)
 			emit(key, base)
 		default:
@@ -184,7 +191,7 @@ func Replay(fills []Fill) ([]Position, []Event) {
 			if delta < 0 {
 				b.q = -excess
 			}
-			b.cost, b.openedAt = excess*f.Price, f.Time
+			b.cost, b.openedAt, b.addedAt = excess*f.Price, f.Time, f.Time
 			emit(key, Event{Time: f.Time, Symbol: f.Symbol, Side: sideOf(b.q), Action: "open", Qty: excess,
 				Price: f.Price, Value: excess * f.Price, Fee: f.Fee * excess / f.Qty, PositionQty: excess})
 		}
@@ -197,7 +204,7 @@ func Replay(fills []Fill) ([]Position, []Event) {
 		}
 		qty := math.Abs(b.q)
 		positions = append(positions, Position{Symbol: strings.SplitN(key, "|", 2)[0], Side: sideOf(b.q), Qty: qty,
-			EntryPrice: b.cost / qty, EntryValue: b.cost, OpenedAt: b.openedAt, Source: "inferred"})
+			EntryPrice: b.cost / qty, EntryValue: b.cost, OpenedAt: b.openedAt, LastAddAt: b.addedAt, Source: "inferred"})
 	}
 	sort.Slice(positions, func(a, b int) bool { return positions[a].EntryValue > positions[b].EntryValue })
 	return positions, events
@@ -218,9 +225,9 @@ func isFlip(side string, entry, price, held, realized float64) bool {
 // LivePositions converts Binance's public positions, taking each position's
 // opening time from the rebuilt one when they match.
 func LivePositions(live []LivePosition, inferred []Position) []Position {
-	opened := map[string]int64{}
+	seen := map[string]Position{}
 	for _, p := range inferred {
-		opened[p.Symbol+"|"+p.Side] = p.OpenedAt
+		seen[p.Symbol+"|"+p.Side] = p
 	}
 	out := make([]Position, 0, len(live))
 	for _, l := range live {
@@ -233,8 +240,9 @@ func LivePositions(live []LivePosition, inferred []Position) []Position {
 			side = sideOf(amt)
 		}
 		qty, entry, lev := math.Abs(amt), float64(l.EntryPrice), float64(l.Leverage)
+		r := seen[l.Symbol+"|"+side]
 		p := Position{Symbol: l.Symbol, Side: side, Qty: qty, EntryPrice: entry, EntryValue: qty * entry,
-			OpenedAt: opened[l.Symbol+"|"+side], Source: "public", MarkPrice: float64(l.MarkPrice), Leverage: lev,
+			OpenedAt: r.OpenedAt, LastAddAt: r.LastAddAt, Source: "public", MarkPrice: float64(l.MarkPrice), Leverage: lev,
 			UnrealizedPnL: float64(l.UnrealizedProfit)}
 		if lev > 0 {
 			p.Margin = p.EntryValue / lev

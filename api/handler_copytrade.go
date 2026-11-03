@@ -40,6 +40,8 @@ func (s *Server) StartCopyTrade(ctx context.Context) {
 		}
 		return bars, nil
 	}
+	// fapi, not the copy-trade web API: does not count against its limits.
+	m.Marks = binance.GetPublicMarkPrices
 	if proxy, err := s.loadCopyTradeProxy(); err != nil {
 		logger.Warnf("copy-trade: saved proxy not used: %v", err)
 	} else if err := m.Client.SetProxy(proxy); err != nil {

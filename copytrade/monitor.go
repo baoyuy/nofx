@@ -53,8 +53,13 @@ type Snapshot struct {
 type Monitor struct {
 	Client *Client
 	// Bars prices the hourly confidence signals; nil disables them.
-	Bars  BarsFunc
+	Bars BarsFunc
+	// Marks prices held positions; nil leaves inferred positions unpriced.
+	Marks MarksFunc
 	store *store.CopyTradeStore
+
+	markMu sync.RWMutex
+	marks  map[string]float64
 
 	mu    sync.RWMutex
 	snaps map[string]*Snapshot
@@ -90,6 +95,7 @@ func (m *Monitor) Run(ctx context.Context) {
 		m.mu.Unlock()
 	}
 	go m.signalLoop(ctx)
+	go m.markLoop(ctx)
 	prune := time.NewTicker(time.Hour)
 	defer prune.Stop()
 	for {
@@ -347,10 +353,9 @@ func (m *Monitor) Snapshots() []Snapshot {
 	m.mu.RLock()
 	out := make([]Snapshot, 0, len(m.snaps))
 	now := time.Now()
+	marks := m.currentMarks()
 	for _, s := range m.snaps {
-		snap := *s
-		snap.Score = ScoreTrader(snap.Follow, now)
-		out = append(out, snap)
+		out = append(out, m.view(s, marks, now))
 	}
 	m.mu.RUnlock()
 	sort.Slice(out, func(a, b int) bool { return out[a].Follow.CreatedAt.Before(out[b].Follow.CreatedAt) })
@@ -364,9 +369,15 @@ func (m *Monitor) Snapshot(id string) (Snapshot, bool) {
 	if !ok {
 		return Snapshot{}, false
 	}
+	return m.view(s, m.currentMarks(), time.Now()), true
+}
+
+// view copies a snapshot with its score and position health.
+func (m *Monitor) view(s *Snapshot, marks map[string]float64, now time.Time) Snapshot {
 	snap := *s
-	snap.Score = ScoreTrader(snap.Follow, time.Now())
-	return snap, true
+	snap.Score = ScoreTrader(snap.Follow, now)
+	snap.Positions = assessHealth(s.Positions, marks, snap.Follow.MarginBalance, now)
+	return snap
 }
 
 // Leaderboard serves Binance's leaderboard, cached for 10 minutes per query.

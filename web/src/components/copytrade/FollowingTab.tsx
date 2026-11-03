@@ -4,7 +4,7 @@ import { api } from '../../lib/api'
 import type { TraderSnapshot } from '../../lib/api/copyTrade'
 import { confirmToast, notify } from '../../lib/notify'
 import { tr, ui } from '../market/marketUi'
-import { ScoreBadge } from './ConfidenceUi'
+import { HealthTag, ScoreBadge } from './ConfidenceUi'
 import {
   actionClass,
   actionLabel,
@@ -139,7 +139,10 @@ function TraderCard({
             <table className="mb-2 w-full text-xs">
               <tbody className="text-nofx-text">
                 {positions.slice(0, 6).map((p) => (
-                  <tr key={p.symbol + p.side}>
+                  <tr
+                    key={p.symbol + p.side}
+                    className={p.liquidated ? 'opacity-50' : ''}
+                  >
                     <td className="py-0.5">
                       <button
                         type="button"
@@ -159,6 +162,9 @@ function TraderCard({
                       className={`tabular-nums ${p.unrealized_pnl ? (p.unrealized_pnl >= 0 ? 'text-nofx-success' : 'text-nofx-danger') : ''}`}
                     >
                       {p.unrealized_pnl ? signedUsd(p.unrealized_pnl) : ''}
+                    </td>
+                    <td>
+                      <HealthTag h={p} language={language} />
                     </td>
                   </tr>
                 ))}

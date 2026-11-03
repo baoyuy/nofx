@@ -35,7 +35,14 @@ const holder = (p: Partial<Holder>): Holder => ({
   entry_price: 100,
   entry_value: 100,
   opened_at: 0,
+  last_add_at: 0,
   source: 'inferred',
+  return_pct: 0,
+  pct_of_margin: false,
+  priced: false,
+  trapped: false,
+  liquidated: false,
+  fresh: false,
   portfolio_id: 'a',
   nickname: 'A',
   avatar_url: '',
@@ -214,6 +221,19 @@ describe('coin list sorting', () => {
     ])
     expect(sortCoins(list, 'traders', 'short').map((c) => c.symbol)).toEqual([
       'C',
+    ])
+  })
+
+  it('fades likely liquidated positions, entered on the chart or pinned', () => {
+    const events = [ev({ portfolio_id: 'a', time: (times[2] + 60) * 1000 })]
+    const holders = [
+      holder({ portfolio_id: 'a', liquidated: true }),
+      holder({ portfolio_id: 'b', side: 'short', liquidated: true }),
+    ]
+    const { entries } = buildMarks(events, holders, times)
+    expect(entries.map((m) => [m.portfolioId, m.kind, m.closed])).toEqual([
+      ['a', 'entry', true],
+      ['b', 'pinned', true],
     ])
   })
 })

@@ -62,6 +62,10 @@ type SideSummary struct {
 	Value   float64 `json:"value"`
 	// AvgEntry is the size-weighted average entry price.
 	AvgEntry float64 `json:"avg_entry"`
+	// Trapped holders are deep in loss; Fresh ones opened or added within
+	// 24 hours. Both are among Traders.
+	Trapped int `json:"trapped"`
+	Fresh   int `json:"fresh"`
 }
 
 // SymbolSummary is how followed traders hold one coin.
@@ -70,6 +74,9 @@ type SymbolSummary struct {
 	Long       SideSummary `json:"long"`
 	Short      SideSummary `json:"short"`
 	Confidence Confidence  `json:"confidence"`
+	// Liquidated counts traders whose position here was likely liquidated;
+	// they are left out of Long, Short and Confidence.
+	Liquidated int `json:"liquidated"`
 }
 
 // Holder is one followed trader's position in a coin, with the trader's
@@ -86,53 +93,72 @@ type Holder struct {
 }
 
 // Symbols sums positions per coin with each coin's direction confidence,
-// most traders first. Snapshots must carry their Score.
+// most traders first. Snapshots must carry their Score and position health.
+// Votes weigh each trader's stake by its health, so traders sitting on deep
+// losses count less than ones who just opened or added.
 func Symbols(snaps []Snapshot) []SymbolSummary {
 	by := map[string]*SymbolSummary{}
 	qty := map[string]float64{}
-	// One vote per trader and side: value-weighted stake times trader score.
+	balance := map[string]float64{}
+	// One vote per trader and side.
 	votes := map[string]map[string]*vote{}
 	for _, s := range snaps {
-		seen := map[string]bool{}
+		balance[s.Follow.PortfolioID] = s.Follow.MarginBalance
+		counted := map[string]bool{}
+		gone := map[string]bool{}
 		for _, p := range s.Positions {
-			if votes[p.Symbol] == nil {
-				votes[p.Symbol] = map[string]*vote{}
-			}
-			vk := s.Follow.PortfolioID + p.Side
-			v := votes[p.Symbol][vk]
-			if v == nil {
-				v = &vote{trader: s.Follow.PortfolioID, side: p.Side, score: s.Score.Score}
-				votes[p.Symbol][vk] = v
-			}
-			v.weight += p.EntryValue
 			sum := by[p.Symbol]
 			if sum == nil {
 				sum = &SymbolSummary{Symbol: p.Symbol}
 				by[p.Symbol] = sum
 			}
+			k := p.Symbol + p.Side
+			if p.Liquidated {
+				if !gone[p.Symbol] {
+					gone[p.Symbol] = true
+					sum.Liquidated++
+				}
+				continue
+			}
+			if votes[p.Symbol] == nil {
+				votes[p.Symbol] = map[string]*vote{}
+			}
+			v := votes[p.Symbol][s.Follow.PortfolioID+p.Side]
+			if v == nil {
+				v = &vote{trader: s.Follow.PortfolioID, side: p.Side, score: s.Score.Score}
+				votes[p.Symbol][s.Follow.PortfolioID+p.Side] = v
+			}
+			v.stake += p.EntryValue
+			v.health += healthFactor(p) * p.EntryValue
 			side := &sum.Long
 			if p.Side == "short" {
 				side = &sum.Short
 			}
 			// A trader counts once per side even with several positions.
-			if k := p.Symbol + p.Side; !seen[k] {
-				seen[k] = true
+			if !counted[k] {
+				counted[k] = true
 				side.Traders++
+				if p.Trapped {
+					side.Trapped++
+				}
+				if p.Fresh {
+					side.Fresh++
+				}
 			}
 			side.Value += p.EntryValue
-			qty[p.Symbol+p.Side] += p.Qty
+			qty[k] += p.Qty
 		}
-	}
-	balance := map[string]float64{}
-	for _, s := range snaps {
-		balance[s.Follow.PortfolioID] = s.Follow.MarginBalance
 	}
 	out := make([]SymbolSummary, 0, len(by))
 	for _, s := range by {
 		var list []vote
 		for _, v := range votes[s.Symbol] {
+			health := 1.0
+			if v.stake > 0 {
+				health = v.health / v.stake
+			}
 			list = append(list, vote{trader: v.trader, side: v.side, score: v.score,
-				weight: math.Max(1, v.score) * stakeFactor(v.weight, balance[v.trader])})
+				weight: math.Max(1, v.score) * stakeFactor(v.stake, balance[v.trader]) * health})
 		}
 		s.Confidence = confidence(list)
 		if q := qty[s.Symbol+"long"]; q > 0 {
