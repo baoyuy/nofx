@@ -243,7 +243,8 @@ func (c *ClaudeClient) ParseMCPResponseFull(body []byte) (*mcp.LLMResponse, erro
 			Name  string          `json:"name,omitempty"`
 			Input json.RawMessage `json:"input,omitempty"`
 		} `json:"content"`
-		Usage struct {
+		StopReason string `json:"stop_reason"`
+		Usage      struct {
 			InputTokens  int `json:"input_tokens"`
 			OutputTokens int `json:"output_tokens"`
 		} `json:"usage"`
@@ -258,6 +259,11 @@ func (c *ClaudeClient) ParseMCPResponseFull(body []byte) (*mcp.LLMResponse, erro
 	}
 	if raw.Error != nil {
 		return nil, fmt.Errorf("Anthropic API error: %s — %s", raw.Error.Type, raw.Error.Message)
+	}
+	// A refusal comes back as HTTP 200 with no text; surface it instead of
+	// letting the caller treat the empty reply as "no decision".
+	if raw.StopReason == "refusal" {
+		return nil, fmt.Errorf("Claude declined to answer (stop_reason=refusal); adjust the prompt")
 	}
 
 	total := raw.Usage.InputTokens + raw.Usage.OutputTokens

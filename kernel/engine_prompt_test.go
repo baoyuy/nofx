@@ -98,6 +98,25 @@ func TestBuildSystemPromptUsesUserRulesInAnyLanguage(t *testing.T) {
 	}
 }
 
+// Claude refuses prompts that ask for its "chain of thought" (empty reply,
+// stop_reason "refusal"), so the built-in prompt must not use that wording.
+func TestBuildSystemPromptAvoidsChainOfThoughtWording(t *testing.T) {
+	for _, lang := range []string{"zh", "en"} {
+		cfg := store.GetDefaultStrategyConfig(lang)
+		cfg.CoinSource = store.CoinSourceConfig{SourceType: "static", StaticCoins: []string{"BTCUSDT", "ETHUSDT"}}
+		cfg.PromptSections.DecisionProcess = ""
+		prompt := strings.ToLower(NewStrategyEngine(&cfg).BuildSystemPrompt(1000, "balanced"))
+		for _, phrase := range []string{"chain of thought", "thinking process"} {
+			if strings.Contains(prompt, phrase) {
+				t.Fatalf("%s prompt still asks for %q", lang, phrase)
+			}
+		}
+		if !strings.Contains(prompt, "<reasoning>") || !strings.Contains(prompt, "<decision>") {
+			t.Fatalf("%s prompt lost the <reasoning>/<decision> output format", lang)
+		}
+	}
+}
+
 func TestBuildSystemPromptDoesNotForceLongOnlyForSingleXYZ(t *testing.T) {
 	prompt := buildXYZStockCustomPrompt("XYZ:INTC")
 

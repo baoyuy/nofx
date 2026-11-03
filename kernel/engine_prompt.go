@@ -125,12 +125,12 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 		sb.WriteString("# 📋 Decision Process\n\n")
 		sb.WriteString("1. Check positions → take profit / stop loss?\n")
 		sb.WriteString("2. Scan candidates + multi-timeframe → are there strong signals?\n")
-		sb.WriteString("3. Write chain of thought first, then output structured JSON\n\n")
+		sb.WriteString("3. Write a concise analysis first, then output structured JSON\n\n")
 	} else {
 		sb.WriteString("# 📋 Decision Process\n\n")
 		sb.WriteString("1. Check positions → take profit / stop loss?\n")
 		sb.WriteString("2. Scan candidates + multi-timeframe → are there strong signals?\n")
-		sb.WriteString("3. Write chain of thought first, then output structured JSON\n\n")
+		sb.WriteString("3. Write a concise analysis first, then output structured JSON\n\n")
 	}
 
 	// 7. Output format — schema spec stays in English (this is a parser
@@ -598,20 +598,22 @@ func writeHardConstraints(sb *strings.Builder, accountEquity float64, riskContro
 	}
 }
 
+// Do not ask for the model's "chain of thought" or "thinking process":
+// Claude models refuse such prompts (stop_reason "refusal", empty reply).
 func writeOutputFormat(sb *strings.Builder, accountEquity, btcEthPosValueRatio float64, riskControl store.RiskControlConfig, singleSymbol bool, primarySymbol string, zh bool) {
 	// Output format schema MUST stay English/structural; parser depends on it.
 	sb.WriteString("# Output Format (Strictly Follow)\n\n")
 	if zh {
-		sb.WriteString("**Must use XML tags <reasoning> and <decision> to separate chain of thought and decision JSON, avoiding parsing errors**\n\n")
+		sb.WriteString("**Must use XML tags <reasoning> and <decision> to separate a concise analysis from the decision JSON, avoiding parsing errors**\n\n")
 	} else {
-		sb.WriteString("**Must use XML tags <reasoning> and <decision> to separate chain of thought and decision JSON, avoiding parsing errors**\n\n")
+		sb.WriteString("**Must use XML tags <reasoning> and <decision> to separate a concise analysis from the decision JSON, avoiding parsing errors**\n\n")
 	}
 	sb.WriteString("## Format Requirements\n\n")
 	sb.WriteString("<reasoning>\n")
 	if zh {
-		sb.WriteString("Your chain of thought analysis...\n- Briefly analyze your thinking process\n")
+		sb.WriteString("Concise analysis of positions and candidates (key reasons only)\n")
 	} else {
-		sb.WriteString("Your chain of thought analysis...\n- Briefly analyze your thinking process\n")
+		sb.WriteString("Concise analysis of positions and candidates (key reasons only)\n")
 	}
 	sb.WriteString("</reasoning>\n\n")
 	sb.WriteString("<decision>\n")
@@ -1022,6 +1024,8 @@ func (e *StrategyEngine) formatCoinSourceTag(sources []string) string {
 			return " (Hyperliquid Top20)"
 		case "vergex_signal":
 			return " (Vergex Signal)"
+		case "bollinger_horn":
+			return " (Bollinger horn: squeeze then expansion)"
 		}
 		if strings.HasPrefix(sources[0], "hyper_rank") {
 			return " (Hyperliquid Dynamic Rank)"
