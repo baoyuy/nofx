@@ -161,7 +161,7 @@ export function TradePanel({
       ) : null}
 
       <Positions
-        positions={bal ? account!.positions : []}
+        positions={(bal && account?.positions) || []}
         exchange={exchange}
         decimals={decimals}
         language={language}

@@ -569,12 +569,21 @@ export const dataApi = {
     return result.data!
   },
 
+  /**
+   * Bull/bear direction board. With `symbols` only those markets are scored
+   * (the dashboard passes the trader's AI candidates and open positions);
+   * without it, the 30 most traded perpetuals.
+   */
   async getDirectionChangeLeaderboard(
     limit = 25,
-    silent?: boolean
+    silent?: boolean,
+    symbols?: string[]
   ): Promise<SignalRankingResponse> {
+    const query = symbols?.length
+      ? `?${new URLSearchParams({ symbols: symbols.join(',') })}`
+      : ''
     const result = await httpClient.request<VergexDirectionLeaderboardResponse>(
-      `${API_BASE}/market-board/direction`,
+      `${API_BASE}/market-board/direction${query}`,
       { silent, timeout: 60000 }
     )
     if (!result.success)

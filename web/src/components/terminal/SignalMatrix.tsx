@@ -101,7 +101,7 @@ export function SignalMatrix({
     return (
       <div style={{ fontFamily: 'var(--tm-mono)' }}>
         <Head />
-        <div className="tm-sc">{isZh ? '暂无信号数据。' : 'No signal data.'}</div>
+        <div className="tm-sc">{isZh ? '这一轮 AI 没有候选币，也没有持仓。' : 'The AI has no candidates or positions this cycle.'}</div>
       </div>
     )
   }
@@ -208,7 +208,7 @@ function Head() {
       <span className="tm-px" style={{ fontSize: 11 }}>
         {isZh ? '信号矩阵' : 'Signal matrix'}
       </span>
-      <span className="tm-sc">{isZh ? '信号矩阵 · 币安' : 'Signal matrix · Binance'}</span>
+      <span className="tm-sc">{isZh ? 'AI 候选与持仓 · 币安' : 'AI candidates & positions · Binance'}</span>
     </div>
   )
 }

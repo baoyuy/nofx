@@ -122,6 +122,10 @@ func fakeBinance(t *testing.T) *httptest.Server {
 				{"symbol": "TSLAUSDT", "lastPrice": "100", "priceChangePercent": "1", "quoteVolume": "99999"},
 			})
 		case "/fapi/v1/klines":
+			if _, listed := trend[sym]; !listed {
+				http.Error(w, `{"code":-1121,"msg":"Invalid symbol."}`, http.StatusBadRequest)
+				return
+			}
 			limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 			share := 0.6
 			if trend[sym] < 0 {
@@ -186,5 +190,22 @@ func TestBoardsFromBinance(t *testing.T) {
 	un, err := c.Heatmap(ctx, "xyz:SP500")
 	if err != nil || un.Data.Cost.State != "unsupported" || len(un.Data.Bins) != 0 {
 		t.Fatalf("unsupported heatmap = %+v, %v", un.Data, err)
+	}
+}
+
+// The dashboard asks for the trader's own coins; only those are scored, in
+// any spelling, duplicates collapse and unlisted markets are left out.
+func TestDirectionForScoresOnlyTheGivenMarkets(t *testing.T) {
+	srv := fakeBinance(t)
+	defer srv.Close()
+	c := New()
+	c.BaseURL = srv.URL
+
+	board := c.DirectionFor(context.Background(), []string{"eth", "ETHUSDT", "NOPEUSDT"})
+	if len(board.Items) != 1 || board.Items[0].Symbol != "ETH" || board.Items[0].Bias != bearish || board.Items[0].Rank != 1 {
+		t.Fatalf("board = %+v", board.Items)
+	}
+	if empty := c.DirectionFor(context.Background(), nil); empty.Items == nil || len(empty.Items) != 0 {
+		t.Fatalf("empty board must be an empty list, got %#v", empty.Items)
 	}
 }

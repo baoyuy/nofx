@@ -147,65 +147,124 @@ func (c *Client) Direction(ctx context.Context) (DirectionBoard, error) {
 		if err != nil {
 			return nil, err
 		}
-		items := make([]DirectionItem, len(tickers))
-		ok := make([]bool, len(tickers))
-		failed := forEach(tickers, func(i int, t Ticker) error {
-			candles, err := c.klines(ctx, t.Symbol, "1h", 60)
-			if err != nil || len(candles) < 25 {
-				return errors.New("candles unavailable")
-			}
-			// Open interest is optional: the board still works without it.
-			oi, oiErr := c.openInterestHistory(ctx, t.Symbol, "1h", 25)
-			var oiChange, oiValue float64
-			oiKnown := oiErr == nil && len(oi) >= 2 && oi[0] > 0
-			if oiKnown {
-				oiValue = oi[len(oi)-1]
-				oiChange = oiValue/oi[0] - 1
-			}
-			f := Factors(candles, oiChange, oiKnown)
-			bias, score, bull, bear, neut := Score(f)
-			base := BaseSymbol(t.Symbol)
-			items[i] = DirectionItem{
-				Market: DirectionMarket{MarketType: "core_perp", MarketID: t.Symbol, Symbol: base},
-				Symbol: base, Bias: bias, DirectionScore: score,
-				BullishCount: bull, BearishCount: bear, NeutralCount: neut, FactorDirections: f,
-				MarkPrice: candles[len(candles)-1].Close, FactorAsOf: candles[len(candles)-1].OpenTime,
-				oiValue: oiValue, volume: t.QuoteVolume,
-			}
-			ok[i] = true
-			return nil
-		})
+		list, failed := c.scoreTickers(ctx, tickers)
 		if len(tickers) == 0 || failed > len(tickers)/2 {
 			return nil, errors.New("Binance candles unavailable for the direction board")
 		}
-		var list []DirectionItem
-		for i := range items {
-			if ok[i] {
-				list = append(list, items[i])
-			}
-		}
-		byOI := make([]int, len(list))
-		for i := range byOI {
-			byOI[i] = i
-		}
-		sort.SliceStable(byOI, func(a, b int) bool { return list[byOI[a]].oiValue > list[byOI[b]].oiValue })
-		for r, i := range byOI {
-			list[i].OIRank = r + 1
-		}
-		sort.SliceStable(list, func(a, b int) bool {
-			if list[a].DirectionScore != list[b].DirectionScore {
-				return list[a].DirectionScore > list[b].DirectionScore
-			}
-			return list[a].volume > list[b].volume
-		})
-		for i := range list {
-			list[i].Rank = i + 1
-		}
-		return DirectionBoard{Band: universe, UniverseSize: len(list), RankBy: "directionScore", Source: "binance",
-			AsOf: time.Now().UnixMilli(), Items: list}, nil
+		return rankDirection(list, universe), nil
 	})
 	if err != nil {
 		return DirectionBoard{}, err
 	}
 	return v.(DirectionBoard), nil
+}
+
+// MaxDirectionSymbols caps an explicit symbol list (the AI's candidates plus
+// open positions never exceed this).
+const MaxDirectionSymbols = 30
+
+// DirectionFor scores only the given perpetuals, e.g. the coins a trader's AI
+// is looking at this cycle. Each symbol is cached on its own, so a changing
+// candidate set reuses earlier work and the cache stays bounded by the number
+// of listed markets. Symbols Binance does not list are left out.
+func (c *Client) DirectionFor(ctx context.Context, symbols []string) DirectionBoard {
+	tickers := make([]Ticker, 0, len(symbols))
+	seen := map[string]bool{}
+	for _, raw := range symbols {
+		pair := PairSymbol(raw)
+		if pair == "" || seen[pair] || len(tickers) >= MaxDirectionSymbols {
+			continue
+		}
+		seen[pair] = true
+		tickers = append(tickers, Ticker{Symbol: pair})
+	}
+	items := make([]DirectionItem, len(tickers))
+	ok := make([]bool, len(tickers))
+	forEach(tickers, func(i int, t Ticker) error {
+		v, err := c.cachedDo("direction1:"+t.Symbol, func(ctx context.Context) (any, error) {
+			list, failed := c.scoreTickers(ctx, []Ticker{t})
+			if failed > 0 || len(list) == 0 {
+				return nil, errors.New("candles unavailable")
+			}
+			return list[0], nil
+		})
+		if err != nil {
+			return err
+		}
+		items[i], ok[i] = v.(DirectionItem), true
+		return nil
+	})
+	var list []DirectionItem
+	for i := range items {
+		if ok[i] {
+			list = append(list, items[i])
+		}
+	}
+	return rankDirection(list, len(tickers))
+}
+
+// scoreTickers computes the factor directions for each ticker and reports how
+// many could not be scored.
+func (c *Client) scoreTickers(ctx context.Context, tickers []Ticker) ([]DirectionItem, int) {
+	items := make([]DirectionItem, len(tickers))
+	ok := make([]bool, len(tickers))
+	failed := forEach(tickers, func(i int, t Ticker) error {
+		candles, err := c.klines(ctx, t.Symbol, "1h", 60)
+		if err != nil || len(candles) < 25 {
+			return errors.New("candles unavailable")
+		}
+		// Open interest is optional: the board still works without it.
+		oi, oiErr := c.openInterestHistory(ctx, t.Symbol, "1h", 25)
+		var oiChange, oiValue float64
+		oiKnown := oiErr == nil && len(oi) >= 2 && oi[0] > 0
+		if oiKnown {
+			oiValue = oi[len(oi)-1]
+			oiChange = oiValue/oi[0] - 1
+		}
+		f := Factors(candles, oiChange, oiKnown)
+		bias, score, bull, bear, neut := Score(f)
+		base := BaseSymbol(t.Symbol)
+		items[i] = DirectionItem{
+			Market: DirectionMarket{MarketType: "core_perp", MarketID: t.Symbol, Symbol: base},
+			Symbol: base, Bias: bias, DirectionScore: score,
+			BullishCount: bull, BearishCount: bear, NeutralCount: neut, FactorDirections: f,
+			MarkPrice: candles[len(candles)-1].Close, FactorAsOf: candles[len(candles)-1].OpenTime,
+			oiValue: oiValue, volume: t.QuoteVolume,
+		}
+		ok[i] = true
+		return nil
+	})
+	var list []DirectionItem
+	for i := range items {
+		if ok[i] {
+			list = append(list, items[i])
+		}
+	}
+	return list, failed
+}
+
+// rankDirection assigns OI ranks and orders the board strongest signal first.
+func rankDirection(list []DirectionItem, band int) DirectionBoard {
+	byOI := make([]int, len(list))
+	for i := range byOI {
+		byOI[i] = i
+	}
+	sort.SliceStable(byOI, func(a, b int) bool { return list[byOI[a]].oiValue > list[byOI[b]].oiValue })
+	for r, i := range byOI {
+		list[i].OIRank = r + 1
+	}
+	sort.SliceStable(list, func(a, b int) bool {
+		if list[a].DirectionScore != list[b].DirectionScore {
+			return list[a].DirectionScore > list[b].DirectionScore
+		}
+		return list[a].volume > list[b].volume
+	})
+	for i := range list {
+		list[i].Rank = i + 1
+	}
+	if list == nil {
+		list = []DirectionItem{}
+	}
+	return DirectionBoard{Band: band, UniverseSize: len(list), RankBy: "directionScore", Source: "binance",
+		AsOf: time.Now().UnixMilli(), Items: list}
 }

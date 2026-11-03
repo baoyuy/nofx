@@ -175,6 +175,10 @@ func (s *Server) handleMarketAccount(c *gin.Context) {
 		SafeError(c, http.StatusBadGateway, "Could not read positions.", err)
 		return
 	}
+	if positions == nil {
+		// An account with nothing open must still send a list, not null.
+		positions = []map[string]interface{}{}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"exchange_type": exchangeType,
 		"paper":         exchangeType == binance.PaperExchangeType,
