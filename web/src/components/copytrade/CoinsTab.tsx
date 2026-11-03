@@ -10,7 +10,7 @@ import type { MarketKline } from '../../lib/api/market'
 import { BinanceChart, BN, type PriceMarker } from '../market/BinanceChart'
 import { tr, ui } from '../market/marketUi'
 import { priceDecimals } from '../../utils/marketIndicators'
-import { buildMarks } from './chartMarks'
+import { buildMarks, recentlyClosed } from './chartMarks'
 import { EntryOverlay } from './EntryOverlay'
 import {
   ConfidenceBadge,
@@ -157,6 +157,13 @@ function CoinDetail({
   }, [symbol, version])
 
   const last = candles[candles.length - 1]?.close || 0
+  // The newest candle's time stands for now (pure, and current enough).
+  const lastTime = candles[candles.length - 1]?.time || 0
+  const closedRecently = useMemo(
+    () =>
+      lastTime ? recentlyClosed(events, holders, (lastTime + 3600) * 1000) : [],
+    [events, holders, lastTime]
+  )
   const marks = useMemo(
     () =>
       buildMarks(
@@ -211,8 +218,8 @@ function CoinDetail({
               <span className="text-nofx-success">
                 {tr(
                   language,
-                  `做多 ${summary.long.traders} 人`,
-                  `${summary.long.traders} long`
+                  `做多 ${summary.long.traders} 人持仓中`,
+                  `${summary.long.traders} holding long`
                 )}{' '}
                 · {usd(summary.long.value)}
                 {summary.long.avg_entry
@@ -223,14 +230,31 @@ function CoinDetail({
               <span className="text-nofx-danger">
                 {tr(
                   language,
-                  `做空 ${summary.short.traders} 人`,
-                  `${summary.short.traders} short`
+                  `做空 ${summary.short.traders} 人持仓中`,
+                  `${summary.short.traders} holding short`
                 )}{' '}
                 · {usd(summary.short.value)}
                 {summary.short.avg_entry
                   ? ` · ${tr(language, '均价', 'avg')} ${price(summary.short.avg_entry)}`
                   : ''}
               </span>
+              {closedRecently.length ? (
+                <span
+                  className="ml-2 text-nofx-text-muted"
+                  title={closedRecently
+                    .map(
+                      (e) =>
+                        `${e.nickname} ${clock(e.time)} ${e.side === 'long' ? tr(language, '平多', 'closed long') : tr(language, '平空', 'closed short')}${e.realized_pnl ? ' ' + signedUsd(e.realized_pnl) : ''}`
+                    )
+                    .join('\n')}
+                >
+                  {tr(
+                    language,
+                    `· 另有 ${closedRecently.length} 人近 24 小时已平仓`,
+                    `· ${closedRecently.length} more closed in the last 24h`
+                  )}
+                </span>
+              ) : null}
             </span>
           ) : null}
           <div className="ml-auto flex gap-1">
@@ -261,8 +285,8 @@ function CoinDetail({
         <p className={`${ui.muted} mb-2`}>
           {tr(
             language,
-            '头像标在带单员开仓、加仓的那根 K 线和价格上：绿框做多，红框做空，点头像看入场价和收益。小三角是减仓或平仓（绿色赚、红色亏）。虚线框头像在最左边，表示入场早于图上的时间，换大周期可以看到。',
-            'Avatars sit on the candle and price where a trader opened or added: green border long, red short. Click one for the entry and results. Small triangles are reductions and closes (green profit, red loss). Dashed avatars at the left entered before the chart; switch to a longer interval.'
+            '头像标在带单员开仓、加仓的那根 K 线和价格上：绿框做多，红框做空，半透明灰框表示这笔仓位已经平掉，点头像看入场价和收益。小三角是减仓或平仓（绿色赚、红色亏）。虚线框头像在最左边，表示入场早于图上的时间，换大周期可以看到。',
+            'Avatars sit on the candle and price where a trader opened or added: green border long, red short, faded grey once that position is closed. Click one for the entry and results. Small triangles are reductions and closes (green profit, red loss). Dashed avatars at the left entered before the chart; switch to a longer interval.'
           )}
         </p>
         <label className="mb-2 flex items-center gap-1.5 text-xs text-nofx-text">

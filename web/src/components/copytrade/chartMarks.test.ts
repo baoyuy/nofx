@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { FeedItem, Holder, SymbolSummary } from '../../lib/api/copyTrade'
-import { barFor, buildMarks, positionResult } from './chartMarks'
+import {
+  barFor,
+  buildMarks,
+  positionResult,
+  recentlyClosed,
+} from './chartMarks'
 import { sortCoins } from './CoinsTab'
 
 const hour = 3600
@@ -73,6 +78,8 @@ describe('chart marks', () => {
       ['pinned', 'b', 0],
     ])
     expect(entries[1].price).toBe(120)
+    // a closed after opening; b still holds.
+    expect(entries.map((m) => m.closed)).toEqual([true, false])
     expect(exits).toHaveLength(1)
     expect(exits[0].bar).toBe(times[3])
   })
@@ -113,6 +120,35 @@ describe('chart marks', () => {
       state: 'closed',
       pnl: 10,
     })
+  })
+})
+
+describe('entries of closed positions', () => {
+  it('fades an entry closed later even if the trader re-entered, and lists recent closes', () => {
+    const t = (h: number) => (times[0] + h * hour) * 1000
+    const events = [
+      ev({ time: t(3.5), action: 'open', portfolio_id: 'a' }), // re-entry, held
+      ev({ time: t(2.5), action: 'close', portfolio_id: 'a' }),
+      ev({ time: t(1.5), action: 'open', portfolio_id: 'a' }), // closed
+      ev({
+        time: t(1.2),
+        action: 'close',
+        portfolio_id: 'c',
+        realized_pnl: 100,
+      }),
+      ev({ time: t(0.5), action: 'open', portfolio_id: 'c' }), // closed, not held
+    ]
+    const holders = [holder({ portfolio_id: 'a' })]
+    const { entries } = buildMarks(events, holders, times)
+    expect(entries.map((m) => [m.portfolioId, m.closed])).toEqual([
+      ['a', false],
+      ['a', true],
+      ['c', true],
+    ])
+    expect(entries[1].holder).toBeUndefined()
+    const closed = recentlyClosed(events, holders, t(4))
+    expect(closed.map((e) => e.portfolio_id)).toEqual(['c'])
+    expect(recentlyClosed(events, holders, t(4) + 25 * hour * 1000)).toEqual([])
   })
 })
 

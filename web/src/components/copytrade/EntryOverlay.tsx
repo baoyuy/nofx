@@ -25,14 +25,17 @@ function Avatar({
   name,
   side,
   dashed,
+  closed,
 }: {
   url?: string
   name: string
   side: 'long' | 'short'
   dashed?: boolean
+  /** the position is no longer held: faded with a grey border */
+  closed?: boolean
 }) {
   const [broken, setBroken] = useState(false)
-  const color = side === 'long' ? UP : DOWN
+  const color = closed ? '#9aa3b2' : side === 'long' ? UP : DOWN
   // Binance's blank default picture tells traders apart worse than a letter.
   const usable = url && !/default-avatar/i.test(url)
   return (
@@ -43,6 +46,7 @@ function Avatar({
         height: AVATAR,
         border: `2px ${dashed ? 'dashed' : 'solid'} ${color}`,
         color,
+        opacity: closed ? 0.45 : 1,
       }}
     >
       {/* The letter shows until (or if never) the picture loads. */}
@@ -309,7 +313,13 @@ export function EntryOverlay({
                     `${t?.nickname || ''}：入场不在图上显示的时间内`,
                     `${t?.nickname || ''}: entry is before the chart`
                   )
-                : t?.nickname
+                : m.closed
+                  ? tr(
+                      language,
+                      `${t?.nickname || ''}：这笔仓位已平`,
+                      `${t?.nickname || ''}: position closed`
+                    )
+                  : t?.nickname
             }
             aria-label={t?.nickname || m.portfolioId}
             onClick={(ev) => {
@@ -322,6 +332,7 @@ export function EntryOverlay({
               name={t?.nickname || ''}
               side={m.side}
               dashed={m.kind === 'pinned'}
+              closed={m.closed}
             />
           </button>
         )

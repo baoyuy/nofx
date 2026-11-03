@@ -13,7 +13,10 @@ export interface EntryMark {
   bar: number
   price: number
   event?: FeedItem
+  /** set only while this entry's position is still held */
   holder?: Holder
+  /** the position this entry opened or added to has been closed */
+  closed: boolean
 }
 
 export interface ExitMark {
@@ -56,9 +59,20 @@ export function buildMarks(
     const key = `${e.portfolio_id}-${e.time}-${e.action}-${e.side}`
     if (e.action === 'open' || e.action === 'add') {
       if (entries.length >= MAX_ENTRY_MARKS) continue
-      const holder = holders.find(
-        (h) => h.portfolio_id === e.portfolio_id && h.side === e.side
+      // Still held only if the trader holds that side and has not closed it
+      // since this entry (a later re-entry is a different position).
+      const closedSince = events.some(
+        (x) =>
+          x.action === 'close' &&
+          x.portfolio_id === e.portfolio_id &&
+          x.side === e.side &&
+          x.time > e.time
       )
+      const holder = closedSince
+        ? undefined
+        : holders.find(
+            (h) => h.portfolio_id === e.portfolio_id && h.side === e.side
+          )
       entries.push({
         key,
         kind: 'entry',
@@ -68,6 +82,7 @@ export function buildMarks(
         price: e.price,
         event: e,
         holder,
+        closed: !holder,
       })
     } else if (exits.length < MAX_ENTRY_MARKS) {
       exits.push({ key, bar, price: e.price, event: e })
@@ -88,10 +103,33 @@ export function buildMarks(
         bar: 0,
         price: h.entry_price,
         holder: h,
+        closed: false,
       })
     }
   }
   return { entries, exits }
+}
+
+/**
+ * Traders who closed this coin within windowMs and hold neither side of it
+ * now, newest close first.
+ */
+export function recentlyClosed(
+  events: FeedItem[],
+  holders: Holder[],
+  now: number,
+  windowMs = 24 * 3600 * 1000
+): FeedItem[] {
+  const holding = new Set(holders.map((h) => h.portfolio_id))
+  const seen = new Set<string>()
+  const out: FeedItem[] = []
+  for (const e of events) {
+    if (e.action !== 'close' || now - e.time > windowMs) continue
+    if (holding.has(e.portfolio_id) || seen.has(e.portfolio_id)) continue
+    seen.add(e.portfolio_id)
+    out.push(e)
+  }
+  return out
 }
 
 export interface PositionResult {
