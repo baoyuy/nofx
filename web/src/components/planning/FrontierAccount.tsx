@@ -2,6 +2,7 @@ import { apiKeyVenues, venueName } from '../../lib/frontierAccounts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api'
 import { getAuthHeaders, handleJSONResponse } from '../../lib/api/helpers'
+import { randomUUID } from '../../lib/uuid'
 import {
   planningAPI,
   CloseNotSubmittedError,
@@ -342,7 +343,7 @@ export function FrontierAccount({
               'close-position',
               {
                 exchange_id: accountID,
-                request_id: crypto.randomUUID(),
+                request_id: randomUUID(),
                 symbol: position.symbol,
                 side: position.side,
                 quantity,

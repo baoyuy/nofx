@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { getAuthHeaders, handleJSONResponse } from '../lib/api/helpers'
 import { type AIModel, type Exchange } from '../types'
 import { ROUTES } from '../router/paths'
+import { randomUUID } from '../lib/uuid'
 import {
   type Plan,
   type LiveRun,
@@ -200,7 +201,7 @@ export function TradingPlanningPage() {
     [tools, setTools] = useState<unknown[]>([])
   const chart = useRef<PlanningChart | null>(null),
     abort = useRef<AbortController | null>(null),
-    session = useRef<string>(crypto.randomUUID()),
+    session = useRef<string>(randomUUID()),
     chatBox = useRef<HTMLDivElement | null>(null),
     chatFollow = useRef(true),
     active = useRef(true)
@@ -492,7 +493,7 @@ export function TradingPlanningPage() {
     setTrace([])
     setError('')
     setOrderNotice('')
-    session.current = crypto.randomUUID()
+    session.current = randomUUID()
   }
   async function choose(p: Plan) {
     setSelected(p.id)
@@ -530,7 +531,7 @@ export function TradingPlanningPage() {
     resetTurn()
     setCompare([])
     setMessages([])
-    session.current = crypto.randomUUID()
+    session.current = randomUUID()
   }
   function viewTrade(trade: LiveRun) {
     marketChosen.current = true
@@ -598,7 +599,7 @@ export function TradingPlanningPage() {
       ? []
       : messages.filter((m) => m.role !== 'error').slice(-16)
     if (separateDraft) {
-      session.current = crypto.randomUUID()
+      session.current = randomUUID()
       setSelected('')
       setCompare([])
       setMessages([])
@@ -606,7 +607,7 @@ export function TradingPlanningPage() {
     setBusy(true)
     setPlanningBusy(true)
     const generation: PlanBatch = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       ids: [],
       created: new Date().toISOString(),
     }
@@ -967,7 +968,7 @@ export function TradingPlanningPage() {
   }
   function newSession() {
     abort.current?.abort()
-    session.current = crypto.randomUUID()
+    session.current = randomUUID()
     setMessages([])
     setSelected('')
     resetTurn()
