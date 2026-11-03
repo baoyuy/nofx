@@ -12,6 +12,7 @@ import (
 	_ "nofx/mcp/payment"
 	_ "nofx/mcp/provider"
 	"nofx/store"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -440,17 +441,28 @@ func (s *Server) handleDuplicateStrategy(c *gin.Context) {
 		return
 	}
 
+	// The name is optional: without one the copy is named after its source.
 	var req struct {
-		Name string `json:"name" binding:"required"`
+		Name string `json:"name"`
 	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		SafeBadRequest(c, "Invalid request parameters")
-		return
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			SafeBadRequest(c, "Invalid request parameters")
+			return
+		}
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		source, err := s.store.Strategy().Get(userID, sourceID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Strategy not found"})
+			return
+		}
+		name = source.Name + " (copy)"
 	}
 
 	newID := uuid.New().String()
-	if err := s.store.Strategy().Duplicate(userID, sourceID, newID, req.Name); err != nil {
+	if err := s.store.Strategy().Duplicate(userID, sourceID, newID, name); err != nil {
 		SafeInternalError(c, "Failed to duplicate strategy", err)
 		return
 	}

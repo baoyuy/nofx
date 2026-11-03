@@ -64,8 +64,11 @@ export const strategyApi = {
     return result.data!
   },
 
-  async duplicateStrategy(strategyId: string): Promise<Strategy> {
-    const result = await httpClient.post<Strategy>(`${API_BASE}/strategies/${strategyId}/duplicate`)
+  async duplicateStrategy(strategyId: string, name?: string): Promise<{ id: string }> {
+    const result = await httpClient.post<{ id: string }>(
+      `${API_BASE}/strategies/${strategyId}/duplicate`,
+      name ? { name } : {}
+    )
     if (!result.success) throw new Error('Failed to duplicate strategy')
     return result.data!
   },
