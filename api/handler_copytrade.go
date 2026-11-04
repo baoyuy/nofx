@@ -61,7 +61,7 @@ func (s *Server) loadCopyTradeProxy() (string, error) {
 
 func (s *Server) registerCopyTradeRoutes(protected *gin.RouterGroup) {
 	s.route(protected, "GET", "/copytrade/status", "Copy-trade monitor status: rate limiting, proxy, followed traders", s.handleCopyTradeStatus)
-	s.route(protected, "GET", "/copytrade/leaderboard", "Binance copy-trading lead traders (?time_range=7D|30D|90D&sort=ROI|PNL|COPIER_PNL&page=1)", s.handleCopyTradeLeaderboard)
+	s.route(protected, "GET", "/copytrade/leaderboard", "Binance copy-trading lead traders (?time_range=7D|30D|90D&sort=ROI|PNL|COPIER_PNL&page=1&nickname=)", s.handleCopyTradeLeaderboard)
 	s.route(protected, "GET", "/copytrade/follows", "Followed lead traders with their positions and latest actions", s.handleCopyTradeFollows)
 	s.route(protected, "POST", "/copytrade/follows", "Follow a lead trader (body: id = portfolio ID or copy-trading page URL)", s.handleCopyTradeFollow)
 	s.route(protected, "GET", "/copytrade/follows/:id", "One followed trader with positions and actions", s.handleCopyTradeFollowDetail)
@@ -137,6 +137,11 @@ func (s *Server) handleCopyTradeLeaderboard(c *gin.Context) {
 	q.Page, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
 	if q.Page < 1 || q.Page > 50 {
 		SafeBadRequest(c, "page must be 1-50")
+		return
+	}
+	q.Nickname = strings.TrimSpace(c.Query("nickname"))
+	if len([]rune(q.Nickname)) > 50 {
+		SafeBadRequest(c, "nickname is at most 50 characters")
 		return
 	}
 	page, err := s.copyTrade.Leaderboard(c.Request.Context(), q)

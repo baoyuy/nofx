@@ -232,11 +232,17 @@ const get = async <T>(path: string, params?: Record<string, unknown>) =>
 export const copyTradeApi = {
   getCopyTradeStatus: () => get<CopyTradeStatus>('/copytrade/status'),
 
-  getLeaderboard: (timeRange: string, sort: string, page: number) =>
+  getLeaderboard: (
+    timeRange: string,
+    sort: string,
+    page: number,
+    nickname = ''
+  ) =>
     get<LeaderPage>('/copytrade/leaderboard', {
       time_range: timeRange,
       sort,
       page,
+      nickname: nickname || undefined,
     }),
 
   getFollows: () =>
