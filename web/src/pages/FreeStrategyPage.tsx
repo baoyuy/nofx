@@ -736,7 +736,14 @@ export function FreeStrategyPage() {
                     type="button"
                     role="radio"
                     aria-checked={(form.coinSource || 'static') === value}
-                    onClick={() => patchForm({ coinSource: value })}
+                    onClick={() =>
+                      // A new source starts from its own direction default.
+                      patchForm(
+                        (form.coinSource || 'static') === value
+                          ? { coinSource: value }
+                          : { coinSource: value, copyTradeFollow: undefined }
+                      )
+                    }
                     className={`flex-1 rounded-lg border px-3 py-2 text-left ${(form.coinSource || 'static') === value ? 'border-nofx-gold bg-nofx-gold/10' : 'border-[rgba(25,36,52,0.14)]'}`}
                   >
                     <span className="block text-sm font-semibold text-nofx-text">
@@ -753,6 +760,8 @@ export function FreeStrategyPage() {
                   language={language}
                   settings={form.copyTrade}
                   onChange={(copyTrade) => patchForm({ copyTrade })}
+                  follow={form.copyTradeFollow || 'follow'}
+                  onFollow={(copyTradeFollow) => patchForm({ copyTradeFollow })}
                 />
               ) : usingHorn ? (
                 <>
@@ -986,6 +995,8 @@ export function FreeStrategyPage() {
                   onChange={(copyTradeContext) =>
                     patchForm({ copyTradeContext })
                   }
+                  follow={form.copyTradeFollow || 'free'}
+                  onFollow={(copyTradeFollow) => patchForm({ copyTradeFollow })}
                 />
               ) : null}
             </Section>
@@ -1403,6 +1414,24 @@ export function FreeStrategyPage() {
                     step={0.5}
                     onChange={(minRiskReward) => patchForm({ minRiskReward })}
                     suffix=": 1"
+                  />
+                </Field>
+                <Field
+                  language={language}
+                  enforced="code"
+                  label={text(language, '止损最小距离', 'Min stop distance')}
+                  hint={text(
+                    language,
+                    '止损离现价至少几倍 ATR（主 K 线周期的平均波幅）。止损太近的开仓会被程序拒绝，避免被正常波动扫掉。0 表示不限制，1.5 比较常用。',
+                    'Stop at least this many ATR (average range of the primary candles) from the price. Closer stops are rejected so normal swings do not stop you out. 0 = off; 1.5 is common.'
+                  )}
+                >
+                  <NumberInput
+                    value={form.minStopATR || 0}
+                    range={LIMITS.minStopATR}
+                    step={0.5}
+                    onChange={(minStopATR) => patchForm({ minStopATR })}
+                    suffix="ATR"
                   />
                 </Field>
               </div>

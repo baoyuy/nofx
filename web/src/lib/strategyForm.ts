@@ -17,6 +17,8 @@ export const LIMITS = {
   minOIValue: { min: 0, max: 1000 },
   confidence: { min: 50, max: 100 },
   riskReward: { min: 1, max: 10 },
+  // ATR14 multiples; mirrors store ClampLimits.
+  minStopATR: { min: 0, max: 5 },
 } as const
 
 export const DEFAULT_MIN_OI_VALUE = 15
@@ -27,6 +29,8 @@ export type HornInterval = (typeof hornIntervals)[number]
 export const DEFAULT_HORN_INTERVAL: HornInterval = '1h'
 
 export type CopyDirection = 'both' | 'long' | 'short'
+// Program-enforced link between opens and the lead traders' lean.
+export type CopyFollow = 'follow' | 'fade' | 'free'
 export interface CopyTradeSettings {
   minConfidence: number
   direction: CopyDirection
@@ -129,6 +133,7 @@ export interface FreeForm {
   copyTrade?: CopyTradeSettings
   // Show followed lead traders' positions to the AI with any source.
   copyTradeContext?: boolean
+  copyTradeFollow?: CopyFollow
   coinPoolID?: string
   hornInterval?: HornInterval
   // Snapshot of the pool's coins, sent with the strategy.
@@ -151,6 +156,8 @@ export interface FreeForm {
   minOIValue?: number
   minConfidence: number
   minRiskReward: number
+  // Program-enforced: stop at least this many ATR14 from the price; 0 = off.
+  minStopATR?: number
   customPrompt: string
   // Editable rule sections; undefined keeps the saved ones.
   rules?: Partial<Record<RuleSection, string>>
@@ -282,6 +289,13 @@ export function formFromStrategy(strategy: Strategy): FreeForm {
       ),
     },
     copyTradeContext: Boolean(src?.copy_trade_context),
+    // Only a saved choice; unset takes the default of the source chosen
+    // (follow for the copy source, free for context only).
+    copyTradeFollow: (['follow', 'fade', 'free'] as const).includes(
+      src?.copy_trade_follow as CopyFollow
+    )
+      ? (src!.copy_trade_follow as CopyFollow)
+      : undefined,
     hornInterval: toHornInterval(ai?.coin_source.horn_interval),
     coinPoolID: pool ? ai!.coin_source.coin_pool_id : '',
     poolCoins: pool ? coins : [],
@@ -332,6 +346,7 @@ export function formFromStrategy(strategy: Strategy): FreeForm {
       LIMITS.confidence,
       SAFE_DEFAULTS.minConfidence
     ),
+    minStopATR: clampNumber(risk?.min_stop_atr, LIMITS.minStopATR, 0),
     minRiskReward: clampNumber(
       risk?.min_risk_reward_ratio,
       LIMITS.riskReward,
@@ -410,6 +425,10 @@ export function configFromForm(
             }
           : {}),
         copy_trade_context: copy || Boolean(form.copyTradeContext),
+        copy_trade_follow:
+          copy || form.copyTradeContext
+            ? form.copyTradeFollow || (copy ? 'follow' : 'free')
+            : undefined,
         static_coins:
           horn || copy
             ? []
@@ -464,6 +483,7 @@ export function configFromForm(
           ai?.risk_control.min_oi_value_millions ??
           DEFAULT_MIN_OI_VALUE,
         min_risk_reward_ratio: form.minRiskReward,
+        min_stop_atr: form.minStopATR || 0,
         min_confidence: form.minConfidence,
       },
       custom_prompt: form.customPrompt.trim(),

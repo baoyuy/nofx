@@ -117,7 +117,7 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	}
 
 	if usesCopyTradeContext(e.config.CoinSource) {
-		sb.WriteString(copyTradeSystemNote)
+		sb.WriteString(copyTradeSystemNote(copyTradeFollowMode(e.config.CoinSource)))
 	}
 
 	// 6. Decision process (editable)
@@ -570,6 +570,10 @@ func writeHardConstraints(sb *strings.Builder, accountEquity float64, riskContro
 	if zh {
 		sb.WriteString(fmt.Sprintf("- Risk-Reward Ratio: ≥1:%.1f (take_profit / stop_loss)\n", riskControl.MinRiskRewardRatio))
 		sb.WriteString(fmt.Sprintf("- Min Confidence: ≥%d to open position\n\n", riskControl.MinConfidence))
+	} else if riskControl.MinStopATR > 0 {
+		sb.WriteString(fmt.Sprintf("- Risk-Reward Ratio: ≥1:%.1f (take_profit / stop_loss)\n", riskControl.MinRiskRewardRatio))
+		sb.WriteString(fmt.Sprintf("- Stop Distance: stop_loss at least %.1f × ATR14 (primary timeframe) away from the current price; closer stops are rejected by the program\n", riskControl.MinStopATR))
+		sb.WriteString(fmt.Sprintf("- Min Confidence: ≥%d to open position\n\n", riskControl.MinConfidence))
 	} else {
 		sb.WriteString(fmt.Sprintf("- Risk-Reward Ratio: ≥1:%.1f (take_profit / stop_loss)\n", riskControl.MinRiskRewardRatio))
 		sb.WriteString(fmt.Sprintf("- Min Confidence: ≥%d to open position\n\n", riskControl.MinConfidence))
@@ -898,7 +902,7 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 		if data := vergexDataForSymbol(ctx, coin.Symbol); data != nil {
 			sb.WriteString(e.formatVergexData(data))
 		}
-		sb.WriteString(formatCopyTrade(copyTradeFor(ctx, coin.Symbol), time.Now()))
+		sb.WriteString(CopyTradeText(ctx, coin.Symbol, time.Now()))
 		sb.WriteString("\n")
 	}
 	sb.WriteString("\n")
@@ -971,7 +975,7 @@ func (e *StrategyEngine) formatPositionInfo(index int, pos PositionInfo, ctx *Co
 	if data := vergexDataForSymbol(ctx, pos.Symbol); data != nil {
 		sb.WriteString(e.formatVergexData(data))
 	}
-	sb.WriteString(formatCopyTrade(copyTradeFor(ctx, pos.Symbol), time.Now()))
+	sb.WriteString(CopyTradeText(ctx, pos.Symbol, time.Now()))
 
 	return sb.String()
 }

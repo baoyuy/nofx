@@ -103,6 +103,23 @@ func copyTradeCoins(m *copytrade.Monitor, now time.Time) []kernel.CopyTradeCoin 
 		}
 		out = append(out, coin)
 	}
+	// Coins no one holds any more but traded within 24h: their closes are
+	// exit signals for a trader still holding them.
+	held := make(map[string]bool, len(sums))
+	for _, c := range sums {
+		held[c.Symbol] = true
+	}
+	for symbol, items := range recent {
+		if held[symbol] {
+			continue
+		}
+		coin := kernel.CopyTradeCoin{Symbol: symbol, Direction: "neutral"}
+		for _, e := range items {
+			coin.Recent = append(coin.Recent, kernel.CopyTradeAction{Time: e.Time, Trader: e.Nickname, Score: scores[e.PortfolioID],
+				Side: e.Side, Action: e.Action, Value: e.Value, Price: e.Price, Realized: e.RealizedPnL})
+		}
+		out = append(out, coin)
+	}
 	return out
 }
 

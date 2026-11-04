@@ -118,4 +118,47 @@ describe('copy-trade source', () => {
         .copyTradeContext
     ).toBe(true)
   })
+
+  it('keeps the direction rule and stop distance', () => {
+    const base = formFromStrategy({
+      name: 'x',
+      config: null,
+    } as unknown as Strategy)
+    // Defaults: follow for the copy source, free for context only.
+    const copy = configFromForm(
+      null,
+      { ...base, coinSource: 'copy' },
+      'zh',
+      null
+    )
+    expect(copy.ai_config!.coin_source.copy_trade_follow).toBe('follow')
+    const ctx = configFromForm(
+      null,
+      { ...base, coinSource: 'static', copyTradeContext: true },
+      'zh',
+      null
+    )
+    expect(ctx.ai_config!.coin_source.copy_trade_follow).toBe('free')
+    const plain = configFromForm(
+      null,
+      { ...base, coinSource: 'static' },
+      'zh',
+      null
+    )
+    expect(plain.ai_config!.coin_source.copy_trade_follow).toBeUndefined()
+
+    const fade = configFromForm(
+      null,
+      { ...base, coinSource: 'copy', copyTradeFollow: 'fade', minStopATR: 1.5 },
+      'zh',
+      null
+    )
+    expect(fade.ai_config!.risk_control.min_stop_atr).toBe(1.5)
+    const back = formFromStrategy({
+      name: 'x',
+      config: fade,
+    } as unknown as Strategy)
+    expect(back.copyTradeFollow).toBe('fade')
+    expect(back.minStopATR).toBe(1.5)
+  })
 })

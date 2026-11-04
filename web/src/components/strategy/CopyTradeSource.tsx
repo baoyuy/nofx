@@ -6,6 +6,7 @@ import {
   COPY_TRADE_LIMITS,
   DEFAULT_COPY_TRADE,
   type CopyDirection,
+  type CopyFollow,
   type CopyTradeSettings,
 } from '../../lib/strategyForm'
 import { ROUTES } from '../../router/paths'
@@ -39,14 +40,81 @@ export function pickCopyTradeCoins(
 const choice = (active: boolean) =>
   `flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${active ? 'border-nofx-gold bg-nofx-gold/10 text-nofx-text' : 'border-[rgba(25,36,52,0.14)] text-nofx-text-muted'}`
 
+/** Program-enforced link between the AI's opens and the lead traders' lean. */
+function FollowChoice({
+  language,
+  value,
+  onChange,
+}: {
+  language: string
+  value: CopyFollow
+  onChange: (v: CopyFollow) => void
+}) {
+  const options: [CopyFollow, string, string][] = [
+    [
+      'follow',
+      text(language, '跟随', 'Follow'),
+      text(
+        language,
+        '只能顺着带单员的偏向开仓',
+        "Open only on the lead traders' side"
+      ),
+    ],
+    [
+      'free',
+      text(language, '自由', 'Free'),
+      text(language, 'AI 自己决定方向', 'The AI picks the side'),
+    ],
+    [
+      'fade',
+      text(language, '反向', 'Fade'),
+      text(language, '只做和带单员相反的方向', 'Open only against their side'),
+    ],
+  ]
+  return (
+    <Field
+      language={language}
+      enforced="code"
+      label={text(language, '开仓方向', 'Open direction')}
+      hint={text(
+        language,
+        '由程序强制执行：不符合的开仓会被拒绝，平仓不受限制。带单员在这个币上没有明显偏向时，「跟随」和「反向」都不会开仓。',
+        'Enforced by the program: other opens are rejected; closing is never blocked. With no clear lean on a coin, Follow and Fade do not open it.'
+      )}
+    >
+      <div className="flex gap-2" role="radiogroup">
+        {options.map(([v, label, hint]) => (
+          <button
+            key={v}
+            type="button"
+            role="radio"
+            aria-checked={value === v}
+            onClick={() => onChange(v)}
+            className={`${choice(value === v)} text-left`}
+          >
+            <span className="block">{label}</span>
+            <span className="block text-xs font-normal text-nofx-text-muted">
+              {hint}
+            </span>
+          </button>
+        ))}
+      </div>
+    </Field>
+  )
+}
+
 export function CopyTradeSourcePanel({
   language,
   settings,
   onChange,
+  follow,
+  onFollow,
 }: {
   language: string
   settings?: CopyTradeSettings
   onChange: (s: CopyTradeSettings) => void
+  follow: CopyFollow
+  onFollow: (v: CopyFollow) => void
 }) {
   const navigate = useNavigate()
   const s = { ...DEFAULT_COPY_TRADE, ...(settings || {}) }
@@ -75,6 +143,7 @@ export function CopyTradeSourcePanel({
           'Before each cycle, coins are picked from what the lead traders you follow on the Copy trade page hold, highest direction confidence first. The AI also sees, per coin, how many hold long or short, their average entry, and who is trapped or fresh, but still decides from candles and indicators instead of copying them. Held coins that drop off are still managed until closed.'
         )}
       </p>
+      <FollowChoice language={language} value={follow} onChange={onFollow} />
       <div className="grid gap-4 md:grid-cols-2">
         <Field
           language={language}
@@ -223,31 +292,40 @@ export function CopyTradeContextToggle({
   language,
   checked,
   onChange,
+  follow,
+  onFollow,
 }: {
   language: string
   checked: boolean
   onChange: (v: boolean) => void
+  follow: CopyFollow
+  onFollow: (v: CopyFollow) => void
 }) {
   return (
-    <label className="flex items-start gap-2 rounded-lg border border-[rgba(25,36,52,0.14)] px-3 py-2">
-      <input
-        type="checkbox"
-        className="mt-0.5"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span>
-        <span className="block text-sm font-semibold text-nofx-text">
-          {text(language, '附带带单参考', 'Include lead-trader context')}
+    <>
+      <label className="flex items-start gap-2 rounded-lg border border-[rgba(25,36,52,0.14)] px-3 py-2">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <span>
+          <span className="block text-sm font-semibold text-nofx-text">
+            {text(language, '附带带单参考', 'Include lead-trader context')}
+          </span>
+          <span className="block text-xs text-nofx-text-muted">
+            {text(
+              language,
+              '每个候选币和持仓币，AI 都会看到关注的带单员在这个币上的多空、均价、被套和最近动作，作为参考信号。没人持有的币不显示。',
+              'For every candidate and held coin, the AI also sees what your followed lead traders hold there: sides, average entry, trapped or fresh, recent actions. Coins nobody holds show nothing.'
+            )}
+          </span>
         </span>
-        <span className="block text-xs text-nofx-text-muted">
-          {text(
-            language,
-            '每个候选币和持仓币，AI 都会看到关注的带单员在这个币上的多空、均价、被套和最近动作，作为参考信号。没人持有的币不显示。',
-            'For every candidate and held coin, the AI also sees what your followed lead traders hold there: sides, average entry, trapped or fresh, recent actions. Coins nobody holds show nothing.'
-          )}
-        </span>
-      </span>
-    </label>
+      </label>
+      {checked ? (
+        <FollowChoice language={language} value={follow} onChange={onFollow} />
+      ) : null}
+    </>
   )
 }

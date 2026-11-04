@@ -178,6 +178,19 @@ func (c *StrategyConfig) ClampLimits() {
 	if c.RiskControl.MaxMarginUsage < MinMarginUsage {
 		c.RiskControl.MaxMarginUsage = MinMarginUsage
 	}
+	if c.RiskControl.MinStopATR < 0 {
+		c.RiskControl.MinStopATR = 0
+	}
+	if c.RiskControl.MinStopATR > 5 {
+		c.RiskControl.MinStopATR = 5
+	}
+	if c.CoinSource.CopyTradeContext && c.CoinSource.SourceType != "copy_trade" {
+		switch c.CoinSource.CopyTradeFollow {
+		case "follow", "fade", "free":
+		default:
+			c.CoinSource.CopyTradeFollow = "free"
+		}
+	}
 	if c.RiskControl.MaxMarginUsage > MaxMarginUsage {
 		c.RiskControl.MaxMarginUsage = MaxMarginUsage
 	}
@@ -895,6 +908,11 @@ type CoinSourceConfig struct {
 	CopyTradeDirection     string  `json:"copy_trade_direction,omitempty"`
 	CopyTradeLimit         int     `json:"copy_trade_limit,omitempty"`
 	CopyTradeMinTraders    int     `json:"copy_trade_min_traders,omitempty"`
+	// CopyTradeFollow is how opens relate to the lead traders' lean, enforced
+	// by the program: follow (only their side), fade (only the other side),
+	// free (AI decides). Default follow for the copy_trade source, free
+	// otherwise.
+	CopyTradeFollow string `json:"copy_trade_follow,omitempty"`
 	// CopyTradeContext shows the AI what followed lead traders do on each
 	// candidate and held coin, whatever the coin source. Always on for the
 	// copy_trade source.
@@ -1044,6 +1062,10 @@ type RiskControlConfig struct {
 	// Candidates whose open-interest value is below this many million USD are
 	// left out of the AI prompt (CODE ENFORCED). nil = default 15M, 0 = off.
 	MinOIValueMillions *float64 `json:"min_oi_value_millions,omitempty"`
+	// MinStopATR rejects opens whose stop loss is closer to the price than
+	// this many ATR14 of the primary timeframe (0 = off), so normal noise
+	// does not stop the trade out.
+	MinStopATR float64 `json:"min_stop_atr,omitempty"`
 }
 
 // MinOIValueMillionsOrDefault returns the candidate OI filter threshold.
@@ -1670,6 +1692,14 @@ const (
 // NormalizeCopyTrade fills the copy-trade source defaults and keeps its
 // settings in range.
 func (c *CoinSourceConfig) NormalizeCopyTrade() {
+	switch c.CopyTradeFollow {
+	case "follow", "fade", "free":
+	default:
+		c.CopyTradeFollow = "free"
+		if c.SourceType == "copy_trade" {
+			c.CopyTradeFollow = "follow"
+		}
+	}
 	switch c.CopyTradeDirection {
 	case "long", "short":
 	default:

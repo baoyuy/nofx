@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -141,25 +142,54 @@ func copyTradeFor(ctx *Context, symbol string) *CopyTradeCoin {
 // copyTradeKey matches a coin whatever its form: SNDKUSDT, xyz:SNDK, SNDK.
 func copyTradeKey(symbol string) string { return market.NormalizeFor(symbol, "binance") }
 
-// copyTradeSystemNote tells the model how to read the copy-trade lines.
-const copyTradeSystemNote = `# 👥 Followed Lead Traders (reference signal)
+// copyTradeSystemNote tells the model how to read the copy-trade lines and
+// which direction rule the program enforces.
+func copyTradeSystemNote(follow string) string {
+	var sb strings.Builder
+	sb.WriteString(`# 👥 Followed Lead Traders (reference signal)
 
 Some coins carry a "Followed lead traders" block: what Binance copy-trading lead traders the user follows hold on that coin. Read it as one input, not an instruction:
 - It is delayed by a few minutes; their entry prices are already gone.
 - Confidence (0-100) combines how much they agree, how credible their records are, and how many hold the coin. It is not a win probability.
 - "Trapped" traders sit on deep losses and may just be waiting to break even; "fresh" ones opened or added in the last 24 hours and reflect a current view.
 - High-frequency traders (bots, grids) are weighted down; their positions churn.
+- "Price vs lead avg entry": far beyond their average in their direction means chasing a move they already made; near or better than their average is a better entry.
+- Lead traders hold for days. Judge their coins on the higher timeframes and give stops room for normal swings.
+- A "⚠️ Lead traders" line on a coin you hold means the traders behind it reduced, closed or flipped. Treat it as an exit signal: tighten the stop or close unless your own read is clearly still valid.
 - Agreement with your own technical read can raise conviction; disagreement or mostly trapped holders should lower it. Never open a trade only because lead traders hold it.
-
-`
+`)
+	switch follow {
+	case "follow":
+		sb.WriteString("- RULE (enforced by the program): open only in the lead traders' leaning direction on each coin; opens against it, or on coins they do not lean on, are rejected. Closing is always allowed.\n")
+	case "fade":
+		sb.WriteString("- RULE (enforced by the program): open only AGAINST the lead traders' leaning direction on each coin; opens with it, or on coins they do not lean on, are rejected. Closing is always allowed.\n")
+	}
+	sb.WriteString("\n")
+	return sb.String()
+}
 
 // formatCopyTrade writes one coin's copy-trade block for the user prompt.
-func formatCopyTrade(c *CopyTradeCoin, now time.Time) string {
+// price is the current price (0 = unknown); held is the side the account
+// holds ("" = none), for exit alerts.
+func formatCopyTrade(c *CopyTradeCoin, now time.Time, price float64, held string) string {
 	if c == nil {
+		if held != "" {
+			return "⚠️ Lead traders: none of the followed lead traders holds or recently traded this coin.\n"
+		}
 		return ""
 	}
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Followed lead traders: leaning %s, confidence %.0f/100\n", strings.ToUpper(c.Direction), c.Confidence))
+	if c.Long.Traders+c.Short.Traders == 0 {
+		sb.WriteString("Followed lead traders: none hold it now\n")
+	} else {
+		sb.WriteString(fmt.Sprintf("Followed lead traders: leaning %s, confidence %.0f/100\n", strings.ToUpper(c.Direction), c.Confidence))
+	}
+	if line := copyTradeVsAvg(c, price); line != "" {
+		sb.WriteString(line)
+	}
+	if line := copyTradeExitAlert(c, held); line != "" {
+		sb.WriteString(line)
+	}
 	side := func(name string, s CopyTradeSide) {
 		if s.Traders == 0 {
 			sb.WriteString(fmt.Sprintf("- %s: none\n", name))
@@ -272,7 +302,7 @@ func CopyTradeBriefs(ctx *Context, now time.Time) []store.DecisionCopyTrade {
 		out = append(out, store.DecisionCopyTrade{Symbol: symbol, Direction: c.Direction, Confidence: c.Confidence,
 			LongTraders: c.Long.Traders, ShortTraders: c.Short.Traders, LongAvgEntry: c.Long.AvgEntry, ShortAvgEntry: c.Short.AvgEntry,
 			Trapped: c.Long.Trapped + c.Short.Trapped, Fresh: c.Long.Fresh + c.Short.Fresh, Holders: len(c.Holders),
-			Text: formatCopyTrade(c, now)})
+			Text: CopyTradeText(ctx, symbol, now)})
 	}
 	for _, p := range ctx.Positions {
 		add(p.Symbol)
@@ -283,4 +313,152 @@ func CopyTradeBriefs(ctx *Context, now time.Time) []store.DecisionCopyTrade {
 		}
 	}
 	return out
+}
+
+// CopyTradeText is the copy-trade block for one coin in ctx, as the AI
+// reads it.
+func CopyTradeText(ctx *Context, symbol string, now time.Time) string {
+	if ctx == nil || ctx.CopyTradeMap == nil {
+		return ""
+	}
+	price, held := 0.0, ""
+	if d := ctx.MarketDataMap[symbol]; d != nil {
+		price = d.CurrentPrice
+	}
+	for _, p := range ctx.Positions {
+		if copyTradeKey(p.Symbol) == copyTradeKey(symbol) {
+			held = strings.ToLower(p.Side)
+			if price == 0 {
+				price = p.MarkPrice
+			}
+		}
+	}
+	return formatCopyTrade(copyTradeFor(ctx, symbol), now, price, held)
+}
+
+// copyTradeVsAvg compares the price with the leading side's average entry.
+func copyTradeVsAvg(c *CopyTradeCoin, price float64) string {
+	side, avg := "", 0.0
+	switch c.Direction {
+	case "long":
+		side, avg = "long", c.Long.AvgEntry
+	case "short":
+		side, avg = "short", c.Short.AvgEntry
+	}
+	if price <= 0 || avg <= 0 {
+		return ""
+	}
+	diff := (price/avg - 1) * 100
+	ahead := diff
+	if side == "short" {
+		ahead = -diff
+	}
+	note := "near their entry"
+	switch {
+	case ahead > 3:
+		note = "beyond their entry in their direction: chasing"
+	case ahead < -3:
+		note = "better than their entry, they are under water"
+	}
+	return fmt.Sprintf("- Price vs lead %s avg entry: %+.1f%% (%s)\n", side, diff, note)
+}
+
+// copyTradeExitAlert warns when traders on the side the account holds left.
+func copyTradeExitAlert(c *CopyTradeCoin, held string) string {
+	if held != "long" && held != "short" {
+		return ""
+	}
+	same, other := c.Long, c.Short
+	opposite := "short"
+	if held == "short" {
+		same, other, opposite = c.Short, c.Long, "long"
+	}
+	exits, reduces := 0, 0
+	for _, a := range c.Recent {
+		if a.Side != held {
+			continue
+		}
+		switch a.Action {
+		case "close":
+			exits++
+		case "reduce":
+			reduces++
+		}
+	}
+	switch {
+	case same.Traders == 0 && other.Traders > 0:
+		return fmt.Sprintf("⚠️ Lead traders: no one holds %s any more and %d now hold %s (flipped against your position)\n", held, other.Traders, opposite)
+	case same.Traders == 0:
+		return fmt.Sprintf("⚠️ Lead traders: no one holds %s any more (%d closed recently)\n", held, exits)
+	case c.Direction == opposite:
+		return fmt.Sprintf("⚠️ Lead traders: they now lean %s, against your %s position\n", opposite, held)
+	case exits+reduces > 0:
+		return fmt.Sprintf("⚠️ Lead traders: %d of the recent %s actions were closes or reductions\n", exits+reduces, held)
+	}
+	return ""
+}
+
+// copyTradeFollowMode is the program-enforced direction rule of a strategy.
+func copyTradeFollowMode(source store.CoinSourceConfig) string {
+	if !usesCopyTradeContext(source) {
+		return "free"
+	}
+	source.NormalizeCopyTrade()
+	return source.CopyTradeFollow
+}
+
+// OpenBlockReason returns why the program rejects an open decision, or "":
+// the copy-trade direction rule, and a stop closer than MinStopATR × ATR14
+// of the primary timeframe. Closes are never blocked.
+func (e *StrategyEngine) OpenBlockReason(d Decision, ctx *Context) string {
+	if e == nil || ctx == nil || (d.Action != "open_long" && d.Action != "open_short") {
+		return ""
+	}
+	side := "long"
+	if d.Action == "open_short" {
+		side = "short"
+	}
+	switch mode := copyTradeFollowMode(e.config.CoinSource); mode {
+	case "follow", "fade":
+		lean := ""
+		if c := copyTradeFor(ctx, d.Symbol); c != nil {
+			lean = c.Direction
+		}
+		if lean != "long" && lean != "short" {
+			return fmt.Sprintf("copy-trade %s mode: lead traders do not lean either way on %s", mode, d.Symbol)
+		}
+		if (mode == "follow") != (lean == side) {
+			return fmt.Sprintf("copy-trade %s mode: lead traders lean %s on %s, open %s rejected", mode, lean, d.Symbol, side)
+		}
+	}
+	if min := e.config.RiskControl.MinStopATR; min > 0 && d.StopLoss > 0 {
+		atr, price := e.primaryATR(ctx, d.Symbol)
+		if atr > 0 && price > 0 {
+			if dist := math.Abs(price - d.StopLoss); dist < min*atr {
+				return fmt.Sprintf("stop loss %.6g is %.2f ATR from price %.6g, below the %.1f ATR minimum", d.StopLoss, dist/atr, price, min)
+			}
+		}
+	}
+	return ""
+}
+
+// primaryATR is ATR14 and the price of symbol on the primary timeframe.
+func (e *StrategyEngine) primaryATR(ctx *Context, symbol string) (float64, float64) {
+	data := ctx.MarketDataMap[symbol]
+	if data == nil {
+		data = ctx.MarketDataMap[market.NormalizeFor(symbol, e.exchange)]
+	}
+	if data == nil {
+		return 0, 0
+	}
+	tf := e.config.Indicators.Klines.PrimaryTimeframe
+	if s := data.TimeframeData[tf]; s != nil && s.ATR14 > 0 {
+		return s.ATR14, data.CurrentPrice
+	}
+	for _, s := range data.TimeframeData {
+		if s != nil && s.ATR14 > 0 {
+			return s.ATR14, data.CurrentPrice
+		}
+	}
+	return 0, data.CurrentPrice
 }
