@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -59,6 +60,35 @@ type Client struct {
 	limitedAt  time.Time
 	okAt       time.Time
 	calls      []time.Time // request times in the last minute
+	// formatErrs holds, per endpoint, the latest response that did not look
+	// like Binance's usual data, until that endpoint answers well again.
+	formatErrs map[string]formatErr
+}
+
+type formatErr struct {
+	msg string
+	at  time.Time
+}
+
+// ErrFormat marks a response whose fields look renamed or missing: the
+// endpoint answered but the data is not what this code reads.
+var ErrFormat = errors.New("Binance changed the data format")
+
+// checkFormat records whether endpoint's data looked right; it returns an
+// ErrFormat error when it did not.
+func (c *Client) checkFormat(endpoint string, ok bool, detail string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if ok {
+		delete(c.formatErrs, endpoint)
+		return nil
+	}
+	if c.formatErrs == nil {
+		c.formatErrs = map[string]formatErr{}
+	}
+	c.formatErrs[endpoint] = formatErr{msg: detail, at: time.Now()}
+	logger.Warnf("copy-trade: %s: unexpected data: %s", endpoint, detail)
+	return fmt.Errorf("%w: %s: %s", ErrFormat, endpoint, detail)
 }
 
 func NewClient() *Client {
@@ -137,6 +167,8 @@ type Status struct {
 	LastOKAt       time.Time `json:"last_ok_at,omitempty"`
 	RequestsPerMin int       `json:"requests_per_min"`
 	Proxy          string    `json:"proxy"` // masked; empty = server IP
+	// FormatErrors lists endpoints whose latest answer looked malformed.
+	FormatErrors []string `json:"format_errors,omitempty"`
 }
 
 func (c *Client) Status() Status {
@@ -150,8 +182,13 @@ func (c *Client) Status() Status {
 			n++
 		}
 	}
+	var bad []string
+	for ep, e := range c.formatErrs {
+		bad = append(bad, ep+": "+e.msg)
+	}
+	sort.Strings(bad)
 	return Status{Paused: now.Before(c.pausedTill), PausedUntil: c.pausedTill, LastError: c.lastErr,
-		LastLimitedAt: c.limitedAt, LastOKAt: c.okAt, RequestsPerMin: n, Proxy: proxy}
+		LastLimitedAt: c.limitedAt, LastOKAt: c.okAt, RequestsPerMin: n, Proxy: proxy, FormatErrors: bad}
 }
 
 type envelope struct {

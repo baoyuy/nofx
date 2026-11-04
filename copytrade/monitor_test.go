@@ -24,6 +24,8 @@ type fakeBinance struct {
 	mu      sync.Mutex
 	trades  []map[string]any
 	limited bool
+	// renamed serves fills with Binance's fields under other names.
+	renamed bool
 	calls   map[string]int
 }
 
@@ -81,6 +83,13 @@ func (f *fakeBinance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if from < len(f.trades) {
 			page = f.trades[from:to]
 		}
+		if f.renamed {
+			moved := make([]map[string]any, len(page))
+			for i, r := range page {
+				moved[i] = map[string]any{"tradeTime": r["time"], "pair": r["symbol"], "side": r["side"], "px": r["price"], "q": r["qty"]}
+			}
+			page = moved
+		}
 		write(map[string]any{"total": len(f.trades), "list": page})
 	default:
 		http.NotFound(w, r)
@@ -109,7 +118,7 @@ func TestMonitorBackfillsThenAddsOnlyNewFills(t *testing.T) {
 	m, fake := newTestMonitor(t)
 	ctx := context.Background()
 	now := time.Now()
-	fake.add(now.Add(-10*24*time.Hour), "BUY", "LONG", 9, 90, 0) // older than the 7-day backfill
+	fake.add(now.Add(-40*24*time.Hour), "BUY", "LONG", 9, 90, 0) // older than the 30-day backfill
 	fake.add(now.Add(-3*time.Hour), "BUY", "LONG", 1, 100, 0)
 	fake.add(now.Add(-2*time.Hour), "BUY", "LONG", 0.5, 103, 0)
 
@@ -208,5 +217,28 @@ func TestFollowPrivatePortfolioUsesPublicOne(t *testing.T) {
 	}
 	if _, err := m.Follow(ctx, "43"); err == nil || !strings.Contains(err.Error(), "already following") {
 		t.Fatalf("its public portfolio is already followed: %v", err)
+	}
+}
+
+func TestRenamedFieldsShowAsFormatError(t *testing.T) {
+	m, fake := newTestMonitor(t)
+	ctx := context.Background()
+	fake.add(time.Now().Add(-time.Hour), "BUY", "LONG", 1, 100, 0)
+	fake.renamed = true
+	if _, err := m.Client.Trades(ctx, "42", 1, 50); !errors.Is(err, ErrFormat) {
+		t.Fatalf("fills without price or time must be a format error: %v", err)
+	}
+	if st := m.Client.Status(); len(st.FormatErrors) != 1 || !strings.HasPrefix(st.FormatErrors[0], "trade-history") {
+		t.Fatalf("status lists the endpoint: %+v", st.FormatErrors)
+	}
+	fake.renamed = false
+	if _, err := m.Client.Trades(ctx, "42", 1, 50); err != nil {
+		t.Fatal(err)
+	}
+	if st := m.Client.Status(); len(st.FormatErrors) != 0 {
+		t.Fatalf("cleared once the data looks right: %+v", st.FormatErrors)
+	}
+	if d, err := m.Client.Detail(ctx, "nope"); err != nil || d.PortfolioID != "" {
+		t.Fatalf("an unknown ID is not a format error: %+v %v", d, err)
 	}
 }

@@ -95,6 +95,14 @@ export function explainConfidence(language: string, s: SymbolSummary): string {
         `${fresh} opened or added within 24h, weighted up 30%`
       )
     )
+  if (s.high_freq)
+    parts.push(
+      tr(
+        language,
+        `${s.high_freq} 人是高频交易员，权重只算 0.4`,
+        `${s.high_freq} high-frequency, weighted 0.4`
+      )
+    )
   if (s.liquidated)
     parts.push(
       tr(
@@ -261,8 +269,8 @@ export function HitRatePanel({ language }: { language: string }) {
         {total
           ? tr(
               language,
-              '每小时记录一次各币的方向和置信度，之后看价格有没有朝这个方向走。格式：命中率 / 样本数；样本少于 30 的显示为灰色，参考意义不大。50% 相当于抛硬币。',
-              'Each hour records every coin’s direction and confidence, then checks whether the price moved that way. Format: hit rate / samples; grey means fewer than 30 samples. 50% is a coin flip.'
+              '每小时记录一次各币的方向和置信度，之后看价格有没有朝这个方向走。同一个币连续几小时同一方向只算一次判断，从第一个小时算起。格式：命中率 / 判断次数；少于 30 次的显示为灰色，参考意义不大。50% 相当于抛硬币。',
+              'Each hour records every coin’s direction and confidence, then checks whether the price moved that way. A coin called the same way several hours in a row counts once, from its first hour. Format: hit rate / calls; grey means fewer than 30. 50% is a coin flip.'
             )
           : tr(
               language,

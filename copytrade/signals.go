@@ -187,14 +187,19 @@ func confidenceBand(score float64) string {
 
 // HitRates summarizes evaluated signals since sinceHour.
 func (m *Monitor) HitRates(sinceHour int64) ([]HitRate, error) {
-	sigs, err := m.store.EvaluatedSignals(sinceHour)
+	// One hour earlier too, to know whether the first ones continue a run.
+	sigs, err := m.store.SignalsSince(sinceHour - 3600)
 	if err != nil {
 		return nil, err
 	}
-	return hitRates(sigs), nil
+	return hitRates(sigs, sinceHour), nil
 }
 
-func hitRates(sigs []store.CopyTradeSignal) []HitRate {
+// hitRates counts each run of hourly signals once: a coin called the same way
+// hour after hour is one call, scored from its first hour. A run starts when
+// the coin had no signal the hour before or was called the other way.
+// sigs must be sorted by hour.
+func hitRates(sigs []store.CopyTradeSignal, sinceHour int64) []HitRate {
 	type acc struct {
 		n, hits int
 		sum     float64
@@ -221,7 +226,16 @@ func hitRates(sigs []store.CopyTradeSignal) []HitRate {
 			}
 		}
 	}
+	prev := map[string]store.CopyTradeSignal{}
 	for _, s := range sigs {
+		p, seen := prev[s.Symbol]
+		prev[s.Symbol] = s
+		if seen && p.Hour == s.Hour-3600 && p.Direction == s.Direction {
+			continue // same call, another hour
+		}
+		if s.Hour < sinceHour {
+			continue
+		}
 		band := confidenceBand(s.Confidence)
 		add(band, "4h", s.Ret4h, s.Direction)
 		add(band, "24h", s.Ret24h, s.Direction)

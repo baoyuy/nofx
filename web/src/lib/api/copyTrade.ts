@@ -16,6 +16,8 @@ export interface CopyTradeStatus {
     requests_per_min: number
     /** Masked proxy; empty = server IP. */
     proxy: string
+    /** endpoints whose latest answer looked malformed: "endpoint: detail" */
+    format_errors?: string[]
   }
   follows: number
   max_follows: number
@@ -122,6 +124,10 @@ export interface TraderSnapshot {
   error?: string
   hot: boolean
   score: TraderScore
+  /** actions in the last 24 hours */
+  orders_per_day: number
+  /** 48+ actions a day: bots and grid traders, weighted down in confidence */
+  high_freq: boolean
 }
 
 export interface FeedItem extends TradeEvent {
@@ -194,10 +200,13 @@ export interface SymbolSummary {
   confidence: Confidence
   /** traders likely liquidated here; not in long, short or confidence */
   liquidated: number
+  /** high-frequency holders, weighted down */
+  high_freq: number
 }
 
 export interface Holder extends TraderPosition, TraderBrief {
   portfolio_id: string
+  high_freq: boolean
 }
 
 export interface FeedQuery {
@@ -205,6 +214,8 @@ export interface FeedQuery {
   symbol?: string
   action?: TradeAction | ''
   min_value?: number
+  /** '1' leaves out high-frequency traders unless portfolio_id picks one */
+  hide_high_freq?: '1'
   page?: number
   page_size?: number
 }

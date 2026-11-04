@@ -2,6 +2,8 @@ package copytrade
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/url"
 	"strings"
 )
@@ -57,8 +59,21 @@ func (c *Client) Leaderboard(ctx context.Context, q LeaderQuery) (LeaderPage, er
 		"favoriteOnly": false, "hideFull": false, "nickname": q.Nickname, "order": "DESC",
 		"userAsset": 0, "portfolioType": "ALL",
 	}, &out)
-	return out, err
+	if err != nil {
+		return out, err
+	}
+	bad := 0
+	for _, r := range out.List {
+		if r.PortfolioID == "" {
+			bad++
+		}
+	}
+	return out, c.checkFormat("leaderboard", mostlyOK(bad, len(out.List)) && !(out.Total > 0 && len(out.List) == 0 && q.Page == 1),
+		fmt.Sprintf("%d of %d rows without an ID", bad, len(out.List)))
 }
+
+// mostlyOK tolerates the odd bad row; more than a fifth means the fields moved.
+func mostlyOK(bad, n int) bool { return n == 0 || bad*5 <= n }
 
 // Detail is a lead portfolio's profile.
 type Detail struct {
@@ -84,8 +99,16 @@ func (d Detail) Private() bool { return strings.EqualFold(d.PortfolioType, "PRIV
 
 func (c *Client) Detail(ctx context.Context, portfolioID string) (Detail, error) {
 	var out Detail
-	err := c.do(ctx, "/v1/friendly/future/copy-trade/lead-portfolio/detail?portfolioId="+url.QueryEscape(portfolioID), nil, &out)
-	return out, err
+	var raw map[string]json.RawMessage
+	err := c.do(ctx, "/v1/friendly/future/copy-trade/lead-portfolio/detail?portfolioId="+url.QueryEscape(portfolioID), nil, &raw)
+	if err != nil || len(raw) == 0 {
+		return out, err // unknown ID: Binance answers with no data
+	}
+	b, _ := json.Marshal(raw)
+	if err := json.Unmarshal(b, &out); err != nil {
+		return out, c.checkFormat("detail", false, err.Error())
+	}
+	return out, c.checkFormat("detail", out.PortfolioID != "" || out.Nickname != "", "profile has no ID or nickname")
 }
 
 // Performance is a portfolio's results over one time range.
@@ -126,12 +149,17 @@ func (c *Client) Positions(ctx context.Context, portfolioID string) ([]LivePosit
 		return nil, err
 	}
 	held := make([]LivePosition, 0, len(rows))
+	bad := 0
 	for _, r := range rows {
 		if r.PositionAmount != 0 {
 			held = append(held, r)
+			if r.Symbol == "" || r.EntryPrice <= 0 {
+				bad++
+			}
 		}
 	}
-	return held, nil
+	return held, c.checkFormat("positions", mostlyOK(bad, len(held)),
+		fmt.Sprintf("%d of %d positions without a symbol or entry price", bad, len(held)))
 }
 
 // Trade is one fill. A large order shows as many fills with the same time.
@@ -161,5 +189,15 @@ func (c *Client) Trades(ctx context.Context, portfolioID string, page, size int)
 	err := c.do(ctx, "/v1/friendly/future/copy-trade/lead-portfolio/trade-history", map[string]any{
 		"pageNumber": page, "pageSize": size, "portfolioId": portfolioID,
 	}, &out)
-	return out, err
+	if err != nil {
+		return out, err
+	}
+	bad := 0
+	for _, t := range out.List {
+		if t.Time <= 0 || t.Symbol == "" || t.Price <= 0 || t.Qty <= 0 {
+			bad++
+		}
+	}
+	return out, c.checkFormat("trade-history", mostlyOK(bad, len(out.List)),
+		fmt.Sprintf("%d of %d fills without time, symbol, price or quantity", bad, len(out.List)))
 }

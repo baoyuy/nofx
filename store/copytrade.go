@@ -121,10 +121,10 @@ func (s *CopyTradeStore) UpdateSignal(sig *CopyTradeSignal) error {
 	}).Error
 }
 
-// EvaluatedSignals returns signals since sinceHour with at least one result.
-func (s *CopyTradeStore) EvaluatedSignals(sinceHour int64) ([]CopyTradeSignal, error) {
+// SignalsSince returns signals from sinceHour on, oldest first.
+func (s *CopyTradeStore) SignalsSince(sinceHour int64) ([]CopyTradeSignal, error) {
 	var out []CopyTradeSignal
-	err := s.db.Where("hour >= ? AND (done_4h = ? OR done_24h = ?)", sinceHour, true, true).Find(&out).Error
+	err := s.db.Where("hour >= ?", sinceHour).Order("hour").Find(&out).Error
 	return out, err
 }
 

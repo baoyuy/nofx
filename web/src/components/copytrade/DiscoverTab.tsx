@@ -275,8 +275,8 @@ export function DiscoverTab({
       notify.success(
         tr(
           language,
-          `已关注 ${f.nickname}，正在拉取最近 7 天的成交`,
-          `Following ${f.nickname}; fetching the last 7 days of trades`
+          `已关注 ${f.nickname}，正在拉取最近 30 天的成交`,
+          `Following ${f.nickname}; fetching the last 30 days of trades`
         )
       )
       setIdInput('')

@@ -126,3 +126,35 @@ func TestSignalsRecordEvaluateAndHitRate(t *testing.T) {
 		t.Fatal("no 4h row")
 	}
 }
+
+func TestHitRatesCountARunOfSignalsOnce(t *testing.T) {
+	up, down := 0.02, -0.02
+	sig := func(h int64, sym, dir string, conf float64, ret float64) store.CopyTradeSignal {
+		r := ret
+		return store.CopyTradeSignal{Hour: h * 3600, Symbol: sym, Direction: dir, Confidence: conf, Ret4h: &r, Done4h: true}
+	}
+	sigs := []store.CopyTradeSignal{
+		sig(9, "BTC", "long", 80, down), // before the window: makes hour 10 a continuation
+		sig(10, "BTC", "long", 80, down),
+		sig(10, "ETH", "long", 80, up), // run 1, scored from here (high band)
+		sig(11, "ETH", "long", 20, down),
+		sig(12, "ETH", "long", 20, down),
+		sig(13, "ETH", "short", 50, down), // flipped: run 2, a short that fell = hit
+		sig(15, "ETH", "short", 50, up),   // gap at 14: run 3
+	}
+	rates := hitRates(sigs, 10*3600)
+	get := func(band string) HitRate {
+		for _, r := range rates {
+			if r.Band == band && r.Horizon == "4h" {
+				return r
+			}
+		}
+		return HitRate{}
+	}
+	if all := get("all"); all.Samples != 3 || all.Hits != 2 {
+		t.Fatalf("three runs, two right: %+v", all)
+	}
+	if high, low := get("high"), get("low"); high.Samples != 1 || low.Samples != 0 {
+		t.Fatalf("a run takes the band of its first hour: high %+v low %+v", high, low)
+	}
+}

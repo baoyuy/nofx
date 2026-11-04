@@ -26,11 +26,13 @@ function StatusBar({
   if (!status) return null
   const c = status.client
   const paused = c.paused && c.paused_until
-  const dot = paused
-    ? 'bg-nofx-danger'
-    : c.last_error
-      ? 'bg-nofx-gold'
-      : 'bg-nofx-success'
+  const formatErrors = c.format_errors || []
+  const dot =
+    paused || formatErrors.length
+      ? 'bg-nofx-danger'
+      : c.last_error
+        ? 'bg-nofx-gold'
+        : 'bg-nofx-success'
   return (
     <div
       className={`${ui.panel} mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm`}
@@ -43,9 +45,11 @@ function StatusBar({
               `被币安限流，暂停到 ${new Date(c.paused_until!).toLocaleTimeString()}`,
               `Rate limited by Binance; paused until ${new Date(c.paused_until!).toLocaleTimeString()}`
             )
-          : c.last_error
-            ? tr(language, '最近一次请求出错', 'Last request failed')
-            : tr(language, '正常', 'OK')}
+          : formatErrors.length
+            ? tr(language, '币安数据格式异常', 'Binance data looks wrong')
+            : c.last_error
+              ? tr(language, '最近一次请求出错', 'Last request failed')
+              : tr(language, '正常', 'OK')}
       </span>
       <span className={ui.muted}>
         {tr(
@@ -80,7 +84,17 @@ function StatusBar({
           ? tr(language, `走代理 ${c.proxy}`, `Via proxy ${c.proxy}`)
           : tr(language, '使用服务器 IP', 'Server IP')}
       </button>
-      {c.last_error && !paused ? (
+      {formatErrors.length ? (
+        <p role="alert" className="w-full text-xs text-nofx-danger">
+          {tr(
+            language,
+            '币安返回的数据缺少价格、时间等字段，可能改了接口格式。在修好之前，受影响的数据不会更新，页面上的数字可能是旧的：',
+            'Binance answered without fields such as price or time; the format may have changed. Until fixed, the affected data stops updating and figures may be stale: '
+          )}
+          {formatErrors.join('；')}
+        </p>
+      ) : null}
+      {c.last_error && !paused && !formatErrors.length ? (
         <p role="alert" className="w-full text-xs text-nofx-danger">
           {c.last_error}
         </p>

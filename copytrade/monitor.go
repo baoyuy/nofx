@@ -18,19 +18,27 @@ const (
 	// minutes at the request spacing.
 	MaxFollows = 100
 
-	backfillWindow  = 7 * 24 * time.Hour
-	retention       = 30 * 24 * time.Hour
-	maxPagesPerSync = 10
-	hotInterval     = time.Minute
-	coldInterval    = 15 * time.Minute
-	errorInterval   = 5 * time.Minute
-	profileInterval = 6 * time.Hour
-	hotWindow       = 2 * time.Hour
-	maxEventsKept   = 300
+	// The first sync of a trader goes back as far as fills are kept, so
+	// positions opened before following are seen whole more often. It may
+	// take up to maxBackfillPages requests (~100 s at the spacing), once.
+	backfillWindow   = retention
+	retention        = 30 * 24 * time.Hour
+	maxPagesPerSync  = 10
+	maxBackfillPages = 25
+	hotInterval      = time.Minute
+	coldInterval     = 15 * time.Minute
+	errorInterval    = 5 * time.Minute
+	profileInterval  = 6 * time.Hour
+	hotWindow        = 2 * time.Hour
+	maxEventsKept    = 300
 	// profileVersion bumps when the stored profile gains fields, so older
 	// profiles are fetched again once (2 = start time and balance, 3 =
 	// portfolio type).
 	profileVersion = 3
+	// highFreqOrders a day (2 an hour, around the clock) marks a high
+	// frequency trader; their votes count highFreqWeight.
+	highFreqOrders = 48
+	highFreqWeight = 0.4
 )
 
 // Snapshot is the rebuilt view of one followed trader.
@@ -46,6 +54,11 @@ type Snapshot struct {
 	Error           string      `json:"error,omitempty"`
 	Hot             bool        `json:"hot"`
 	Score           TraderScore `json:"score"`
+	// OrdersPerDay counts actions (merged orders) in the last 24 hours;
+	// HighFreq marks bots and grid traders whose positions churn too fast to
+	// say much about direction.
+	OrdersPerDay int  `json:"orders_per_day"`
+	HighFreq     bool `json:"high_freq"`
 
 	nextDue time.Time
 }
@@ -227,18 +240,18 @@ func applyDetail(f *store.CopyTradeFollow, d Detail) {
 	}
 }
 
-// syncFills fetches fills newer than the stored ones (or the last 7 days on
+// syncFills fetches fills newer than the stored ones (or the last 30 days on
 // the first run). Pages are newest first and fills have no ID, so it stores
 // the fetched window as a whole: every fill at or after the oldest fully
 // fetched time replaces what was stored there.
 func (m *Monitor) syncFills(ctx context.Context, f *store.CopyTradeFollow) error {
-	stop := f.FillsUntil
+	stop, maxPages := f.FillsUntil, maxPagesPerSync
 	if stop == 0 {
-		stop = time.Now().Add(-backfillWindow).UnixMilli()
+		stop, maxPages = time.Now().Add(-backfillWindow).UnixMilli(), maxBackfillPages
 	}
 	var rows []Trade
 	reachedEnd := false
-	for page := 1; page <= maxPagesPerSync; page++ {
+	for page := 1; page <= maxPages; page++ {
 		p, err := m.Client.Trades(ctx, f.PortfolioID, page, TradePageSize)
 		if err != nil {
 			return err
@@ -261,7 +274,7 @@ func (m *Monitor) syncFills(ctx context.Context, f *store.CopyTradeFollow) error
 			// fetched times and note the gap.
 			from = oldest + 1
 			logger.Warnf("copy-trade: %s traded more than %d fills since the last check; older ones skipped",
-				f.PortfolioID, maxPagesPerSync*TradePageSize)
+				f.PortfolioID, maxPages*TradePageSize)
 		}
 	}
 	fills := make([]store.CopyTradeFill, 0, len(rows))
@@ -304,6 +317,8 @@ func (m *Monitor) rebuild(s *Snapshot, live []LivePosition) {
 	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
 		events[i], events[j] = events[j], events[i]
 	}
+	s.OrdersPerDay = ordersSince(events, time.Now().Add(-24*time.Hour).UnixMilli())
+	s.HighFreq = s.OrdersPerDay >= highFreqOrders
 	if len(events) > maxEventsKept {
 		events = events[:maxEventsKept]
 	}
@@ -312,6 +327,18 @@ func (m *Monitor) rebuild(s *Snapshot, live []LivePosition) {
 	if s.Follow.Private {
 		s.Hot = false // nothing to poll
 	}
+}
+
+// ordersSince counts newest-first events at or after ms.
+func ordersSince(events []Event, ms int64) int {
+	n := 0
+	for _, e := range events {
+		if e.Time < ms {
+			break
+		}
+		n++
+	}
+	return n
 }
 
 // Follow adds a trader after checking it exists. Its history is fetched in

@@ -99,6 +99,22 @@ function TraderCard({
           {tr(language, '胜率', 'Win')} {t.win_rate.toFixed(0)}%
         </span>
         <ScoreBadge score={snap.score} language={language} />
+        {snap.high_freq ? (
+          <span
+            className="rounded bg-nofx-bg-deeper px-1.5 text-[11px] text-nofx-text-muted"
+            title={tr(
+              language,
+              '近 24 小时动作很多，多半是程序或网格交易：仓位来回开平，置信度里权重只算 0.4，实时动态默认隐藏。',
+              'Many actions in 24h, most likely a bot or grid: positions churn, so its confidence weight is 0.4 and the feed hides it by default.'
+            )}
+          >
+            {tr(
+              language,
+              `高频 · 每天 ${snap.orders_per_day} 单`,
+              `High-freq · ${snap.orders_per_day}/day`
+            )}
+          </span>
+        ) : null}
         {t.private ? (
           <span className="rounded bg-nofx-gold/10 px-1.5 text-[11px] text-nofx-gold">
             {tr(language, '私域', 'Private')}
@@ -164,8 +180,8 @@ function TraderCard({
           <Loader2 className="h-3 w-3 animate-spin" />
           {tr(
             language,
-            '正在拉取最近 7 天的成交…',
-            'Fetching the last 7 days of trades…'
+            '正在拉取最近 30 天的成交…',
+            'Fetching the last 30 days of trades…'
           )}
         </p>
       ) : (

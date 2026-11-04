@@ -88,6 +88,7 @@ type vote struct {
 	score float64
 	// Summed while collecting: entry value, and entry value × health.
 	stake, health float64
+	highFreq      bool
 }
 
 func confidence(votes []vote) Confidence {

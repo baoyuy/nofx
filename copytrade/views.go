@@ -20,7 +20,9 @@ type FeedFilter struct {
 	Symbol      string
 	Action      string // open | add | reduce | close
 	MinValue    float64
-	Limit       int
+	// HideHighFreq drops high-frequency traders unless PortfolioID picks one.
+	HideHighFreq bool
+	Limit        int
 	// Offset skips that many newest matches (for paging).
 	Offset int
 }
@@ -40,6 +42,9 @@ func FeedPage(snaps []Snapshot, f FeedFilter) ([]FeedItem, int) {
 	var out []FeedItem
 	for _, s := range snaps {
 		if f.PortfolioID != "" && s.Follow.PortfolioID != f.PortfolioID {
+			continue
+		}
+		if f.HideHighFreq && f.PortfolioID == "" && s.HighFreq {
 			continue
 		}
 		for _, e := range s.Events {
@@ -77,6 +82,8 @@ type SymbolSummary struct {
 	// Liquidated counts traders whose position here was likely liquidated;
 	// they are left out of Long, Short and Confidence.
 	Liquidated int `json:"liquidated"`
+	// HighFreq counts high-frequency holders, whose votes are weighted down.
+	HighFreq int `json:"high_freq"`
 }
 
 // Holder is one followed trader's position in a coin, with the trader's
@@ -90,6 +97,7 @@ type Holder struct {
 	PnL30       float64 `json:"pnl_30d"`
 	WinRate30   float64 `json:"win_rate_30d"`
 	Score       float64 `json:"score"`
+	HighFreq    bool    `json:"high_freq"`
 }
 
 // Symbols sums positions per coin with each coin's direction confidence,
@@ -106,6 +114,7 @@ func Symbols(snaps []Snapshot) []SymbolSummary {
 		balance[s.Follow.PortfolioID] = s.Follow.MarginBalance
 		counted := map[string]bool{}
 		gone := map[string]bool{}
+		hf := map[string]bool{}
 		for _, p := range s.Positions {
 			sum := by[p.Symbol]
 			if sum == nil {
@@ -125,8 +134,12 @@ func Symbols(snaps []Snapshot) []SymbolSummary {
 			}
 			v := votes[p.Symbol][s.Follow.PortfolioID+p.Side]
 			if v == nil {
-				v = &vote{trader: s.Follow.PortfolioID, side: p.Side, score: s.Score.Score}
+				v = &vote{trader: s.Follow.PortfolioID, side: p.Side, score: s.Score.Score, highFreq: s.HighFreq}
 				votes[p.Symbol][s.Follow.PortfolioID+p.Side] = v
+			}
+			if s.HighFreq && !hf[p.Symbol] {
+				hf[p.Symbol] = true
+				sum.HighFreq++
 			}
 			v.stake += p.EntryValue
 			v.health += healthFactor(p) * p.EntryValue
@@ -158,6 +171,9 @@ func Symbols(snaps []Snapshot) []SymbolSummary {
 				health = v.health / v.stake
 			}
 			base := math.Max(1, v.score) * stakeFactor(v.stake, balance[v.trader])
+			if v.highFreq {
+				base *= highFreqWeight
+			}
 			list = append(list, vote{trader: v.trader, side: v.side, score: v.score, base: base, weight: base * health})
 		}
 		s.Confidence = confidence(list)
@@ -188,7 +204,7 @@ func Holders(snaps []Snapshot, symbol string) []Holder {
 			if p.Symbol == symbol {
 				f := s.Follow
 				out = append(out, Holder{Position: p, PortfolioID: f.PortfolioID, Nickname: f.Nickname, AvatarURL: f.AvatarURL,
-					ROI30: f.ROI, PnL30: f.PnL, WinRate30: f.WinRate, Score: s.Score.Score})
+					ROI30: f.ROI, PnL30: f.PnL, WinRate30: f.WinRate, Score: s.Score.Score, HighFreq: s.HighFreq})
 			}
 		}
 	}

@@ -418,7 +418,21 @@ function CoinDetail({
                       key={h.portfolio_id + h.side}
                       className={`border-t ${ui.border} ${h.liquidated ? 'opacity-50' : ''}`}
                     >
-                      <td className="py-1.5">{h.nickname}</td>
+                      <td className="py-1.5">
+                        {h.nickname}
+                        {h.high_freq ? (
+                          <span
+                            className="ml-1 rounded bg-nofx-bg-deeper px-1 text-[10px] text-nofx-text-muted"
+                            title={tr(
+                              language,
+                              '高频交易员：每天 48 单以上，置信度里权重只算 0.4',
+                              'High-frequency: 48+ orders a day, weighted 0.4 in confidence'
+                            )}
+                          >
+                            {tr(language, '高频', 'HF')}
+                          </span>
+                        ) : null}
+                      </td>
                       <td className={sideClass(h.side)}>
                         {sideLabel(language, h.side)}
                       </td>

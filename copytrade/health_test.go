@@ -100,3 +100,28 @@ func TestConfidenceDropsWhenTheLeadingSideIsTrapped(t *testing.T) {
 		t.Fatalf("trapped: %+v vs %+v", trapped.Confidence, healthy.Confidence)
 	}
 }
+
+func TestHighFrequencyTradersCountLessAndCanBeHidden(t *testing.T) {
+	events := []Event{{Time: 300}, {Time: 200}, {Time: 100}}
+	if n := ordersSince(events, 200); n != 2 {
+		t.Fatalf("orders since 200: %d", n)
+	}
+	long := []Position{{Symbol: "BTCUSDT", Side: "long", Qty: 1, EntryPrice: 100, EntryValue: 100, Source: "inferred"}}
+	short := []Position{{Symbol: "BTCUSDT", Side: "short", Qty: 1, EntryPrice: 100, EntryValue: 100, Source: "inferred"}}
+	snap := func(id string, hf bool, p []Position) Snapshot {
+		return Snapshot{Follow: store.CopyTradeFollow{PortfolioID: id, MarginBalance: 1000}, Score: TraderScore{Score: 60},
+			Positions: p, HighFreq: hf, Events: []Event{{Time: 1, Symbol: "BTCUSDT", Side: p[0].Side, Action: "open", Value: 100}}}
+	}
+	// Two bots long, one manual trader short: the bots' 2 × 0.4 loses to 1.
+	snaps := []Snapshot{snap("bot1", true, long), snap("bot2", true, long), snap("human", false, short)}
+	s := Symbols(snaps)[0]
+	if s.HighFreq != 2 || s.Long.Traders != 2 || s.Confidence.Direction != "short" {
+		t.Fatalf("high-frequency votes are weighted down: %+v", s)
+	}
+	if items, total := FeedPage(snaps, FeedFilter{HideHighFreq: true}); total != 1 || items[0].PortfolioID != "human" {
+		t.Fatalf("hidden from the feed: %+v", items)
+	}
+	if _, total := FeedPage(snaps, FeedFilter{HideHighFreq: true, PortfolioID: "bot1"}); total != 1 {
+		t.Fatal("picking a high-frequency trader shows them anyway")
+	}
+}

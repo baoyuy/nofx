@@ -32,6 +32,8 @@ export function FeedTab({
   const [symbol, setSymbol] = useState('')
   const [action, setAction] = useState<TradeAction | ''>('')
   const [minValue, setMinValue] = useState(0)
+  const [hideHighFreq, setHideHighFreq] = useState(true)
+  const highFreq = snaps.filter((s) => s.high_freq)
   const [items, setItems] = useState<FeedItem[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -56,6 +58,7 @@ export function FeedTab({
           : undefined,
         action,
         min_value: minValue || undefined,
+        hide_high_freq: hideHighFreq ? '1' : undefined,
         page,
         page_size: pageSize,
       })
@@ -76,7 +79,7 @@ export function FeedTab({
     return () => {
       cancelled = true
     }
-  }, [trader, symbol, action, minValue, page, pageSize, version])
+  }, [trader, symbol, action, minValue, hideHighFreq, page, pageSize, version])
 
   const pager = (where: string) =>
     total > pageSize ? (
@@ -196,6 +199,28 @@ export function FeedTab({
             ))}
           </select>
         </label>
+        {highFreq.length ? (
+          <label
+            className="flex items-center gap-1.5 pb-2 text-sm text-nofx-text"
+            title={highFreq
+              .map(
+                (s) =>
+                  `${s.trader.nickname}：${tr(language, `近 24 小时 ${s.orders_per_day} 单`, `${s.orders_per_day} orders in 24h`)}`
+              )
+              .join('\n')}
+          >
+            <input
+              type="checkbox"
+              checked={hideHighFreq}
+              onChange={(e) => filter(setHideHighFreq)(e.target.checked)}
+            />
+            {tr(
+              language,
+              `隐藏高频交易员（${highFreq.length} 人，每天 48 单以上）`,
+              `Hide high-frequency traders (${highFreq.length}, 48+ orders a day)`
+            )}
+          </label>
+        ) : null}
       </div>
       {pager('mb-3')}
       {error ? (
