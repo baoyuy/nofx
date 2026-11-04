@@ -2,7 +2,6 @@ package trader
 
 import (
 	"nofx/logger"
-	"nofx/market"
 	"nofx/trader/binance"
 	"time"
 )
@@ -31,7 +30,7 @@ func (at *AutoTrader) recordPaperCloses(pt *binance.PaperTrader) {
 		}
 		at.logInfof("📝 [Paper] %s triggered: %s %s qty=%.6f @ %.6f", ev.Reason, ev.Symbol, ev.Side, ev.Quantity, ev.ExitPrice)
 
-		symbol := market.Normalize(ev.Symbol)
+		symbol := at.normSymbol(ev.Symbol)
 		order := at.createOrderRecord(ev.OrderID, symbol, action, positionSide, ev.Quantity, ev.ExitPrice, ev.Leverage)
 		switch ev.Reason {
 		case "stop_loss":

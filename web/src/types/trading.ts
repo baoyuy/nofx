@@ -6,7 +6,7 @@ export interface SystemStatus {
   start_time: string
   runtime_minutes: number
   call_count: number
-  cycle_number?: number  // Decision cycle number, persisted across restarts
+  cycle_number?: number // Decision cycle number, persisted across restarts
   initial_balance: number
   scan_interval: string
   stop_until: string
@@ -59,10 +59,10 @@ export interface DecisionAction {
   quantity: number
   leverage: number
   price: number
-  stop_loss?: number      // Stop loss price
-  take_profit?: number    // Take profit price
-  confidence?: number     // AI confidence (0-100)
-  reasoning?: string      // Brief reasoning
+  stop_loss?: number // Stop loss price
+  take_profit?: number // Take profit price
+  confidence?: number // AI confidence (0-100)
+  reasoning?: string // Brief reasoning
   order_id: number
   timestamp: string
   success: boolean
@@ -87,10 +87,26 @@ export interface DecisionRecord {
   account_state: AccountSnapshot
   positions: any[]
   candidate_coins: string[]
+  /** followed lead traders on the coins the AI saw; text = what it read */
+  copy_trade?: DecisionCopyTrade[]
   decisions: DecisionAction[]
   execution_log: string[]
   success: boolean
   error_message?: string
+}
+
+export interface DecisionCopyTrade {
+  symbol: string
+  direction: 'long' | 'short' | 'neutral'
+  confidence: number
+  long_traders: number
+  short_traders: number
+  long_avg_entry: number
+  short_avg_entry: number
+  trapped: number
+  fresh: number
+  holders: number
+  text: string
 }
 
 export interface Statistics {
@@ -160,10 +176,10 @@ export interface TraderConfigData {
   trader_name: string
   ai_model: string
   exchange_id: string
-  strategy_id?: string  // Strategy ID
-  strategy_name?: string  // Strategy name
+  strategy_id?: string // Strategy ID
+  strategy_name?: string // Strategy name
   is_cross_margin: boolean
-  show_in_competition: boolean  // Whether to show in the competition arena
+  show_in_competition: boolean // Whether to show in the competition arena
   scan_interval_minutes: number
   initial_balance: number
   is_running: boolean

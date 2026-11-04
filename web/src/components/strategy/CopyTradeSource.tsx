@@ -15,7 +15,7 @@ import { Field, NumberInput, text } from './StrategyEditorParts'
  * Coins the copy_trade source would pick now, as the backend does: the
  * leading side matches the direction, enough traders, confidence high
  * enough, highest confidence first. (The backend also drops traders not
- * refreshed for 30 minutes and, off Hyperliquid, stock contracts.)
+ * refreshed for 30 minutes.)
  */
 export function pickCopyTradeCoins(
   coins: SymbolSummary[],
@@ -214,13 +214,6 @@ export function CopyTradeSourcePanel({
           {text(language, '去带单页查看', 'Open the Copy trade page')}
         </button>
       </div>
-      <p className="text-xs text-nofx-text-muted">
-        {text(
-          language,
-          '股票类合约（如 SNDK、MU、AAPL）只在 Hyperliquid 上有，用币安或模拟盘的交易员会自动跳过它们。',
-          'Stock contracts (SNDK, MU, AAPL…) exist only on Hyperliquid; Binance and paper traders skip them automatically.'
-        )}
-      </p>
     </>
   )
 }

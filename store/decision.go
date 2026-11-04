@@ -25,6 +25,7 @@ type DecisionRecordDB struct {
 	DecisionJSON        string    `gorm:"column:decision_json;default:''"`
 	RawResponse         string    `gorm:"column:raw_response;default:''"`
 	CandidateCoins      string    `gorm:"column:candidate_coins;default:''"`
+	CopyTrade           string    `gorm:"column:copy_trade;default:''"`
 	ExecutionLog        string    `gorm:"column:execution_log;default:''"`
 	Decisions           string    `gorm:"column:decisions;default:'[]'"`
 	Success             bool      `gorm:"default:false"`
@@ -54,6 +55,8 @@ type DecisionRecord struct {
 	AccountState        AccountSnapshot    `json:"account_state"`
 	Positions           []PositionSnapshot `json:"positions"`
 	Decisions           []DecisionAction   `json:"decisions"`
+	// What followed lead traders did on the coins the AI saw.
+	CopyTrade []DecisionCopyTrade `json:"copy_trade,omitempty"`
 }
 
 // AccountSnapshot account state snapshot
@@ -139,6 +142,9 @@ func (db *DecisionRecordDB) toRecord() *DecisionRecord {
 		AIRequestDurationMs: db.AIRequestDurationMs,
 	}
 	json.Unmarshal([]byte(db.CandidateCoins), &record.CandidateCoins)
+	if db.CopyTrade != "" {
+		json.Unmarshal([]byte(db.CopyTrade), &record.CopyTrade)
+	}
 	json.Unmarshal([]byte(db.ExecutionLog), &record.ExecutionLog)
 	json.Unmarshal([]byte(db.Decisions), &record.Decisions)
 	return record
@@ -154,6 +160,11 @@ func (s *DecisionStore) LogDecision(record *DecisionRecord) error {
 
 	// Serialize arrays to JSON
 	candidateCoinsJSON, _ := json.Marshal(record.CandidateCoins)
+	copyTradeJSON := ""
+	if len(record.CopyTrade) > 0 {
+		b, _ := json.Marshal(record.CopyTrade)
+		copyTradeJSON = string(b)
+	}
 	executionLogJSON, _ := json.Marshal(record.ExecutionLog)
 	decisionsJSON, _ := json.Marshal(record.Decisions)
 
@@ -167,6 +178,7 @@ func (s *DecisionStore) LogDecision(record *DecisionRecord) error {
 		DecisionJSON:        record.DecisionJSON,
 		RawResponse:         record.RawResponse,
 		CandidateCoins:      string(candidateCoinsJSON),
+		CopyTrade:           copyTradeJSON,
 		ExecutionLog:        string(executionLogJSON),
 		Decisions:           string(decisionsJSON),
 		Success:             record.Success,
@@ -310,4 +322,20 @@ func (s *DecisionStore) GetLastCycleNumber(traderID string) (int, error) {
 		return 0, nil
 	}
 	return *cycleNumber, nil
+}
+
+// DecisionCopyTrade is followed lead traders' view of one coin at decision
+// time; Text is the block the AI read.
+type DecisionCopyTrade struct {
+	Symbol        string  `json:"symbol"`
+	Direction     string  `json:"direction"`
+	Confidence    float64 `json:"confidence"`
+	LongTraders   int     `json:"long_traders"`
+	ShortTraders  int     `json:"short_traders"`
+	LongAvgEntry  float64 `json:"long_avg_entry"`
+	ShortAvgEntry float64 `json:"short_avg_entry"`
+	Trapped       int     `json:"trapped"`
+	Fresh         int     `json:"fresh"`
+	Holders       int     `json:"holders"`
+	Text          string  `json:"text"`
 }

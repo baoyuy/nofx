@@ -36,16 +36,23 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 	var klines3m, klines4h []Kline
 	var err error
 	// Normalize symbol
-	symbol = Normalize(symbol)
+	symbol = NormalizeFor(symbol, exchange)
 
 	// Check if this is an xyz dex asset (use Hyperliquid API)
-	isXyzAsset := IsXyzDexAsset(symbol)
+	isXyzAsset := usesXyzMarket(symbol, exchange)
+	// Binance stock and commodity contracts: Binance's own candles.
+	binanceStock := binanceFamily(exchange) && IsXyzDexAsset(symbol)
 
 	// For hyperliquid exchange, also use Hyperliquid API
 	useHyperliquidAPI := isXyzAsset || strings.ToLower(exchange) == "hyperliquid"
 
 	// Get 3-minute K-line data (or 5-minute for xyz assets as 3m may not be available)
-	if useHyperliquidAPI {
+	if binanceStock {
+		klines3m, err = getKlinesFromBinance(symbol, "3m", 100)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to get 3-minute K-line from Binance: %v", err)
+		}
+	} else if useHyperliquidAPI {
 		// Use Hyperliquid API for xyz dex assets (use 5m since 3m may not be available)
 		klines3m, err = getKlinesFromHyperliquid(symbol, "5m", 100)
 		if err != nil {
@@ -66,7 +73,12 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 	}
 
 	// Get 4-hour K-line data
-	if useHyperliquidAPI {
+	if binanceStock {
+		klines4h, err = getKlinesFromBinance(symbol, "4h", 100)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to get 4-hour K-line from Binance: %v", err)
+		}
+	} else if useHyperliquidAPI {
 		klines4h, err = getKlinesFromHyperliquid(symbol, "4h", 100)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to get 4-hour K-line from Hyperliquid: %v", err)
@@ -147,7 +159,14 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 // primaryTimeframe: primary timeframe (used for calculating current indicators), defaults to timeframes[0]
 // count: number of K-lines for each timeframe
 func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe string, count int) (*Data, error) {
-	symbol = Normalize(symbol)
+	return GetWithTimeframesFor(symbol, "", timeframes, primaryTimeframe, count)
+}
+
+// GetWithTimeframesFor is GetWithTimeframes for the symbols and candles of
+// one exchange ("" = the default: Hyperliquid for xyz: assets, else Binance
+// via CoinAnk).
+func GetWithTimeframesFor(symbol, exchange string, timeframes []string, primaryTimeframe string, count int) (*Data, error) {
+	symbol = NormalizeFor(symbol, exchange)
 
 	if len(timeframes) == 0 {
 		return nil, fmt.Errorf("at least one timeframe is required")
@@ -174,28 +193,12 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	timeframeData := make(map[string]*TimeframeSeriesData)
 	var primaryKlines []Kline
 
-	// Check if this is an xyz dex asset (use Hyperliquid API)
-	isXyzAsset := IsXyzDexAsset(symbol)
-
 	// Get K-line data for each timeframe
 	for _, tf := range timeframes {
-		var klines []Kline
-		var err error
-
-		if isXyzAsset {
-			// Use Hyperliquid API for xyz dex assets
-			klines, err = getKlinesFromHyperliquid(symbol, tf, 200)
-			if err != nil {
-				logger.Infof("⚠️ Failed to get %s %s K-line from Hyperliquid: %v", symbol, tf, err)
-				continue
-			}
-		} else {
-			// Use CoinAnk for regular crypto assets (default to Binance)
-			klines, err = getKlinesFromCoinAnk(symbol, tf, "binance", 200)
-			if err != nil {
-				logger.Infof("⚠️ Failed to get %s %s K-line from CoinAnk: %v", symbol, tf, err)
-				continue
-			}
+		klines, err := getKlinesFor(symbol, tf, exchange, 200)
+		if err != nil {
+			logger.Infof("⚠️ Failed to get %s %s K-line: %v", symbol, tf, err)
+			continue
 		}
 
 		if len(klines) == 0 {

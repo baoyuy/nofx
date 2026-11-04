@@ -33,6 +33,22 @@ type CopyTradeAction struct {
 	Realized float64
 }
 
+// CopyTradeHolder is one followed lead trader's position in a coin.
+type CopyTradeHolder struct {
+	Trader    string
+	Score     float64 // credibility 0-100
+	Side      string  // long | short
+	Entry     float64
+	Value     float64 // USDT at entry
+	Leverage  float64 // 0 = unknown (position inferred from trades)
+	ReturnPct float64 // unrealized, % of margin when Leverage > 0, else % of price
+	Priced    bool    // ReturnPct is known
+	OpenedAt  int64   // ms; 0 = before monitoring
+	Trapped   bool
+	Fresh     bool
+	HighFreq  bool
+}
+
 // CopyTradeCoin is what followed lead traders do on one coin.
 type CopyTradeCoin struct {
 	Symbol     string
@@ -43,6 +59,8 @@ type CopyTradeCoin struct {
 	Liquidated int
 	// Recent actions, newest first, high-frequency traders left out.
 	Recent []CopyTradeAction
+	// Holders, most credible first, at most a few.
+	Holders []CopyTradeHolder
 }
 
 // CopyTradeResolver returns every coin followed lead traders hold, with
@@ -53,10 +71,9 @@ var CopyTradeResolver func() []CopyTradeCoin
 // copyTradeCandidates picks the coins of the copy_trade source: the leading
 // side matches the direction setting, enough traders, confidence high
 // enough, highest confidence first.
-//
-// Lead traders often hold stock contracts (SNDK, MU, AAPL…). Those map to
-// Hyperliquid's xyz: market, so they are skipped when stocks is false.
-func copyTradeCandidates(source store.CoinSourceConfig, stocks bool) []CandidateCoin {
+// Symbols are Binance's; GetCandidateCoins puts them in the trader's
+// exchange form.
+func copyTradeCandidates(source store.CoinSourceConfig) []CandidateCoin {
 	source.NormalizeCopyTrade()
 	if CopyTradeResolver == nil {
 		logger.Warnf("⚠️  Copy-trade monitor not running: no copy-trade coins")
@@ -74,9 +91,6 @@ func copyTradeCandidates(source store.CoinSourceConfig, stocks bool) []Candidate
 		if c.Long.Traders+c.Short.Traders < source.CopyTradeMinTraders {
 			continue
 		}
-		if !stocks && market.IsXyzDexAsset(c.Symbol) {
-			continue
-		}
 		picked = append(picked, c)
 	}
 	sort.SliceStable(picked, func(a, b int) bool { return picked[a].Confidence > picked[b].Confidence })
@@ -85,7 +99,7 @@ func copyTradeCandidates(source store.CoinSourceConfig, stocks bool) []Candidate
 	}
 	out := make([]CandidateCoin, 0, len(picked))
 	for _, c := range picked {
-		out = append(out, CandidateCoin{Symbol: market.Normalize(c.Symbol), Sources: []string{"copy_trade"}})
+		out = append(out, CandidateCoin{Symbol: copyTradeKey(c.Symbol), Sources: []string{"copy_trade"}})
 	}
 	logger.Infof("👥 Copy-trade source: %d of %d followed coins pass (min confidence %.0f, %s, %d+ traders)",
 		len(out), len(coins), source.CopyTradeMinConfidence, source.CopyTradeDirection, source.CopyTradeMinTraders)
@@ -113,7 +127,7 @@ func enrichCopyTradeData(ctx *Context, engine *StrategyEngine) {
 	ctx.CopyTradeMap = map[string]*CopyTradeCoin{}
 	for _, c := range CopyTradeResolver() {
 		c := c
-		ctx.CopyTradeMap[market.Normalize(c.Symbol)] = &c
+		ctx.CopyTradeMap[copyTradeKey(c.Symbol)] = &c
 	}
 }
 
@@ -121,8 +135,11 @@ func copyTradeFor(ctx *Context, symbol string) *CopyTradeCoin {
 	if ctx == nil || ctx.CopyTradeMap == nil {
 		return nil
 	}
-	return ctx.CopyTradeMap[market.Normalize(symbol)]
+	return ctx.CopyTradeMap[copyTradeKey(symbol)]
 }
+
+// copyTradeKey matches a coin whatever its form: SNDKUSDT, xyz:SNDK, SNDK.
+func copyTradeKey(symbol string) string { return market.NormalizeFor(symbol, "binance") }
 
 // copyTradeSystemNote tells the model how to read the copy-trade lines.
 const copyTradeSystemNote = `# 👥 Followed Lead Traders (reference signal)
@@ -169,6 +186,41 @@ func formatCopyTrade(c *CopyTradeCoin, now time.Time) string {
 	if c.Liquidated > 0 {
 		sb.WriteString(fmt.Sprintf("- %d more likely liquidated (not counted)\n", c.Liquidated))
 	}
+	if len(c.Holders) > 0 {
+		sb.WriteString("- Holders (most credible first):\n")
+		for _, h := range c.Holders {
+			line := fmt.Sprintf("  - %s (score %.0f) %s %.0f USDT @ %s", h.Trader, h.Score, h.Side, h.Value, formatCopyPrice(h.Entry))
+			if h.Leverage > 0 {
+				line += fmt.Sprintf(", %.0fx", h.Leverage)
+			}
+			if h.Priced {
+				if h.Leverage > 0 {
+					line += fmt.Sprintf(", %+.1f%% of margin", h.ReturnPct)
+				} else {
+					line += fmt.Sprintf(", %+.1f%% price", h.ReturnPct)
+				}
+			}
+			if h.OpenedAt > 0 {
+				line += ", held " + formatCopyAgo(now.Sub(time.UnixMilli(h.OpenedAt)).Round(time.Minute))
+			} else {
+				line += ", held since before monitoring"
+			}
+			var tags []string
+			if h.Trapped {
+				tags = append(tags, "trapped")
+			}
+			if h.Fresh {
+				tags = append(tags, "fresh")
+			}
+			if h.HighFreq {
+				tags = append(tags, "high-frequency")
+			}
+			if len(tags) > 0 {
+				line += " [" + strings.Join(tags, ", ") + "]"
+			}
+			sb.WriteString(line + "\n")
+		}
+	}
 	if len(c.Recent) > 0 {
 		sb.WriteString("- Recent actions:\n")
 		for _, a := range c.Recent {
@@ -203,8 +255,32 @@ func formatCopyAgo(d time.Duration) string {
 	return fmt.Sprintf("%.1fh", d.Hours())
 }
 
-// tradesStocks tells whether the strategy's exchange can trade the xyz:
-// stock contracts: Hyperliquid, or unknown (previews show everything).
-func (e *StrategyEngine) tradesStocks() bool {
-	return e.exchange == "" || e.exchange == "hyperliquid"
+// CopyTradeBriefs summarizes, for the decision record, what followed lead
+// traders did on each coin the AI was shown, with the same text it read.
+func CopyTradeBriefs(ctx *Context, now time.Time) []store.DecisionCopyTrade {
+	if ctx == nil || ctx.CopyTradeMap == nil {
+		return nil
+	}
+	var out []store.DecisionCopyTrade
+	seen := map[string]bool{}
+	add := func(symbol string) {
+		c := copyTradeFor(ctx, symbol)
+		if c == nil || seen[copyTradeKey(symbol)] {
+			return
+		}
+		seen[copyTradeKey(symbol)] = true
+		out = append(out, store.DecisionCopyTrade{Symbol: symbol, Direction: c.Direction, Confidence: c.Confidence,
+			LongTraders: c.Long.Traders, ShortTraders: c.Short.Traders, LongAvgEntry: c.Long.AvgEntry, ShortAvgEntry: c.Short.AvgEntry,
+			Trapped: c.Long.Trapped + c.Short.Trapped, Fresh: c.Long.Fresh + c.Short.Fresh, Holders: len(c.Holders),
+			Text: formatCopyTrade(c, now)})
+	}
+	for _, p := range ctx.Positions {
+		add(p.Symbol)
+	}
+	for _, c := range ctx.CandidateCoins {
+		if _, ok := ctx.MarketDataMap[c.Symbol]; ok || ctx.MarketDataMap == nil {
+			add(c.Symbol)
+		}
+	}
+	return out
 }

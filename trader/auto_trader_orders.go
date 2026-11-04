@@ -308,7 +308,7 @@ func (at *AutoTrader) executeCloseLongWithRecord(decision *kernel.Decision, acti
 	actionRecord.Price = marketData.CurrentPrice
 
 	// Normalize symbol for database lookup
-	normalizedSymbol := market.Normalize(decision.Symbol)
+	normalizedSymbol := at.normSymbol(decision.Symbol)
 
 	// Get entry price and quantity - prioritize local database for accurate quantity
 	var entryPrice float64
@@ -372,7 +372,7 @@ func (at *AutoTrader) executeCloseShortWithRecord(decision *kernel.Decision, act
 	actionRecord.Price = marketData.CurrentPrice
 
 	// Normalize symbol for database lookup
-	normalizedSymbol := market.Normalize(decision.Symbol)
+	normalizedSymbol := at.normSymbol(decision.Symbol)
 
 	// Get entry price and quantity - prioritize local database for accurate quantity
 	var entryPrice float64

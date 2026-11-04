@@ -132,6 +132,7 @@ func (at *AutoTrader) runCycle() error {
 		for _, coin := range ctx.CandidateCoins {
 			record.CandidateCoins = append(record.CandidateCoins, coin.Symbol)
 		}
+		record.CopyTrade = kernel.CopyTradeBriefs(ctx, time.Now())
 	}
 
 	if aiDecision != nil && aiDecision.AIRequestDurationMs > 0 {
@@ -362,6 +363,12 @@ func (at *AutoTrader) runCycle() error {
 	}
 
 	return nil
+}
+
+// normSymbol is the symbol form of this trader's exchange, used for the
+// records it stores: Binance keeps stock contracts as SNDKUSDT.
+func (at *AutoTrader) normSymbol(symbol string) string {
+	return market.NormalizeFor(strings.TrimSpace(symbol), at.exchange)
 }
 
 func normalizeUniverseSymbol(symbol string) string {

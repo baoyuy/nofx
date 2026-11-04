@@ -207,7 +207,7 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 
 	// 1. First fetch data for position coins (must fetch)
 	for _, pos := range ctx.Positions {
-		data, err := market.GetWithTimeframes(pos.Symbol, timeframes, primaryTimeframe, klineCount)
+		data, err := market.GetWithTimeframesFor(pos.Symbol, engine.Exchange(), timeframes, primaryTimeframe, klineCount)
 		if err != nil {
 			logger.Infof("⚠️  Failed to fetch market data for position %s: %v", pos.Symbol, err)
 			continue
@@ -226,7 +226,7 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 			continue
 		}
 
-		data, err := market.GetWithTimeframes(coin.Symbol, timeframes, primaryTimeframe, klineCount)
+		data, err := market.GetWithTimeframesFor(coin.Symbol, engine.Exchange(), timeframes, primaryTimeframe, klineCount)
 		if err != nil {
 			logger.Infof("⚠️  Failed to fetch market data for %s: %v", coin.Symbol, err)
 			continue

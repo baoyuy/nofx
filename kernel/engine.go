@@ -291,8 +291,32 @@ func (e *StrategyEngine) GetConfig() *store.StrategyConfig {
 // Candidate Coins
 // ============================================================================
 
-// GetCandidateCoins gets candidate coins based on strategy configuration
+// GetCandidateCoins gets candidate coins based on strategy configuration, in
+// the symbol form of the trader's exchange: on Binance a stock contract stays
+// SNDKUSDT instead of Hyperliquid's xyz:SNDK.
 func (e *StrategyEngine) GetCandidateCoins() ([]CandidateCoin, error) {
+	coins, err := e.candidateCoins()
+	if err != nil || e.exchange == "" {
+		return coins, err
+	}
+	out := make([]CandidateCoin, 0, len(coins))
+	seen := make(map[string]int, len(coins))
+	for _, c := range coins {
+		c.Symbol = market.NormalizeFor(c.Symbol, e.exchange)
+		if i, ok := seen[c.Symbol]; ok {
+			out[i].Sources = append(out[i].Sources, c.Sources...)
+			continue
+		}
+		seen[c.Symbol] = len(out)
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+// Exchange returns the exchange set with SetExchange ("" for previews).
+func (e *StrategyEngine) Exchange() string { return e.exchange }
+
+func (e *StrategyEngine) candidateCoins() ([]CandidateCoin, error) {
 	var candidates []CandidateCoin
 	symbolSources := make(map[string][]string)
 
@@ -306,7 +330,7 @@ func (e *StrategyEngine) GetCandidateCoins() ([]CandidateCoin, error) {
 		return e.filterExcludedCoins(hornCandidates(coinSource)), nil
 
 	case "copy_trade":
-		return e.filterExcludedCoins(copyTradeCandidates(coinSource, e.tradesStocks())), nil
+		return e.filterExcludedCoins(copyTradeCandidates(coinSource)), nil
 
 	case "static":
 		for _, symbol := range coinSource.StaticCoins {

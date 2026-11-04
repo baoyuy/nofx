@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -84,11 +85,16 @@ func copyTradeCoins(m *copytrade.Monitor, now time.Time) []kernel.CopyTradeCoin 
 			}
 		}
 	}
+	highFreq := map[string]bool{}
+	for _, s := range snaps {
+		highFreq[s.Follow.PortfolioID] = s.HighFreq
+	}
 	out := make([]kernel.CopyTradeCoin, 0, len(sums))
 	for _, c := range sums {
 		coin := kernel.CopyTradeCoin{Symbol: c.Symbol, Direction: c.Confidence.Direction, Confidence: c.Confidence.Score,
 			Long: side(c.Long), Short: side(c.Short), Liquidated: c.Liquidated}
 		coin.Long.HighFreq, coin.Short.HighFreq = hf[c.Symbol+"|long"], hf[c.Symbol+"|short"]
+		coin.Holders = copyTradeHolders(copytrade.Holders(snaps, c.Symbol), highFreq)
 		for _, e := range recent[c.Symbol] {
 			coin.Recent = append(coin.Recent, kernel.CopyTradeAction{Time: e.Time, Trader: e.Nickname, Score: scores[e.PortfolioID],
 				Side: e.Side, Action: e.Action, Value: e.Value, Price: e.Price, Realized: e.RealizedPnL})
@@ -433,4 +439,26 @@ func (s *Server) handleCopyTradeProxyTest(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true, "latency_ms": latency, "traders": page.Total})
+}
+
+// copyTradeHoldersShown caps the holder lines per coin in the AI prompt.
+const copyTradeHoldersShown = 5
+
+// copyTradeHolders lists the most credible holders of a coin, leaving out
+// likely liquidated positions.
+func copyTradeHolders(holders []copytrade.Holder, highFreq map[string]bool) []kernel.CopyTradeHolder {
+	sort.SliceStable(holders, func(a, b int) bool { return holders[a].Score > holders[b].Score })
+	var out []kernel.CopyTradeHolder
+	for _, h := range holders {
+		if h.Liquidated {
+			continue
+		}
+		if len(out) == copyTradeHoldersShown {
+			break
+		}
+		out = append(out, kernel.CopyTradeHolder{Trader: h.Nickname, Score: h.Score, Side: h.Side, Entry: h.EntryPrice,
+			Value: h.EntryValue, Leverage: h.Leverage, ReturnPct: h.ReturnPct, Priced: h.Priced, OpenedAt: h.OpenedAt,
+			Trapped: h.Trapped, Fresh: h.Fresh, HighFreq: highFreq[h.PortfolioID]})
+	}
+	return out
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DecisionCopyTradePanel } from './DecisionCopyTrade'
 import type { DecisionRecord, DecisionAction } from '../../types'
 import { t, type Language } from '../../i18n/translations'
 import { formatRequestError } from '../../lib/requestErrors'
@@ -300,6 +301,8 @@ export function DecisionCard({ decision, language, onSymbolClick }: DecisionCard
           ))}
         </div>
       )}
+
+      <DecisionCopyTradePanel items={decision.copy_trade} language={language} />
 
       {/* Collapsible Sections */}
       <div className="space-y-2">
