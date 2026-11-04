@@ -157,8 +157,8 @@ func Symbols(snaps []Snapshot) []SymbolSummary {
 			if v.stake > 0 {
 				health = v.health / v.stake
 			}
-			list = append(list, vote{trader: v.trader, side: v.side, score: v.score,
-				weight: math.Max(1, v.score) * stakeFactor(v.stake, balance[v.trader]) * health})
+			base := math.Max(1, v.score) * stakeFactor(v.stake, balance[v.trader])
+			list = append(list, vote{trader: v.trader, side: v.side, score: v.score, base: base, weight: base * health})
 		}
 		s.Confidence = confidence(list)
 		if q := qty[s.Symbol+"long"]; q > 0 {

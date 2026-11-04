@@ -75,3 +75,28 @@ func TestSymbolsDiscountTrappedAndDropLiquidated(t *testing.T) {
 		t.Fatalf("unpriced long still votes long: %+v", healthy[0].Confidence)
 	}
 }
+
+func TestConfidenceDropsWhenTheLeadingSideIsTrapped(t *testing.T) {
+	now := time.Now()
+	coin := func(mark float64) SymbolSummary {
+		var snaps []Snapshot
+		for _, id := range []string{"a", "b", "c", "d", "e"} {
+			p := Position{Symbol: "BTCUSDT", Side: "long", Qty: 1, EntryPrice: 100, EntryValue: 100, Source: "inferred"}
+			snaps = append(snaps, Snapshot{Follow: store.CopyTradeFollow{PortfolioID: id, MarginBalance: 1000},
+				Score: TraderScore{Score: 60}, Positions: assessHealth([]Position{p}, map[string]float64{"BTCUSDT": mark}, 1000, now)})
+		}
+		return Symbols(snaps)[0]
+	}
+	healthy, noisy, trapped := coin(101), coin(97), coin(93)
+	if healthy.Confidence.Health != 1 || healthy.Long.Trapped != 0 {
+		t.Fatalf("healthy: %+v", healthy)
+	}
+	// 3% against at an assumed 10x is 30% of margin: weighed down, not trapped.
+	if noisy.Long.Trapped != 0 || noisy.Confidence.Score >= healthy.Confidence.Score {
+		t.Fatalf("noisy: %+v vs %+v", noisy.Confidence, healthy.Confidence)
+	}
+	// Everyone long and 7% under water: same agreement, much lower score.
+	if trapped.Long.Trapped != 5 || trapped.Confidence.Agreement != 1 || trapped.Confidence.Score > healthy.Confidence.Score*0.5 {
+		t.Fatalf("trapped: %+v vs %+v", trapped.Confidence, healthy.Confidence)
+	}
+}

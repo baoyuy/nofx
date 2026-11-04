@@ -79,6 +79,14 @@ export function explainConfidence(language: string, s: SymbolSummary): string {
         `${trapped} trapped in loss, weighted down (may just be holding on)`
       )
     )
+  if (c.health !== undefined && c.health < 0.95)
+    parts.push(
+      tr(
+        language,
+        `${c.direction === 'short' ? '空方' : '多方'}整体浮亏，分数乘以 ${c.health.toFixed(2)}`,
+        `the ${c.direction} side is under water overall: score × ${c.health.toFixed(2)}`
+      )
+    )
   if (fresh)
     parts.push(
       tr(

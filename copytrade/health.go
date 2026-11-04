@@ -19,7 +19,7 @@ type Health struct {
 	PctOfMargin bool    `json:"pct_of_margin"`
 	Priced      bool    `json:"priced"`
 	// Trapped: the loss passed trappedMarginPct of margin (or trappedMovePct
-	// of price when leverage is unknown).
+	// of price when leverage is unknown: the same loss at assumedLeverage).
 	Trapped bool `json:"trapped"`
 	// Liquidated: inferred position whose loss, with the trader's other
 	// inferred losses, reached the trader's whole balance. Excluded from
@@ -30,8 +30,10 @@ type Health struct {
 }
 
 const (
-	trappedMarginPct = 20.0
-	trappedMovePct   = 2.0
+	// At 20x a 1% move is already 20% of margin, so a lower bar flags
+	// ordinary noise (40% of positions on the first day at 20%/2%).
+	trappedMarginPct = 50.0
+	trappedMovePct   = trappedMarginPct / assumedLeverage
 	// assumedLeverage turns a price move into a margin loss when leverage is
 	// unknown (inferred positions).
 	assumedLeverage = 10.0

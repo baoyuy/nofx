@@ -486,8 +486,8 @@ function CoinDetail({
           )}
           {tr(
             language,
-            '「被套」：亏掉保证金 20% 以上（推算仓位看不到杠杆，按价格反向 2% 以上算）。「新开」：24 小时内开仓或加仓。「可能已强平」：推算仓位的亏损已超过他的账户余额。',
-            ' "Trapped": lost 20%+ of margin (2%+ adverse price move when leverage is unknown). "New": opened or added within 24h. "Likely liquidated": the inferred loss exceeds the trader’s balance.'
+            '「被套」：亏掉保证金 50% 以上（推算仓位看不到杠杆，按价格反向 5% 以上算）。没到被套的浮亏也会按亏损多少降低置信度。「新开」：24 小时内开仓或加仓。「可能已强平」：推算仓位的亏损已超过他的账户余额。',
+            ' "Trapped": lost 50%+ of margin (5%+ adverse price move when leverage is unknown). Smaller losses still lower confidence in proportion. "New": opened or added within 24h. "Likely liquidated": the inferred loss exceeds the trader’s balance.'
           )}
         </p>
       </section>

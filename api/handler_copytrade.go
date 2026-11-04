@@ -180,7 +180,7 @@ func (s *Server) handleCopyTradeFollow(c *gin.Context) {
 	defer cancel()
 	f, err := s.copyTrade.Follow(ctx, id)
 	if err != nil {
-		if strings.Contains(err.Error(), "already following") || strings.Contains(err.Error(), "at most") || strings.Contains(err.Error(), "no lead trader") {
+		if errors.Is(err, copytrade.ErrPrivate) || strings.Contains(err.Error(), "already following") || strings.Contains(err.Error(), "at most") || strings.Contains(err.Error(), "no lead trader") {
 			SafeBadRequest(c, err.Error())
 			return
 		}

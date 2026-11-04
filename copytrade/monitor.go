@@ -28,8 +28,9 @@ const (
 	hotWindow       = 2 * time.Hour
 	maxEventsKept   = 300
 	// profileVersion bumps when the stored profile gains fields, so older
-	// profiles are fetched again once (2 = start time and balance).
-	profileVersion = 2
+	// profiles are fetched again once (2 = start time and balance, 3 =
+	// portfolio type).
+	profileVersion = 3
 )
 
 // Snapshot is the rebuilt view of one followed trader.
@@ -157,11 +158,12 @@ func (m *Monitor) refresh(ctx context.Context, id string) {
 	}
 	f := snap.Follow
 	err := m.syncProfile(ctx, &f)
-	if err == nil {
+	// Private portfolios return no trades: only the profile is kept fresh.
+	if err == nil && !f.Private {
 		err = m.syncFills(ctx, &f)
 	}
 	var live []LivePosition
-	if err == nil && f.PositionShow {
+	if err == nil && f.PositionShow && !f.Private {
 		live, err = m.Client.Positions(ctx, id)
 	}
 	retry := time.Now().Add(errorInterval)
@@ -216,6 +218,10 @@ func applyDetail(f *store.CopyTradeFollow, d Detail) {
 	f.Nickname, f.AvatarURL, f.Status, f.PositionShow = d.Nickname, d.AvatarURL, d.Status, d.PositionShow
 	f.AUM, f.CopyCount, f.MaxCopyCount = float64(d.AUM), d.CopyCount, d.MaxCopyCount
 	f.MarginBalance, f.StartTime = float64(d.MarginBalance), d.StartTime
+	f.Private, f.PublicID = d.Private(), d.PublicID
+	if f.PublicID == f.PortfolioID {
+		f.PublicID = ""
+	}
 	if d.LastTradeTime > 0 {
 		f.LastTradeTime = d.LastTradeTime
 	}
@@ -303,20 +309,16 @@ func (m *Monitor) rebuild(s *Snapshot, live []LivePosition) {
 	}
 	s.Positions, s.Events = positions, events
 	s.Hot = len(positions) > 0 || time.Since(time.UnixMilli(s.Follow.LastTradeTime)) < hotWindow
+	if s.Follow.Private {
+		s.Hot = false // nothing to poll
+	}
 }
 
 // Follow adds a trader after checking it exists. Its history is fetched in
 // the background.
 func (m *Monitor) Follow(ctx context.Context, id string) (*store.CopyTradeFollow, error) {
-	m.mu.RLock()
-	_, exists := m.snaps[id]
-	n := len(m.snaps)
-	m.mu.RUnlock()
-	if exists {
-		return nil, errors.New("already following this trader")
-	}
-	if n >= MaxFollows {
-		return nil, fmt.Errorf("you can follow at most %d traders", MaxFollows)
+	if err := m.canFollow(id); err != nil {
+		return nil, err
 	}
 	d, err := m.Client.Detail(ctx, id)
 	if err != nil {
@@ -324,6 +326,22 @@ func (m *Monitor) Follow(ctx context.Context, id string) (*store.CopyTradeFollow
 	}
 	if d.PortfolioID == "" && d.Nickname == "" {
 		return nil, errors.New("no lead trader with this ID")
+	}
+	if d.Private() {
+		// Its trades are hidden; the same trader's public portfolio shows them.
+		if d.PublicID == "" || d.PublicID == id {
+			return nil, ErrPrivate
+		}
+		id = d.PublicID
+		if err := m.canFollow(id); err != nil {
+			return nil, err
+		}
+		if d, err = m.Client.Detail(ctx, id); err != nil {
+			return nil, err
+		}
+		if d.Private() {
+			return nil, ErrPrivate
+		}
 	}
 	f := store.CopyTradeFollow{PortfolioID: id}
 	applyDetail(&f, d)
@@ -335,6 +353,21 @@ func (m *Monitor) Follow(ctx context.Context, id string) (*store.CopyTradeFollow
 	m.mu.Unlock()
 	m.poke()
 	return &f, nil
+}
+
+// ErrPrivate refuses a private portfolio with no public one to follow.
+var ErrPrivate = errors.New("this is a private copy-trading portfolio: Binance hides its trades and positions, and the trader has no public portfolio to follow instead")
+
+func (m *Monitor) canFollow(id string) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, exists := m.snaps[id]; exists {
+		return errors.New("already following this trader")
+	}
+	if len(m.snaps) >= MaxFollows {
+		return fmt.Errorf("you can follow at most %d traders", MaxFollows)
+	}
+	return nil
 }
 
 func (m *Monitor) Unfollow(id string) error {

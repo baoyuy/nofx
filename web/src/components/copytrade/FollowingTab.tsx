@@ -55,6 +55,19 @@ function TraderCard({
       notify.error(e instanceof Error ? e.message : String(e))
     }
   }
+  // Follows the public twin, then drops the private portfolio.
+  const followPublic = async (id: string) => {
+    try {
+      await api.follow(id).catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (!msg.includes('already following')) throw e
+      })
+      await api.unfollow(t.portfolio_id)
+      onChanged()
+    } catch (e) {
+      notify.error(e instanceof Error ? e.message : String(e))
+    }
+  }
   return (
     <section className={ui.panel}>
       <header className="mb-2 flex flex-wrap items-center gap-2">
@@ -86,6 +99,11 @@ function TraderCard({
           {tr(language, '胜率', 'Win')} {t.win_rate.toFixed(0)}%
         </span>
         <ScoreBadge score={snap.score} language={language} />
+        {t.private ? (
+          <span className="rounded bg-nofx-gold/10 px-1.5 text-[11px] text-nofx-gold">
+            {tr(language, '私域', 'Private')}
+          </span>
+        ) : null}
         {t.status && t.status !== 'ACTIVE' ? (
           <span className="rounded bg-nofx-danger/10 px-1.5 text-[11px] text-nofx-danger">
             {t.status}
@@ -114,7 +132,34 @@ function TraderCard({
           {snap.error}
         </p>
       ) : null}
-      {!loaded && !snap.error ? (
+      {t.private ? (
+        <div className="rounded bg-nofx-gold/10 px-2 py-2 text-xs text-nofx-text">
+          {tr(
+            language,
+            '这是私域带单账户：币安不公开它的成交和持仓，这里永远不会有数据，也不计入币种统计。',
+            'This is a private copy-trading portfolio: Binance hides its trades and positions, so nothing will ever show here and it is left out of coin stats.'
+          )}{' '}
+          {t.public_id ? (
+            <button
+              type="button"
+              className="font-medium text-nofx-gold hover:underline"
+              onClick={() => void followPublic(t.public_id || '')}
+            >
+              {tr(
+                language,
+                '改为关注他的公域账户',
+                'Follow the public portfolio instead'
+              )}
+            </button>
+          ) : (
+            tr(
+              language,
+              '他没有公域账户，建议取消关注。',
+              'The trader has no public portfolio; consider unfollowing.'
+            )
+          )}
+        </div>
+      ) : !loaded && !snap.error ? (
         <p className={`${ui.muted} flex items-center gap-1 py-3`}>
           <Loader2 className="h-3 w-3 animate-spin" />
           {tr(

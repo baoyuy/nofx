@@ -32,6 +32,10 @@ type CopyTradeFollow struct {
 	ProfileAt      int64 `gorm:"column:profile_at" json:"-"`
 	ProfileVersion int   `gorm:"column:profile_version" json:"-"`
 	LastTradeTime  int64 `gorm:"column:last_trade_time" json:"last_trade_time"`
+	// Private portfolios hide trades and positions, so they never show data;
+	// PublicID is the trader's public portfolio, if any.
+	Private  bool   `gorm:"column:private" json:"private"`
+	PublicID string `gorm:"column:public_id" json:"public_id,omitempty"`
 
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"followed_at"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"-"`

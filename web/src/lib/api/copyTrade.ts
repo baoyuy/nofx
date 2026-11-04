@@ -62,6 +62,10 @@ export interface FollowedTrader {
   mdd: number
   win_rate: number
   last_trade_time: number
+  /** private portfolio: Binance hides its trades, so no data ever shows */
+  private?: boolean
+  /** the same trader's public portfolio, when private */
+  public_id?: string
   followed_at: string
 }
 
@@ -87,7 +91,7 @@ export interface TraderPosition {
   pct_of_margin: boolean
   /** a mark price was available */
   priced: boolean
-  /** losing 20%+ of margin (2%+ of price when leverage is unknown) */
+  /** losing 50%+ of margin (5%+ of price when leverage is unknown) */
   trapped: boolean
   /** inferred position whose loss reached the trader's balance */
   liquidated: boolean
@@ -158,6 +162,8 @@ export interface Confidence {
   count_factor: number
   /** mean trader score of the holders, 0-1 */
   quality: number
+  /** leading side's health, 0-1; below 1 when it sits on losses */
+  health: number
   traders: number
 }
 

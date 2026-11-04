@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -47,7 +48,16 @@ func (f *fakeBinance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.URL.Path {
 	case "/v1/friendly/future/copy-trade/lead-portfolio/detail":
-		if r.URL.Query().Get("portfolioId") != "42" {
+		switch r.URL.Query().Get("portfolioId") {
+		case "42":
+		case "43": // private, public twin 42
+			write(map[string]any{"leadPortfolioId": "43", "nickname": "测试员", "status": "ACTIVE",
+				"portfolioType": "PRIVATE", "publicLeadPortfolioId": "42", "privateLeadPortfolioId": "43"})
+			return
+		case "44": // private only
+			write(map[string]any{"leadPortfolioId": "44", "nickname": "私域", "status": "ACTIVE", "portfolioType": "PRIVATE"})
+			return
+		default:
 			write(nil)
 			return
 		}
@@ -183,5 +193,20 @@ func TestProxyValidationAndMask(t *testing.T) {
 	}
 	if got := MaskProxy("http://user:secret@1.2.3.4:8080"); got != "http://user:***@1.2.3.4:8080" {
 		t.Fatalf("mask = %s", got)
+	}
+}
+
+func TestFollowPrivatePortfolioUsesPublicOne(t *testing.T) {
+	m, _ := newTestMonitor(t)
+	ctx := context.Background()
+	if _, err := m.Follow(ctx, "44"); !errors.Is(err, ErrPrivate) {
+		t.Fatalf("a private portfolio without a public one must be refused: %v", err)
+	}
+	f, err := m.Follow(ctx, "43")
+	if err != nil || f.PortfolioID != "42" || f.Private {
+		t.Fatalf("private 43 must follow its public 42: %+v %v", f, err)
+	}
+	if _, err := m.Follow(ctx, "43"); err == nil || !strings.Contains(err.Error(), "already following") {
+		t.Fatalf("its public portfolio is already followed: %v", err)
 	}
 }

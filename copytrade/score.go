@@ -72,7 +72,10 @@ type Confidence struct {
 	LongShare   float64 `json:"long_share"`   // long weight / total weight
 	CountFactor float64 `json:"count_factor"` // penalty for few traders
 	Quality     float64 `json:"quality"`      // mean score of the holders, 0-1
-	Traders     int     `json:"traders"`
+	// Health of the leading side: its health-weighted votes over the same
+	// votes without health, at most 1. Below 1 when the side sits on losses.
+	Health  float64 `json:"health"`
+	Traders int     `json:"traders"`
 }
 
 // vote is one trader's position on a coin.
@@ -80,19 +83,27 @@ type vote struct {
 	trader string
 	side   string
 	weight float64
-	score  float64
+	// base is weight without the health factor.
+	base  float64
+	score float64
 	// Summed while collecting: entry value, and entry value × health.
 	stake, health float64
 }
 
 func confidence(votes []vote) Confidence {
-	var long, short, scoreSum float64
+	var long, short, longBase, shortBase, scoreSum float64
 	traders := map[string]float64{}
 	for _, v := range votes {
+		base := v.base
+		if base == 0 {
+			base = v.weight
+		}
 		if v.side == "short" {
 			short += v.weight
+			shortBase += base
 		} else {
 			long += v.weight
+			longBase += base
 		}
 		traders[v.trader] = v.score
 	}
@@ -109,13 +120,23 @@ func confidence(votes []vote) Confidence {
 	c.Agreement = math.Abs(long-short) / total
 	c.CountFactor = countFactor(len(traders))
 	c.Quality = scoreSum / float64(len(traders)) / 100
-	// Weak holders lower confidence by up to half.
-	c.Score = 100 * c.Agreement * c.CountFactor * (0.5 + 0.5*c.Quality)
 	switch {
 	case long > short:
 		c.Direction = "long"
 	case short > long:
 		c.Direction = "short"
 	}
+	// Agreement alone stays high when the whole leading side is trapped;
+	// their losses lower the score too.
+	lead, leadBase := long, longBase
+	if short > long {
+		lead, leadBase = short, shortBase
+	}
+	c.Health = 1
+	if leadBase > 0 {
+		c.Health = math.Min(1, lead/leadBase)
+	}
+	// Weak holders lower confidence by up to half.
+	c.Score = 100 * c.Agreement * c.CountFactor * (0.5 + 0.5*c.Quality) * c.Health
 	return c
 }

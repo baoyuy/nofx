@@ -3,6 +3,7 @@ package copytrade
 import (
 	"context"
 	"net/url"
+	"strings"
 )
 
 // LeaderQuery selects one leaderboard page.
@@ -72,7 +73,14 @@ type Detail struct {
 	MaxCopyCount  int    `json:"maxCopyCount"`
 	StartTime     int64  `json:"startTime"`
 	LastTradeTime int64  `json:"lastTradeTime"`
+	// PortfolioType is PUBLIC or PRIVATE. Private portfolios hide their trade
+	// history; PublicID names the same trader's public portfolio, if any.
+	PortfolioType string `json:"portfolioType"`
+	PublicID      string `json:"publicLeadPortfolioId"`
 }
+
+// Private tells a portfolio whose trades Binance does not show.
+func (d Detail) Private() bool { return strings.EqualFold(d.PortfolioType, "PRIVATE") }
 
 func (c *Client) Detail(ctx context.Context, portfolioID string) (Detail, error) {
 	var out Detail
