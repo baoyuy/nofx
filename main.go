@@ -114,6 +114,13 @@ func main() {
 	// Create TraderManager
 	traderManager := manager.NewTraderManager()
 
+	// The copy-trade monitor starts before the traders so a strategy using
+	// copy-trade data has it from its first cycle.
+	server := api.NewServer(traderManager, st, cryptoService, cfg.APIServerPort)
+	copyTradeCtx, stopCopyTrade := context.WithCancel(context.Background())
+	defer stopCopyTrade()
+	server.StartCopyTrade(copyTradeCtx)
+
 	// Load all traders from database to memory (may auto-start traders with IsRunning=true)
 	if err := traderManager.LoadTradersFromStore(st); err != nil {
 		logger.Fatalf("❌ Failed to load traders: %v", err)
@@ -144,11 +151,6 @@ func main() {
 	}
 
 	// Start API server
-	server := api.NewServer(traderManager, st, cryptoService, cfg.APIServerPort)
-	copyTradeCtx, stopCopyTrade := context.WithCancel(context.Background())
-	defer stopCopyTrade()
-	server.StartCopyTrade(copyTradeCtx)
-
 	go func() {
 		if err := server.Start(); err != nil {
 			logger.Fatalf("❌ Failed to start API server: %v", err)

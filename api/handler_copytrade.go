@@ -50,6 +50,8 @@ func (s *Server) StartCopyTrade(ctx context.Context) {
 		logger.Warnf("copy-trade: saved proxy not used: %v", err)
 	}
 	s.copyTrade = m
+	// Before traders start: their first cycle reads this.
+	m.Load()
 	kernel.CopyTradeResolver = func() []kernel.CopyTradeCoin { return copyTradeCoins(m, time.Now()) }
 	go m.Run(ctx)
 }

@@ -81,6 +81,8 @@ type Monitor struct {
 
 	boardMu sync.Mutex
 	boards  map[string]cachedBoard
+
+	loadOnce sync.Once
 }
 
 type cachedBoard struct {
@@ -95,19 +97,31 @@ func NewMonitor(st *store.CopyTradeStore) *Monitor {
 
 // Run loads stored follows, then refreshes the most overdue trader one at a
 // time until ctx ends.
+// Load rebuilds every followed trader from stored fills, so readers have
+// data before the first poll. A snapshot counts as updated when its fills
+// were last synced; public positions return with the first poll.
+func (m *Monitor) Load() {
+	m.loadOnce.Do(func() {
+		follows, err := m.store.ListFollows()
+		if err != nil {
+			logger.Warnf("copy-trade: load follows: %v", err)
+		}
+		now := time.Now()
+		for i, f := range follows {
+			snap := &Snapshot{Follow: f, nextDue: now.Add(time.Duration(i) * 2 * time.Second)}
+			m.rebuild(snap, nil)
+			if f.FillsUntil > 0 {
+				snap.UpdatedAt = f.UpdatedAt
+			}
+			m.mu.Lock()
+			m.snaps[f.PortfolioID] = snap
+			m.mu.Unlock()
+		}
+	})
+}
+
 func (m *Monitor) Run(ctx context.Context) {
-	follows, err := m.store.ListFollows()
-	if err != nil {
-		logger.Warnf("copy-trade: load follows: %v", err)
-	}
-	now := time.Now()
-	for i, f := range follows {
-		snap := &Snapshot{Follow: f, nextDue: now.Add(time.Duration(i) * 2 * time.Second)}
-		m.rebuild(snap, nil)
-		m.mu.Lock()
-		m.snaps[f.PortfolioID] = snap
-		m.mu.Unlock()
-	}
+	m.Load()
 	go m.signalLoop(ctx)
 	go m.markLoop(ctx)
 	prune := time.NewTicker(time.Hour)

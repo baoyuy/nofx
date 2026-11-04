@@ -242,3 +242,20 @@ func TestRenamedFieldsShowAsFormatError(t *testing.T) {
 		t.Fatalf("an unknown ID is not a format error: %+v %v", d, err)
 	}
 }
+
+func TestLoadServesStoredDataBeforeTheFirstPoll(t *testing.T) {
+	m, fake := newTestMonitor(t)
+	ctx := context.Background()
+	fake.add(time.Now().Add(-time.Hour), "BUY", "LONG", 1, 100, 0)
+	if _, err := m.Follow(ctx, "42"); err != nil {
+		t.Fatal(err)
+	}
+	m.refresh(ctx, "42")
+	// A restart: a new monitor over the same store, not polled yet.
+	again := NewMonitor(m.store)
+	again.Load()
+	s, ok := again.Snapshot("42")
+	if !ok || s.UpdatedAt.IsZero() || time.Since(s.UpdatedAt) > time.Minute || len(s.Events) != 1 {
+		t.Fatalf("restored from stored fills, dated by the last sync: %+v", s)
+	}
+}
