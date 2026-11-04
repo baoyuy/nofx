@@ -28,7 +28,8 @@ var sampleCoins = []CopyTradeCoin{
 		Holders: []CopyTradeHolder{
 			{Trader: "黑石策略", Score: 80, Side: "long", Entry: 1090.3, Value: 1319, Leverage: 10, ReturnPct: -42.5, Priced: true,
 				OpenedAt: time.Now().Add(-26 * time.Hour).UnixMilli(), Trapped: false},
-			{Trader: "小小羊", Score: 86, Side: "long", Entry: 1150, Value: 2000, ReturnPct: -6.2, Priced: true, Trapped: true, HighFreq: true},
+			{Trader: "小小羊", Score: 86, Side: "long", Entry: 1150, Value: 2000, ReturnPct: -6.2, Priced: true, Trapped: true,
+				HighFreq: true, Style: "martingale"},
 		}},
 	{Symbol: "XRPUSDT", Direction: "long", Confidence: 70, Long: CopyTradeSide{Traders: 1, Value: 300}},
 	{Symbol: "BCHUSDT", Direction: "long", Confidence: 30, Long: CopyTradeSide{Traders: 3, Value: 800}},
@@ -82,13 +83,14 @@ func TestCopyTradePromptOnlyWhenAsked(t *testing.T) {
 	for _, want := range []string{"leaning LONG, confidence 55/100", "6 traders", "4 trapped", "avg entry 1100.00",
 		"Short: none", "黑石策略 (score 80) add long 241 USDT @ 1146.40", "1.5h ago",
 		"Holders (most credible first)", "黑石策略 (score 80) long 1319 USDT @ 1090.30, 10x, -42.5% of margin, held 26.0h",
-		"小小羊 (score 86) long 2000 USDT @ 1150.00, -6.2% price, held since before monitoring [trapped, high-frequency]",
+		"小小羊 (score 86) long 2000 USDT @ 1150.00, -6.2% price, held since before monitoring [trapped, high-frequency, averages into losses]",
 		"Price vs lead long avg entry: +5.0% (beyond their entry in their direction: chasing)"} {
 		if !strings.Contains(block, want) {
 			t.Fatalf("block missing %q:\n%s", want, block)
 		}
 	}
-	if sp := engine.BuildSystemPrompt(1000, ""); !strings.Contains(sp, "Never open a trade only because lead traders hold it") || strings.Contains(sp, "RULE (enforced") {
+	if sp := engine.BuildSystemPrompt(1000, ""); !strings.Contains(sp, "Never open a trade only because lead traders hold it") ||
+		!strings.Contains(sp, "their votes count 0.3") || strings.Contains(sp, "RULE (enforced") {
 		t.Fatal("system prompt explains the copy-trade block")
 	}
 }

@@ -152,3 +152,28 @@ func TestAveragingDownKeepsTheLossVisible(t *testing.T) {
 			healthFactor(got), healthFactor(plain))
 	}
 }
+
+// A trader who keeps adding to losses looks heavily invested; that size is a
+// symptom, so their votes count 0.3 and the other side can win.
+func TestMartingaleVotesCountLess(t *testing.T) {
+	now := time.Now()
+	// Three traders long, one short, each with the same size and score.
+	snaps := func(kind string) []Snapshot {
+		pos := func(side string, id string, style string) Snapshot {
+			p := Position{Symbol: "BTCUSDT", Side: side, Qty: 1, EntryPrice: 100, EntryValue: 100, Source: "inferred",
+				OpenedAt: now.Add(-48 * time.Hour).UnixMilli()}
+			return Snapshot{Follow: store.CopyTradeFollow{PortfolioID: id, MarginBalance: 1000},
+				Score: TraderScore{Score: 60}, Style: Style{Kind: style},
+				Positions: assessHealth([]Position{p}, map[string]float64{"BTCUSDT": 101}, 1000, now)}
+		}
+		return []Snapshot{pos("long", "a", kind), pos("long", "b", kind), pos("long", "c", kind),
+			pos("short", "d", StyleSwing)}
+	}
+	if got := Symbols(snaps(StyleSwing))[0]; got.Confidence.Direction != "long" {
+		t.Fatalf("three against one leans long: %+v", got.Confidence)
+	}
+	got := Symbols(snaps(StyleMartingale))[0]
+	if got.Confidence.Direction != "short" || got.Confidence.Score >= 60 {
+		t.Fatalf("martingale votes at 0.3 let the lone short win: %+v", got.Confidence)
+	}
+}

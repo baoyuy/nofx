@@ -16,6 +16,8 @@ import {
   sideClass,
   sideLabel,
   signedUsd,
+  styleHint,
+  styleLabel,
   usd,
 } from './format'
 
@@ -99,6 +101,18 @@ function TraderCard({
           {tr(language, '胜率', 'Win')} {t.win_rate.toFixed(0)}%
         </span>
         <ScoreBadge score={snap.score} language={language} />
+        {styleLabel(language, snap.style?.kind) ? (
+          <span
+            className={`rounded bg-nofx-bg-deeper px-1.5 text-[11px] ${
+              snap.style?.kind === 'martingale'
+                ? 'text-nofx-danger'
+                : 'text-nofx-text-muted'
+            }`}
+            title={styleHint(language, snap.style?.kind)}
+          >
+            {styleLabel(language, snap.style?.kind)}
+          </span>
+        ) : null}
         {snap.high_freq ? (
           <span
             className="rounded bg-nofx-bg-deeper px-1.5 text-[11px] text-nofx-text-muted"
@@ -289,13 +303,15 @@ export function FollowingTab({
   onSymbol: (symbol: string) => void
 }) {
   const [sort, setSort] = useState<'followed' | 'score' | 'roi'>('score')
+  // Filter by trading style: scalp | swing | long | martingale | few_samples.
+  const [style, setStyle] = useState('')
   const sorted = useMemo(() => {
-    const list = [...snaps]
+    const list = snaps.filter((s) => !style || s.style?.kind === style)
     if (sort === 'score')
       list.sort((a, b) => (b.score?.score || 0) - (a.score?.score || 0))
     if (sort === 'roi') list.sort((a, b) => b.trader.roi - a.trader.roi)
     return list
-  }, [snaps, sort])
+  }, [snaps, sort, style])
   if (!snaps.length) {
     return (
       <p className={`${ui.panel} py-10 text-center ${ui.muted}`}>
@@ -324,6 +340,23 @@ export function FollowingTab({
           </option>
           <option value="followed">
             {tr(language, '关注时间', 'Follow order')}
+          </option>
+        </select>
+        <select
+          className={`${ui.inputInline}`}
+          value={style}
+          onChange={(e) => setStyle(e.target.value)}
+          aria-label={tr(language, '风格', 'Style')}
+        >
+          <option value="">{tr(language, '全部风格', 'All styles')}</option>
+          <option value="scalp">{tr(language, '短线', 'Scalp')}</option>
+          <option value="swing">{tr(language, '波段', 'Swing')}</option>
+          <option value="long">{tr(language, '长线', 'Long')}</option>
+          <option value="martingale">
+            {tr(language, '摊平型', 'Averages down')}
+          </option>
+          <option value="few_samples">
+            {tr(language, '样本不足', 'Few samples')}
           </option>
         </select>
         <span className={ui.muted}>

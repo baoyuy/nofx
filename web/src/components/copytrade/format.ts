@@ -85,3 +85,60 @@ export function actionClass(action: TradeAction, side: TradeSide): string {
   if (action === 'open' || action === 'add') return sideClass(side)
   return 'text-nofx-text-muted'
 }
+
+/**
+ * How a lead trader trades, from 30 days of fills. An empty string when there
+ * is nothing worth showing (too few trades, or the portfolio hides its fills).
+ */
+export function styleLabel(language: string, kind?: string): string {
+  switch (kind) {
+    case 'scalp':
+      return tr(language, '短线', 'Scalp')
+    case 'swing':
+      return tr(language, '波段', 'Swing')
+    case 'long':
+      return tr(language, '长线', 'Long')
+    case 'martingale':
+      return tr(language, '摊平型', 'Averages down')
+    default:
+      return ''
+  }
+}
+
+/** The style tooltip: what the classification is based on. */
+export function styleHint(language: string, kind?: string): string {
+  switch (kind) {
+    case 'scalp':
+      return tr(
+        language,
+        '30 天里多数交易在 4 小时内平掉：仓位是抓拍，不是观点。',
+        'Most trades close within 4 hours over 30 days: a snapshot, not a view.'
+      )
+    case 'swing':
+      return tr(
+        language,
+        '30 天里多数交易持有 4 小时到 3 天。',
+        'Most trades are held 4 hours to 3 days over 30 days.'
+      )
+    case 'long':
+      return tr(
+        language,
+        '30 天里多数交易持有超过 3 天：方向有意义，但入场价已经旧了。',
+        'Most trades are held over 3 days: the direction matters, the entry is old.'
+      )
+    case 'martingale':
+      return tr(
+        language,
+        '亏损时反复加仓、多半亏损离场：仓位越重越可能是在摊平，票权只算 0.3。',
+        'Keeps adding to losing positions and mostly exits at a loss: a bigger position means averaging down, so its vote counts 0.3.'
+      )
+    case 'few_samples':
+      return tr(
+        language,
+        '30 天里完整交易不足 5 笔，看不出风格。',
+        'Fewer than 5 completed trades in 30 days: no style to tell.'
+      )
+    default:
+      return ''
+  }
+}

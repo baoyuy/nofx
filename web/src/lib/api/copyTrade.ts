@@ -128,6 +128,8 @@ export interface TraderSnapshot {
   orders_per_day: number
   /** 48+ actions a day: bots and grid traders, weighted down in confidence */
   high_freq: boolean
+  /** Holding-time style and whether they average into losses. */
+  style: TraderStyle
 }
 
 export interface FeedItem extends TradeEvent {
@@ -184,6 +186,16 @@ export interface TraderScore {
   reliability: number
 }
 
+/** How a lead trader trades, measured from 30 days of fills. */
+export interface TraderStyle {
+  kind: 'scalp' | 'swing' | 'long' | 'martingale' | 'few_samples' | 'unknown'
+  trades: number
+  median_hold_hours: number
+  adds_per_trade: number
+  adverse_add_share: number
+  loss_exit_share: number
+}
+
 export interface HitRate {
   band: 'high' | 'mid' | 'low' | 'all'
   horizon: '4h' | '24h'
@@ -207,8 +219,9 @@ export interface SymbolSummary {
 export interface Holder extends TraderPosition, TraderBrief {
   portfolio_id: string
   high_freq: boolean
+  /** scalp | swing | long | martingale | few_samples | unknown */
+  style?: string
 }
-
 export interface FeedQuery {
   portfolio_id?: string
   symbol?: string

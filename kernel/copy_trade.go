@@ -49,6 +49,9 @@ type CopyTradeHolder struct {
 	Trapped   bool
 	Fresh     bool
 	HighFreq  bool
+	// Style is how they trade: scalp, swing, long or martingale. Empty when
+	// there are too few trades to tell.
+	Style string
 }
 
 // CopyTradeCoin is what followed lead traders do on one coin.
@@ -198,6 +201,7 @@ Some coins carry a "Followed lead traders" block: what Binance copy-trading lead
 - Confidence (0-100) combines how much they agree, how credible their records are, and how many hold the coin. It is not a win probability.
 - "Trapped" traders sit on deep losses and may just be waiting to break even; "fresh" ones opened or added in the last 24 hours and reflect a current view. A trader who averaged down is judged from the first entry, so adding to a losing position still shows as trapped.
 - High-frequency traders (bots, grids) are weighted down; their positions churn.
+- "averages into losses" marks a trader who keeps adding to losing positions: their votes count 0.3, so their size says little about conviction. The tags "scalp" and "long" are holding-time styles: a scalp closes within hours (a snapshot, not a view), a long holds for weeks (directionally meaningful, but their entry is old).
 - "Price vs lead avg entry": far beyond their average in their direction means chasing a move they already made; near or better than their average is a better entry.
 - Lead traders hold for days. Judge their coins on the higher timeframes and give stops room for normal swings.
 - A line on a coin you hold saying the traders "closed or reduced recently", that no one holds it any more, or that they flipped means the side behind your position left. Treat it as an exit signal: tighten the stop or close unless your own read is clearly still valid.
@@ -308,6 +312,13 @@ func formatCopyTrade(c *CopyTradeCoin, cov *CopyTradeView, now time.Time, price 
 			}
 			if h.HighFreq {
 				tags = append(tags, "high-frequency")
+			}
+			switch h.Style {
+			case "martingale":
+				// Their size is a symptom, not conviction: votes count 0.3.
+				tags = append(tags, "averages into losses")
+			case "scalp", "long":
+				tags = append(tags, h.Style)
 			}
 			if len(tags) > 0 {
 				line += " [" + strings.Join(tags, ", ") + "]"

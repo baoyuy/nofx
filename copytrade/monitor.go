@@ -54,6 +54,8 @@ type Snapshot struct {
 	Error           string      `json:"error,omitempty"`
 	Hot             bool        `json:"hot"`
 	Score           TraderScore `json:"score"`
+	// Style is how they trade: holding time and whether they average down.
+	Style Style `json:"style"`
 	// OrdersPerDay counts actions (merged orders) in the last 24 hours;
 	// HighFreq marks bots and grid traders whose positions churn too fast to
 	// say much about direction.
@@ -346,8 +348,10 @@ func (m *Monitor) rebuild(s *Snapshot, live []LivePosition) {
 	}
 	s.Positions, s.Events = positions, events
 	s.Hot = len(positions) > 0 || time.Since(time.UnixMilli(s.Follow.LastTradeTime)) < hotWindow
+	s.Style = StyleOf(fills)
 	if s.Follow.Private {
-		s.Hot = false // nothing to poll
+		// Nothing to poll, and no fills to classify.
+		s.Style, s.Hot = Style{Kind: StyleUnknown}, false
 	}
 }
 

@@ -99,6 +99,8 @@ type Holder struct {
 	WinRate30   float64 `json:"win_rate_30d"`
 	Score       float64 `json:"score"`
 	HighFreq    bool    `json:"high_freq"`
+	// Style is how the holder trades: scalp, swing, long, martingale, ...
+	Style string `json:"style,omitempty"`
 }
 
 // Symbols sums positions per coin with each coin's direction confidence,
@@ -109,10 +111,13 @@ func Symbols(snaps []Snapshot) []SymbolSummary {
 	by := map[string]*SymbolSummary{}
 	qty := map[string]float64{}
 	balance := map[string]float64{}
+	// Traders who average into losses: their size says little, see style.go.
+	martingale := map[string]bool{}
 	// One vote per trader and side.
 	votes := map[string]map[string]*vote{}
 	for _, s := range snaps {
 		balance[s.Follow.PortfolioID] = s.Follow.MarginBalance
+		martingale[s.Follow.PortfolioID] = s.Style.Martingale()
 		counted := map[string]bool{}
 		gone := map[string]bool{}
 		hf := map[string]bool{}
@@ -175,6 +180,11 @@ func Symbols(snaps []Snapshot) []SymbolSummary {
 			if v.highFreq {
 				base *= highFreqWeight
 			}
+			// A trader who keeps adding to losses would otherwise look
+			// convinced: their position size is a symptom, not a signal.
+			if martingale[v.trader] {
+				base *= martingaleWeight
+			}
 			list = append(list, vote{trader: v.trader, side: v.side, score: v.score, base: base, weight: base * health})
 		}
 		s.Confidence = confidence(list)
@@ -202,11 +212,13 @@ func Holders(snaps []Snapshot, symbol string) []Holder {
 	var out []Holder
 	for _, s := range snaps {
 		for _, p := range s.Positions {
-			if p.Symbol == symbol {
-				f := s.Follow
-				out = append(out, Holder{Position: p, PortfolioID: f.PortfolioID, Nickname: f.Nickname, AvatarURL: f.AvatarURL,
-					ROI30: f.ROI, PnL30: f.PnL, WinRate30: f.WinRate, Score: s.Score.Score, HighFreq: s.HighFreq})
+			if p.Symbol != symbol {
+				continue
 			}
+			f := s.Follow
+			out = append(out, Holder{Position: p, PortfolioID: f.PortfolioID, Nickname: f.Nickname, AvatarURL: f.AvatarURL,
+				ROI30: f.ROI, PnL30: f.PnL, WinRate30: f.WinRate, Score: s.Score.Score, HighFreq: s.HighFreq,
+				Style: s.Style.Kind})
 		}
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].EntryValue > out[b].EntryValue })

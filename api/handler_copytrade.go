@@ -523,7 +523,7 @@ func copyTradeHolders(holders []copytrade.Holder, highFreq map[string]bool) []ke
 		}
 		out = append(out, kernel.CopyTradeHolder{Trader: h.Nickname, Score: h.Score, Side: h.Side, Entry: h.EntryPrice,
 			Value: h.EntryValue, Leverage: h.Leverage, ReturnPct: h.ReturnPct, Priced: h.Priced, OpenedAt: h.OpenedAt,
-			Trapped: h.Trapped, Fresh: h.Fresh, HighFreq: highFreq[h.PortfolioID]})
+			Trapped: h.Trapped, Fresh: h.Fresh, HighFreq: highFreq[h.PortfolioID], Style: h.Style})
 	}
 	return out
 }

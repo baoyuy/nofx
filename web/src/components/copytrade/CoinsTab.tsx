@@ -27,6 +27,8 @@ import {
   sideClass,
   sideLabel,
   signedUsd,
+  styleHint,
+  styleLabel,
   usd,
 } from './format'
 
@@ -430,6 +432,18 @@ function CoinDetail({
                             )}
                           >
                             {tr(language, '高频', 'HF')}
+                          </span>
+                        ) : null}
+                        {styleLabel(language, h.style) ? (
+                          <span
+                            className={`ml-1 rounded bg-nofx-bg-deeper px-1 text-[10px] ${
+                              h.style === 'martingale'
+                                ? 'text-nofx-danger'
+                                : 'text-nofx-text-muted'
+                            }`}
+                            title={styleHint(language, h.style)}
+                          >
+                            {styleLabel(language, h.style)}
                           </span>
                         ) : null}
                       </td>
