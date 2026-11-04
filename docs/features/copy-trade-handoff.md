@@ -99,8 +99,14 @@ gofmt 会对齐结构体字段；新字段加在结构体中间时注意对齐�
    docker compose exec -T nofx sh -c "sqlite3 -cmd '.timeout 20000' /app/data/data.db \".backup /app/data/data.db.bak-$stamp-before-<说明>\""
    ```
 2. 更新代码：`git fetch -q origin dev && git merge --ff-only origin/dev`
-3. 构建重启：`docker compose up -d --build > /root/nofx-build.log 2>&1`
+3. 构建重启。**只重建改过的那一半**，不要每次两个都建：
+   - 改了 Go（多数情况）：`docker compose up -d --build nofx`
+   - 只改了 `web/`：`docker compose up -d --build nofx-frontend`
+   - 两边都改了才跑 `docker compose up -d --build`
+
+   两个 Dockerfile 都用了 BuildKit 缓存挂载（`/go/pkg/mod`、`/root/.cache/go-build`、`/root/.npm`、`/var/cache/apk`）：第一次构建仍是全量（约 15–20 分钟，Go 是 CGO + TA-Lib），之后改代码只重编受影响的包，通常 1–3 分钟。**不要加 `--no-cache`**，那会把缓存全丢掉。
 4. 检查：`docker compose ps`，以及 `docker compose logs --since 3m nofx | grep -iE "copy-trade|error"`。
+5. 磁盘：构建缓存会长到几 GB，空间紧张时清旧的：`docker image prune -f`（只删悬空镜像，安全），或 `docker builder prune --keep-storage 8GB`。
 
 服务器的 `.env` 只有 root 能读，不要输出它的内容。
 

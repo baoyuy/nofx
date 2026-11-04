@@ -16,7 +16,8 @@ ARG TA_LIB_VERSION=0.4.0
 FROM alpine:${ALPINE_VERSION} AS ta-lib-builder
 ARG TA_LIB_VERSION
 
-RUN apk update && apk add --no-cache \
+RUN --mount=type=cache,target=/var/cache/apk \
+    apk update && apk add --no-cache \
     wget tar make gcc g++ musl-dev autoconf automake
 
 RUN wget https://prdownloads.sourceforge.net/ta-lib/ta-lib-${TA_LIB_VERSION}-src.tar.gz && \
@@ -38,16 +39,24 @@ RUN wget https://prdownloads.sourceforge.net/ta-lib/ta-lib-${TA_LIB_VERSION}-src
 # ──────────────────────────────────────────────────────────────
 FROM golang:${GO_VERSION} AS backend-builder
 
-RUN apk update && apk add --no-cache git make gcc g++ musl-dev
+RUN --mount=type=cache,target=/var/cache/apk \
+    apk update && apk add --no-cache git make gcc g++ musl-dev
 
 COPY --from=ta-lib-builder /usr/local /usr/local
 
 WORKDIR /app
+
+# The module cache and the compiler cache live on BuildKit cache mounts, so a
+# source change only recompiles the packages that changed. Without them every
+# build recompiled the whole project, CGO and TA-Lib included (~15 minutes).
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 COPY . .
-RUN CGO_ENABLED=1 GOOS=linux \
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=1 GOOS=linux \
     CGO_CFLAGS="-D_LARGEFILE64_SOURCE" \
     go build -trimpath -ldflags="-s -w" -o nofx .
 
