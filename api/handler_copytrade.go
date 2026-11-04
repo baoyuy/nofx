@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"nofx/copytrade"
+	"nofx/kernel"
 	"nofx/logger"
 	"nofx/trader/binance"
 )
@@ -48,7 +49,53 @@ func (s *Server) StartCopyTrade(ctx context.Context) {
 		logger.Warnf("copy-trade: saved proxy not used: %v", err)
 	}
 	s.copyTrade = m
+	kernel.CopyTradeResolver = func() []kernel.CopyTradeCoin { return copyTradeCoins(m, time.Now()) }
 	go m.Run(ctx)
+}
+
+// copyTradeFreshness drops traders not refreshed for this long from the AI's
+// view: a cold trader is refreshed every 15 minutes.
+const copyTradeFreshness = 30 * time.Minute
+
+// copyTradeCoins converts the monitor's coin summaries for the strategy
+// engine.
+func copyTradeCoins(m *copytrade.Monitor, now time.Time) []kernel.CopyTradeCoin {
+	snaps := copytrade.Fresh(m.Snapshots(), copyTradeFreshness, now)
+	scores := map[string]float64{}
+	for _, s := range snaps {
+		scores[s.Follow.PortfolioID] = s.Score.Score
+	}
+	recent := copytrade.RecentBySymbol(snaps, now.Add(-24*time.Hour).UnixMilli(), 6)
+	side := func(s copytrade.SideSummary) kernel.CopyTradeSide {
+		return kernel.CopyTradeSide{Traders: s.Traders, Value: s.Value, AvgEntry: s.AvgEntry, Trapped: s.Trapped, Fresh: s.Fresh}
+	}
+	sums := copytrade.Symbols(snaps)
+	// High-frequency holders per side, for the prompt.
+	hf := map[string]int{}
+	for _, s := range snaps {
+		if !s.HighFreq {
+			continue
+		}
+		seen := map[string]bool{}
+		for _, p := range s.Positions {
+			if k := p.Symbol + "|" + p.Side; !seen[k] {
+				seen[k] = true
+				hf[k]++
+			}
+		}
+	}
+	out := make([]kernel.CopyTradeCoin, 0, len(sums))
+	for _, c := range sums {
+		coin := kernel.CopyTradeCoin{Symbol: c.Symbol, Direction: c.Confidence.Direction, Confidence: c.Confidence.Score,
+			Long: side(c.Long), Short: side(c.Short), Liquidated: c.Liquidated}
+		coin.Long.HighFreq, coin.Short.HighFreq = hf[c.Symbol+"|long"], hf[c.Symbol+"|short"]
+		for _, e := range recent[c.Symbol] {
+			coin.Recent = append(coin.Recent, kernel.CopyTradeAction{Time: e.Time, Trader: e.Nickname, Score: scores[e.PortfolioID],
+				Side: e.Side, Action: e.Action, Value: e.Value, Price: e.Price, Realized: e.RealizedPnL})
+		}
+		out = append(out, coin)
+	}
+	return out
 }
 
 func (s *Server) loadCopyTradeProxy() (string, error) {

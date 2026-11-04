@@ -4,6 +4,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 )
 
 // FeedItem is one action of one followed trader.
@@ -209,5 +210,32 @@ func Holders(snaps []Snapshot, symbol string) []Holder {
 		}
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].EntryValue > out[b].EntryValue })
+	return out
+}
+
+// Fresh keeps the snapshots refreshed within maxAge, without private
+// portfolios (they never have data).
+func Fresh(snaps []Snapshot, maxAge time.Duration, now time.Time) []Snapshot {
+	out := make([]Snapshot, 0, len(snaps))
+	for _, s := range snaps {
+		if !s.Follow.Private && !s.UpdatedAt.IsZero() && now.Sub(s.UpdatedAt) <= maxAge {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// RecentBySymbol returns per coin the newest actions at or after sinceMs,
+// at most perSymbol each, newest first, high-frequency traders left out.
+func RecentBySymbol(snaps []Snapshot, sinceMs int64, perSymbol int) map[string][]FeedItem {
+	out := map[string][]FeedItem{}
+	for _, it := range Feed(snaps, FeedFilter{HideHighFreq: true, Limit: 500}) {
+		if it.Time < sinceMs {
+			break
+		}
+		if len(out[it.Symbol]) < perSymbol {
+			out[it.Symbol] = append(out[it.Symbol], it)
+		}
+	}
 	return out
 }

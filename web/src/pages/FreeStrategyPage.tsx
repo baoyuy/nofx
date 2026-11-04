@@ -38,6 +38,10 @@ import {
 } from '../lib/strategyForm'
 import { parseStrategyFile, strategyToJsonc } from '../lib/strategyFile'
 import {
+  CopyTradeContextToggle,
+  CopyTradeSourcePanel,
+} from '../components/strategy/CopyTradeSource'
+import {
   Field,
   NumberInput,
   RiskSummary,
@@ -705,11 +709,24 @@ export function FreeStrategyPage() {
                     ],
                     [
                       'horn',
-                      text(language, '布林喇叭口（实时）', 'Bollinger horn (live)'),
+                      text(
+                        language,
+                        '布林喇叭口（实时）',
+                        'Bollinger horn (live)'
+                      ),
                       text(
                         language,
                         `每轮重新筛选，取前 ${LIMITS.maxCoins} 个`,
                         `Re-screened every cycle, top ${LIMITS.maxCoins}`
+                      ),
+                    ],
+                    [
+                      'copy',
+                      text(language, '带单币种', "Lead traders' coins"),
+                      text(
+                        language,
+                        '关注的带单员正在做的币',
+                        'What your followed lead traders hold'
                       ),
                     ],
                   ] as const
@@ -731,7 +748,13 @@ export function FreeStrategyPage() {
                   </button>
                 ))}
               </div>
-              {usingHorn ? (
+              {form.coinSource === 'copy' ? (
+                <CopyTradeSourcePanel
+                  language={language}
+                  settings={form.copyTrade}
+                  onChange={(copyTrade) => patchForm({ copyTrade })}
+                />
+              ) : usingHorn ? (
                 <>
                   <Field
                     language={language}
@@ -742,7 +765,15 @@ export function FreeStrategyPage() {
                       `Before each cycle, the top 50 Binance gainers are re-screened for the Bollinger horn (squeeze then expansion) and the top ${LIMITS.maxCoins} by score go to the AI. Non-matching coins are never padded in, so there can be fewer. Held coins that drop off are still managed by the AI until closed.`
                     )}
                   >
-                    <div className="flex gap-2" role="radiogroup" aria-label={text(language, '布林线周期', 'Bollinger interval')}>
+                    <div
+                      className="flex gap-2"
+                      role="radiogroup"
+                      aria-label={text(
+                        language,
+                        '布林线周期',
+                        'Bollinger interval'
+                      )}
+                    >
                       {hornIntervals.map((iv) => (
                         <button
                           key={iv}
@@ -757,38 +788,63 @@ export function FreeStrategyPage() {
                       ))}
                     </div>
                   </Field>
-                  <div className="flex flex-wrap items-center gap-2" aria-live="polite">
+                  <div
+                    className="flex flex-wrap items-center gap-2"
+                    aria-live="polite"
+                  >
                     <span className="text-xs text-nofx-text-muted">
                       {text(language, '当前会交易：', 'Would trade now:')}
                     </span>
                     {hornError ? (
                       <span className="text-xs text-nofx-danger">
-                        {text(language, '筛选失败，请稍后再试。', 'Screening failed; try again later.')}
+                        {text(
+                          language,
+                          '筛选失败，请稍后再试。',
+                          'Screening failed; try again later.'
+                        )}
                       </span>
                     ) : !hornBoard ? (
                       <span className="text-xs text-nofx-text-muted">
-                        {text(language, '正在筛选币安合约…', 'Screening Binance futures…')}
+                        {text(
+                          language,
+                          '正在筛选币安合约…',
+                          'Screening Binance futures…'
+                        )}
                       </span>
                     ) : hornMatches.length === 0 ? (
                       <span className="text-xs text-nofx-text-muted">
-                        {text(language, '现在没有符合喇叭口形态的币，本轮只会管理已有持仓。', 'No coin shows the horn right now; the cycle only manages open positions.')}
+                        {text(
+                          language,
+                          '现在没有符合喇叭口形态的币，本轮只会管理已有持仓。',
+                          'No coin shows the horn right now; the cycle only manages open positions.'
+                        )}
                       </span>
                     ) : (
                       hornMatches.map((r) => {
                         const onBoard = hornOnBoard(r, language === 'zh')
                         return (
-                        <span
-                          key={r.symbol}
-                          className="rounded-md bg-nofx-gold/10 px-2 py-1 text-xs font-medium text-nofx-gold"
-                          title={text(language, `得分 ${r.score.toFixed(0)}`, `score ${r.score.toFixed(0)}`)}
-                        >
-                          {r.symbol}
-                          {onBoard.label ? (
-                            <span className={onBoard.isNew ? 'ml-1 font-semibold text-nofx-success' : 'ml-1 font-normal text-nofx-text-muted'}>
-                              {onBoard.label}
-                            </span>
-                          ) : null}
-                        </span>
+                          <span
+                            key={r.symbol}
+                            className="rounded-md bg-nofx-gold/10 px-2 py-1 text-xs font-medium text-nofx-gold"
+                            title={text(
+                              language,
+                              `得分 ${r.score.toFixed(0)}`,
+                              `score ${r.score.toFixed(0)}`
+                            )}
+                          >
+                            {r.symbol}
+                            {onBoard.label ? (
+                              <span
+                                className={
+                                  onBoard.isNew
+                                    ? 'ml-1 font-semibold text-nofx-success'
+                                    : 'ml-1 font-normal text-nofx-text-muted'
+                                }
+                              >
+                                {onBoard.label}
+                              </span>
+                            ) : null}
+                          </span>
                         )
                       })
                     )}
@@ -797,7 +853,11 @@ export function FreeStrategyPage() {
                       onClick={() => navigate(ROUTES.coinPool)}
                       className="text-xs text-nofx-gold underline"
                     >
-                      {text(language, '在币池页查看完整筛选', 'See the full screen on the Coin pool page')}
+                      {text(
+                        language,
+                        '在币池页查看完整筛选',
+                        'See the full screen on the Coin pool page'
+                      )}
                     </button>
                   </div>
                 </>
@@ -919,6 +979,15 @@ export function FreeStrategyPage() {
                   </div>
                 </>
               )}
+              {form.coinSource !== 'copy' ? (
+                <CopyTradeContextToggle
+                  language={language}
+                  checked={Boolean(form.copyTradeContext)}
+                  onChange={(copyTradeContext) =>
+                    patchForm({ copyTradeContext })
+                  }
+                />
+              ) : null}
             </Section>
 
             <Section

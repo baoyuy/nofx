@@ -699,6 +699,7 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 		NetFlowRankingData: netFlowRankingData,
 		PriceRankingData:   priceRankingData,
 	}
+	kernel.EnrichCopyTradeData(testContext, engine)
 
 	// Build System Prompt
 	systemPrompt := engine.BuildSystemPrompt(1000.0, req.PromptVariant)

@@ -322,6 +322,15 @@ func (c *StrategyConfig) NormalizeProductSchema() {
 		if c.CoinSource.VergexChain == "" {
 			c.CoinSource.VergexChain = "hyperliquid"
 		}
+	case "copy_trade":
+		c.CoinSource.UseAI500 = false
+		c.CoinSource.UseOITop = false
+		c.CoinSource.UseOILow = false
+		c.CoinSource.UseHyperAll = false
+		c.CoinSource.UseHyperMain = false
+		c.CoinSource.CoinPoolID = ""
+		c.CoinSource.CopyTradeContext = true
+		c.CoinSource.NormalizeCopyTrade()
 	case "mixed":
 		// Keep the user's explicit per-source flags.
 	default:
@@ -376,6 +385,8 @@ func normalizeCoinSourceType(value string) string {
 		return "hyper_all"
 	case strings.Contains(compact, "hypermain"):
 		return "hyper_main"
+	case strings.Contains(compact, "copytrad") || strings.Contains(value, "lead trader"):
+		return "copy_trade"
 	case strings.Contains(value, "static") || strings.Contains(value, "fixed"):
 		return "static"
 	default:
@@ -877,6 +888,17 @@ type CoinSourceConfig struct {
 	// Binance top gainers are re-screened every cycle on this interval
 	// (15m | 1h | 4h, default 1h) and the top HornCoinLimit matches are traded.
 	HornInterval string `json:"horn_interval,omitempty"`
+	// Copy-trade source (source_type = "copy_trade"): coins followed lead
+	// traders hold, ranked by direction confidence. Direction: both | long |
+	// short (the side the followed traders lean). 0 values take the defaults.
+	CopyTradeMinConfidence float64 `json:"copy_trade_min_confidence,omitempty"`
+	CopyTradeDirection     string  `json:"copy_trade_direction,omitempty"`
+	CopyTradeLimit         int     `json:"copy_trade_limit,omitempty"`
+	CopyTradeMinTraders    int     `json:"copy_trade_min_traders,omitempty"`
+	// CopyTradeContext shows the AI what followed lead traders do on each
+	// candidate and held coin, whatever the coin source. Always on for the
+	// copy_trade source.
+	CopyTradeContext bool `json:"copy_trade_context,omitempty"`
 	// static coin list (used when source_type = "static")
 	StaticCoins []string `json:"static_coins,omitempty"`
 	// excluded coins list (filtered out from all sources)
@@ -1601,6 +1623,8 @@ func (c *StrategyConfig) getEffectiveCoinCount() int {
 		count = len(c.CoinSource.StaticCoins)
 	case "bollinger_horn":
 		count = HornCoinLimit
+	case "copy_trade":
+		count = c.CoinSource.CopyTradeLimit
 	case "ai500":
 		count = c.CoinSource.AI500Limit
 	case "oi_top":
@@ -1634,4 +1658,36 @@ func (c *StrategyConfig) getEffectiveTimeframeCount() int {
 		count++
 	}
 	return count
+}
+
+// Copy-trade source defaults.
+const (
+	DefaultCopyTradeMinConfidence = 40
+	DefaultCopyTradeLimit         = 5
+	DefaultCopyTradeMinTraders    = 2
+)
+
+// NormalizeCopyTrade fills the copy-trade source defaults and keeps its
+// settings in range.
+func (c *CoinSourceConfig) NormalizeCopyTrade() {
+	switch c.CopyTradeDirection {
+	case "long", "short":
+	default:
+		c.CopyTradeDirection = "both"
+	}
+	if c.CopyTradeMinConfidence <= 0 || c.CopyTradeMinConfidence > 100 {
+		c.CopyTradeMinConfidence = DefaultCopyTradeMinConfidence
+	}
+	if c.CopyTradeLimit <= 0 {
+		c.CopyTradeLimit = DefaultCopyTradeLimit
+	}
+	if c.CopyTradeLimit > MaxCandidateCoins {
+		c.CopyTradeLimit = MaxCandidateCoins
+	}
+	if c.CopyTradeMinTraders <= 0 {
+		c.CopyTradeMinTraders = DefaultCopyTradeMinTraders
+	}
+	if c.CopyTradeMinTraders > 20 {
+		c.CopyTradeMinTraders = 20
+	}
 }

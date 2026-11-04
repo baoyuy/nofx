@@ -85,7 +85,13 @@ interface TraderConfigModalProps {
 
 // coinSourceLabel names a strategy's coin source for the summary card.
 function coinSourceLabel(
-  source: { source_type: string; static_coins?: string[]; horn_interval?: string },
+  source: {
+    source_type: string
+    static_coins?: string[]
+    horn_interval?: string
+    copy_trade_min_confidence?: number
+    copy_trade_limit?: number
+  },
   language: string
 ): string {
   const zh = language === 'zh'
@@ -100,6 +106,10 @@ function coinSourceLabel(
       return zh
         ? `布林喇叭口（实时，${source.horn_interval || '1h'}）`
         : `Bollinger horn (live, ${source.horn_interval || '1h'})`
+    case 'copy_trade':
+      return zh
+        ? `带单币种（置信度 ${source.copy_trade_min_confidence || 40} 以上，最多 ${source.copy_trade_limit || 5} 个）`
+        : `Lead traders' coins (confidence ${source.copy_trade_min_confidence || 40}+, up to ${source.copy_trade_limit || 5})`
     case 'vergex_signal':
       return zh
         ? 'Vergex 信号榜（付费，已停用）'

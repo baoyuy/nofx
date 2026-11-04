@@ -113,6 +113,8 @@ type Context struct {
 	BTCETHLeverage     int                                `json:"-"`
 	AltcoinLeverage    int                                `json:"-"`
 	Timeframes         []string                           `json:"-"`
+	// Followed lead traders' view per coin, when the strategy uses it.
+	CopyTradeMap map[string]*CopyTradeCoin `json:"-"`
 }
 
 // Decision AI trading decision
@@ -190,7 +192,13 @@ type StrategyEngine struct {
 	nofxosClient       *nofxos.Client
 	vergexClient       *vergex.Client
 	vergexRankingCache map[string]*vergex.DirectionChangeItem
+	// exchange the strategy trades on; "" = unknown (strategy previews).
+	exchange string
 }
+
+// SetExchange tells the engine which exchange its trader uses, so sources
+// can leave out coins that exchange cannot trade.
+func (e *StrategyEngine) SetExchange(exchange string) { e.exchange = strings.ToLower(exchange) }
 
 // NewStrategyEngine creates strategy execution engine.
 // Paid market data always goes through Claw402. If no key is passed, resolve
@@ -296,6 +304,9 @@ func (e *StrategyEngine) GetCandidateCoins() ([]CandidateCoin, error) {
 
 	case "bollinger_horn":
 		return e.filterExcludedCoins(hornCandidates(coinSource)), nil
+
+	case "copy_trade":
+		return e.filterExcludedCoins(copyTradeCandidates(coinSource, e.tradesStocks())), nil
 
 	case "static":
 		for _, symbol := range coinSource.StaticCoins {

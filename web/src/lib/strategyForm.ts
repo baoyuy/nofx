@@ -25,6 +25,26 @@ export const DEFAULT_MIN_OI_VALUE = 15
 export const hornIntervals = ['15m', '1h', '4h'] as const
 export type HornInterval = (typeof hornIntervals)[number]
 export const DEFAULT_HORN_INTERVAL: HornInterval = '1h'
+
+export type CopyDirection = 'both' | 'long' | 'short'
+export interface CopyTradeSettings {
+  minConfidence: number
+  direction: CopyDirection
+  limit: number
+  minTraders: number
+}
+// Same defaults and ranges as the backend (store.NormalizeCopyTrade).
+export const DEFAULT_COPY_TRADE: CopyTradeSettings = {
+  minConfidence: 40,
+  direction: 'both',
+  limit: 5,
+  minTraders: 2,
+}
+export const COPY_TRADE_LIMITS = {
+  minConfidence: { min: 1, max: 100 },
+  limit: { min: 1, max: 10 },
+  minTraders: { min: 1, max: 20 },
+}
 const toHornInterval = (v?: string): HornInterval =>
   (hornIntervals as readonly string[]).includes(v || '')
     ? (v as HornInterval)
@@ -104,7 +124,11 @@ export interface FreeForm {
   description: string
   // "pool" trades a saved coin pool from the Coin pool page; "horn"
   // re-screens Binance for the Bollinger horn every cycle.
-  coinSource?: 'static' | 'pool' | 'horn'
+  coinSource?: 'static' | 'pool' | 'horn' | 'copy'
+  // Settings of the "copy" source (coins followed lead traders hold).
+  copyTrade?: CopyTradeSettings
+  // Show followed lead traders' positions to the AI with any source.
+  copyTradeContext?: boolean
   coinPoolID?: string
   hornInterval?: HornInterval
   // Snapshot of the pool's coins, sent with the strategy.
@@ -192,9 +216,15 @@ export function usesPaidSource(config?: StrategyConfig | null): boolean {
   if (!ai) return false
   const source = ai.coin_source
   return (
-    !['static', 'coin_pool', 'bollinger_horn', 'hyper_all', 'hyper_main', 'hyper_rank'].includes(
-      source.source_type
-    ) ||
+    ![
+      'static',
+      'coin_pool',
+      'bollinger_horn',
+      'copy_trade',
+      'hyper_all',
+      'hyper_main',
+      'hyper_rank',
+    ].includes(source.source_type) ||
     source.use_ai500 ||
     source.use_oi_top ||
     source.use_oi_low
@@ -212,6 +242,8 @@ export function formFromStrategy(strategy: Strategy): FreeForm {
   const pool =
     ai?.coin_source.source_type === 'coin_pool' && ai.coin_source.coin_pool_id
   const horn = ai?.coin_source.source_type === 'bollinger_horn'
+  const copy = ai?.coin_source.source_type === 'copy_trade'
+  const src = ai?.coin_source
   const timeframe = timeframeOptions.includes(
     ind?.klines.primary_timeframe || ''
   )
@@ -226,7 +258,30 @@ export function formFromStrategy(strategy: Strategy): FreeForm {
   return {
     name: strategy.name,
     description: strategy.description || '',
-    coinSource: horn ? 'horn' : pool ? 'pool' : 'static',
+    coinSource: copy ? 'copy' : horn ? 'horn' : pool ? 'pool' : 'static',
+    copyTrade: {
+      minConfidence: clampNumber(
+        src?.copy_trade_min_confidence,
+        COPY_TRADE_LIMITS.minConfidence,
+        DEFAULT_COPY_TRADE.minConfidence
+      ),
+      direction: (['both', 'long', 'short'] as const).includes(
+        src?.copy_trade_direction as CopyDirection
+      )
+        ? (src!.copy_trade_direction as CopyDirection)
+        : DEFAULT_COPY_TRADE.direction,
+      limit: clampNumber(
+        src?.copy_trade_limit,
+        COPY_TRADE_LIMITS.limit,
+        DEFAULT_COPY_TRADE.limit
+      ),
+      minTraders: clampNumber(
+        src?.copy_trade_min_traders,
+        COPY_TRADE_LIMITS.minTraders,
+        DEFAULT_COPY_TRADE.minTraders
+      ),
+    },
+    copyTradeContext: Boolean(src?.copy_trade_context),
     hornInterval: toHornInterval(ai?.coin_source.horn_interval),
     coinPoolID: pool ? ai!.coin_source.coin_pool_id : '',
     poolCoins: pool ? coins : [],
@@ -314,6 +369,8 @@ export function configFromForm(
   const leverage = form.leverage
   const pool = form.coinSource === 'pool' && Boolean(form.coinPoolID)
   const horn = form.coinSource === 'horn'
+  const copy = form.coinSource === 'copy'
+  const copyTrade = { ...DEFAULT_COPY_TRADE, ...(form.copyTrade || {}) }
   const extra = (form.extraTimeframes || [])
     .filter((tf) => tf !== form.timeframe)
     .slice(0, LIMITS.maxExtraTimeframes)
@@ -333,16 +390,32 @@ export function configFromForm(
     language,
     ai_config: {
       coin_source: {
-        source_type: horn ? 'bollinger_horn' : pool ? 'coin_pool' : 'static',
+        source_type: copy
+          ? 'copy_trade'
+          : horn
+            ? 'bollinger_horn'
+            : pool
+              ? 'coin_pool'
+              : 'static',
         coin_pool_id: pool ? form.coinPoolID : '',
         horn_interval: horn ? toHornInterval(form.hornInterval) : undefined,
         // For a pool the backend refreshes this snapshot from the pool; the
         // horn source picks its coins live every cycle.
-        static_coins: horn
-          ? []
-          : pool
-            ? (form.poolCoins || []).slice(0, LIMITS.maxCoins)
-            : parseCoins(form.coinsInput),
+        ...(copy
+          ? {
+              copy_trade_min_confidence: copyTrade.minConfidence,
+              copy_trade_direction: copyTrade.direction,
+              copy_trade_limit: copyTrade.limit,
+              copy_trade_min_traders: copyTrade.minTraders,
+            }
+          : {}),
+        copy_trade_context: copy || Boolean(form.copyTradeContext),
+        static_coins:
+          horn || copy
+            ? []
+            : pool
+              ? (form.poolCoins || []).slice(0, LIMITS.maxCoins)
+              : parseCoins(form.coinsInput),
         excluded_coins: ai?.coin_source.excluded_coins || [],
         use_ai500: false,
         use_oi_top: false,

@@ -116,6 +116,10 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 		sb.WriteString(fmt.Sprintf("\nFeel free to use any effective analysis method, but **confidence ≥ %d** is required to open positions; avoid low-quality behaviors such as single-indicator entries, contradictory signals, sideways chop, or re-entering immediately after a close.\n\n", riskControl.MinConfidence))
 	}
 
+	if usesCopyTradeContext(e.config.CoinSource) {
+		sb.WriteString(copyTradeSystemNote)
+	}
+
 	// 6. Decision process (editable)
 	decisionProcess := englishOnlyPromptSection(promptSections.DecisionProcess)
 	if decisionProcess != "" {
@@ -894,6 +898,7 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 		if data := vergexDataForSymbol(ctx, coin.Symbol); data != nil {
 			sb.WriteString(e.formatVergexData(data))
 		}
+		sb.WriteString(formatCopyTrade(copyTradeFor(ctx, coin.Symbol), time.Now()))
 		sb.WriteString("\n")
 	}
 	sb.WriteString("\n")
@@ -966,6 +971,7 @@ func (e *StrategyEngine) formatPositionInfo(index int, pos PositionInfo, ctx *Co
 	if data := vergexDataForSymbol(ctx, pos.Symbol); data != nil {
 		sb.WriteString(e.formatVergexData(data))
 	}
+	sb.WriteString(formatCopyTrade(copyTradeFor(ctx, pos.Symbol), time.Now()))
 
 	return sb.String()
 }
@@ -1026,6 +1032,8 @@ func (e *StrategyEngine) formatCoinSourceTag(sources []string) string {
 			return " (Vergex Signal)"
 		case "bollinger_horn":
 			return " (Bollinger horn: squeeze then expansion)"
+		case "copy_trade":
+			return " (Followed lead traders)"
 		}
 		if strings.HasPrefix(sources[0], "hyper_rank") {
 			return " (Hyperliquid Dynamic Rank)"
