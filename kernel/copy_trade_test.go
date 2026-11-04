@@ -11,8 +11,13 @@ import (
 
 func withCopyTrade(t *testing.T, coins []CopyTradeCoin) {
 	t.Helper()
+	withCopyTradeView(t, CopyTradeView{Coins: coins, Fresh: 3, Total: 3})
+}
+
+func withCopyTradeView(t *testing.T, view CopyTradeView) {
+	t.Helper()
 	prev := CopyTradeResolver
-	CopyTradeResolver = func() []CopyTradeCoin { return coins }
+	CopyTradeResolver = func() CopyTradeView { return view }
 	t.Cleanup(func() { CopyTradeResolver = prev })
 }
 
@@ -73,7 +78,7 @@ func TestCopyTradePromptOnlyWhenAsked(t *testing.T) {
 	cfg.CoinSource.CopyTradeContext = true
 	engine = NewStrategyEngine(&cfg)
 	enrichCopyTradeData(ctx, engine)
-	block := formatCopyTrade(copyTradeFor(ctx, "SNDK"), time.Now(), 1155, "")
+	block := formatCopyTrade(copyTradeFor(ctx, "SNDK"), ctx.CopyTradeCoverage, time.Now(), 1155, "")
 	for _, want := range []string{"leaning LONG, confidence 55/100", "6 traders", "4 trapped", "avg entry 1100.00",
 		"Short: none", "黑石策略 (score 80) add long 241 USDT @ 1146.40", "1.5h ago",
 		"Holders (most credible first)", "黑石策略 (score 80) long 1319 USDT @ 1090.30, 10x, -42.5% of margin, held 26.0h",
@@ -187,7 +192,8 @@ func TestCopyTradeExitAlerts(t *testing.T) {
 		{"nobody left", &CopyTradeCoin{Direction: "neutral", Recent: []CopyTradeAction{closed}}, "long", "no one holds long any more (1 closed recently)"},
 		{"flipped", &CopyTradeCoin{Direction: "short", Short: CopyTradeSide{Traders: 2}}, "long", "now hold short (flipped against your position)"},
 		{"leaning against", &CopyTradeCoin{Direction: "short", Long: CopyTradeSide{Traders: 1}, Short: CopyTradeSide{Traders: 3}}, "long", "they now lean short, against your long position"},
-		{"some exits", &CopyTradeCoin{Direction: "long", Long: CopyTradeSide{Traders: 2}, Recent: []CopyTradeAction{closed}}, "long", "1 of the recent long actions were closes or reductions"},
+		{"half the side left", &CopyTradeCoin{Direction: "long", Long: CopyTradeSide{Traders: 2}, Recent: []CopyTradeAction{closed}}, "long", "1 of the 3 traders on the long side closed or reduced recently"},
+		{"one of many left", &CopyTradeCoin{Direction: "long", Long: CopyTradeSide{Traders: 8}, Recent: []CopyTradeAction{closed}}, "long", ""},
 		{"still with you", &CopyTradeCoin{Direction: "long", Long: CopyTradeSide{Traders: 2}}, "long", ""},
 		{"not held", &CopyTradeCoin{Direction: "neutral", Recent: []CopyTradeAction{closed}}, "", ""},
 	}
@@ -197,10 +203,54 @@ func TestCopyTradeExitAlerts(t *testing.T) {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
 		}
 	}
-	if got := formatCopyTrade(nil, now, 0, "short"); !strings.Contains(got, "none of the followed lead traders") {
+	if got := formatCopyTrade(nil, nil, now, 0, "short"); !strings.Contains(got, "none of the followed lead traders") {
 		t.Errorf("held coin nobody traded: %q", got)
 	}
 	if got := copyTradeVsAvg(&CopyTradeCoin{Direction: "short", Short: CopyTradeSide{AvgEntry: 100}}, 104); !strings.Contains(got, "+4.0% (better than their entry, they are under water)") {
 		t.Errorf("short side above average: %q", got)
+	}
+}
+
+// A stale or partly stale monitor must not read as "nobody holds the coin":
+// that would tell the model to close a position nobody really left.
+func TestCopyTradeStaleDataIsNotAnExitSignal(t *testing.T) {
+	now := time.Now()
+	gap := &CopyTradeView{Fresh: 0, Total: 4, Reason: "Binance is rate limiting requests"}
+	if got := formatCopyTrade(nil, gap, now, 0, "long"); !strings.Contains(got, "unavailable right now (Binance is rate limiting requests)") ||
+		strings.Contains(got, "none of the followed lead traders") {
+		t.Errorf("no data at all: %q", got)
+	}
+	// No position at stake: stay quiet instead of adding noise to every coin.
+	if got := formatCopyTrade(nil, gap, now, 0, ""); got != "" {
+		t.Errorf("candidate coin without data: %q", got)
+	}
+	partial := &CopyTradeView{Fresh: 2, Total: 5, Reason: "no refresh in the last 30 minutes"}
+	if got := formatCopyTrade(nil, partial, now, 0, "long"); !strings.Contains(got, "2 of 5 followed traders") ||
+		strings.Contains(got, "none of the followed lead traders") {
+		t.Errorf("partly stale: %q", got)
+	}
+	// The coin is present but the leave signals come from incomplete data.
+	coin := &CopyTradeCoin{Direction: "long", Long: CopyTradeSide{Traders: 1, AvgEntry: 100},
+		Recent: []CopyTradeAction{{Time: now.UnixMilli(), Trader: "A", Side: "long", Action: "close", Value: 10, Price: 100}}}
+	if got := formatCopyTrade(coin, partial, now, 100, "long"); strings.Contains(got, "closed or reduced recently") {
+		t.Errorf("no exit alert while data is incomplete: %q", got)
+	} else if !strings.Contains(got, "only 2 of 5 followed traders have fresh data") {
+		t.Errorf("the gap is stated: %q", got)
+	}
+	whole := &CopyTradeView{Fresh: 5, Total: 5}
+	if got := formatCopyTrade(nil, whole, now, 0, "long"); !strings.Contains(got, "none of the followed lead traders") {
+		t.Errorf("complete data keeps the exit signal: %q", got)
+	}
+	if got := formatCopyTrade(nil, &CopyTradeView{Reason: "no public lead trader is followed"}, now, 0, "long"); got != "" {
+		t.Errorf("following nobody is not a data gap: %q", got)
+	}
+}
+
+// No fresh coins means no candidates, and the prompt says why instead of
+// silently picking nothing.
+func TestCopyTradeCandidatesNeedFreshData(t *testing.T) {
+	withCopyTradeView(t, CopyTradeView{Fresh: 0, Total: 3, Reason: "Binance is rate limiting requests"})
+	if got := copyTradeCandidates(store.CoinSourceConfig{SourceType: "copy_trade"}); len(got) != 0 {
+		t.Fatalf("stale data must not pick coins: %+v", got)
 	}
 }

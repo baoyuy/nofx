@@ -259,3 +259,31 @@ func TestLoadServesStoredDataBeforeTheFirstPoll(t *testing.T) {
 		t.Fatalf("restored from stored fills, dated by the last sync: %+v", s)
 	}
 }
+
+// Binance showing a bigger position than the stored fills explain: the trader
+// held it before monitoring, so the first fill is an add, not an open, and the
+// holding time stays unknown instead of looking one hour old.
+func TestRebuildTreatsOlderPositionsAsAdds(t *testing.T) {
+	m, _ := newTestMonitor(t)
+	seen := time.Now().Add(-time.Hour).UnixMilli()
+	if err := m.store.ReplaceFills("9", 0, []store.CopyTradeFill{
+		{PortfolioID: "9", Time: seen, Symbol: "BTCUSDT", Side: "BUY", PositionSide: "BOTH", Qty: 1, Price: 100},
+	}, time.Now().UnixMilli()); err != nil {
+		t.Fatal(err)
+	}
+	snap := &Snapshot{Follow: store.CopyTradeFollow{PortfolioID: "9", PositionShow: true}, nextDue: time.Now()}
+	live := []LivePosition{{Symbol: "BTCUSDT", PositionSide: "BOTH", PositionAmount: 3, EntryPrice: 95, MarkPrice: 96, Leverage: 10}}
+	m.rebuild(snap, live)
+	if len(snap.Positions) != 1 {
+		t.Fatalf("positions = %+v", snap.Positions)
+	}
+	p := snap.Positions[0]
+	if !p.PreExisting || p.OpenedAt != 0 || !approx(p.FirstEntry, 100) {
+		t.Fatalf("position held before the fills: %+v", p)
+	}
+	for _, e := range snap.Events {
+		if e.Action == "open" {
+			t.Fatalf("the fill adds to a position seen earlier: %+v", snap.Events)
+		}
+	}
+}

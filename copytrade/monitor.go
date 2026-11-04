@@ -323,9 +323,17 @@ func (m *Monitor) rebuild(s *Snapshot, live []LivePosition) {
 		fills[i] = Fill{Time: f.Time, Seq: f.Seq, Symbol: f.Symbol, Side: f.Side, PositionSide: f.PositionSide,
 			Qty: f.Qty, Price: f.Price, Fee: f.Fee, RealizedPnL: f.RealizedPnL}
 	}
+	public := s.Follow.PositionShow && live != nil
 	positions, events := Replay(fills)
+	if public {
+		// Binance shows a bigger position than the fills explain: it was
+		// opened before the stored fills, so replay again knowing that.
+		if pre := preOpenedBooks(live, positions); len(pre) > 0 {
+			positions, events = ReplayKnown(fills, pre)
+		}
+	}
 	s.PositionsSource = "inferred"
-	if s.Follow.PositionShow && live != nil {
+	if public {
 		positions, s.PositionsSource = LivePositions(live, positions), "public"
 	}
 	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {

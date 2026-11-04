@@ -52,7 +52,7 @@ func (s *Server) StartCopyTrade(ctx context.Context) {
 	s.copyTrade = m
 	// Before traders start: their first cycle reads this.
 	m.Load()
-	kernel.CopyTradeResolver = func() []kernel.CopyTradeCoin { return copyTradeCoins(m, time.Now()) }
+	kernel.CopyTradeResolver = func() kernel.CopyTradeView { return copyTradeView(m, time.Now()) }
 	go m.Run(ctx)
 }
 
@@ -60,10 +60,19 @@ func (s *Server) StartCopyTrade(ctx context.Context) {
 // view: a cold trader is refreshed every 15 minutes.
 const copyTradeFreshness = 30 * time.Minute
 
-// copyTradeCoins converts the monitor's coin summaries for the strategy
-// engine.
-func copyTradeCoins(m *copytrade.Monitor, now time.Time) []kernel.CopyTradeCoin {
-	snaps := copytrade.Fresh(m.Snapshots(), copyTradeFreshness, now)
+// copyTradeView converts the monitor's coin summaries for the strategy
+// engine, with how much of the picture is fresh.
+func copyTradeView(m *copytrade.Monitor, now time.Time) kernel.CopyTradeView {
+	all := m.Snapshots()
+	snaps := copytrade.Fresh(all, copyTradeFreshness, now)
+	view := kernel.CopyTradeView{Fresh: len(snaps)}
+	// Private portfolios never have data: they cannot be missing any.
+	for _, s := range all {
+		if !s.Follow.Private {
+			view.Total++
+		}
+	}
+	view.Reason = copyTradeGapReason(m, view)
 	scores := map[string]float64{}
 	for _, s := range snaps {
 		scores[s.Follow.PortfolioID] = s.Score.Score
@@ -120,7 +129,25 @@ func copyTradeCoins(m *copytrade.Monitor, now time.Time) []kernel.CopyTradeCoin 
 		}
 		out = append(out, coin)
 	}
-	return out
+	view.Coins = out
+	return view
+}
+
+// copyTradeGapReason explains stale copy-trade data for the prompt, or "" when
+// everything the monitor follows is fresh.
+func copyTradeGapReason(m *copytrade.Monitor, view kernel.CopyTradeView) string {
+	if view.Total == 0 {
+		return "no public lead trader is followed"
+	}
+	if view.Fresh >= view.Total {
+		return ""
+	}
+	if st := m.Client.Status(); st.Paused {
+		return "Binance is rate limiting requests"
+	} else if st.LastError != "" {
+		return st.LastError
+	}
+	return "no refresh in the last 30 minutes"
 }
 
 func (s *Server) loadCopyTradeProxy() (string, error) {

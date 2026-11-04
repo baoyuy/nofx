@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -64,10 +65,44 @@ type CopyTradeCoin struct {
 	Holders []CopyTradeHolder
 }
 
-// CopyTradeResolver returns every coin followed lead traders hold, with
-// fresh data only. It is set at startup by the copy-trade monitor; nil means
-// the monitor is not running.
-var CopyTradeResolver func() []CopyTradeCoin
+// CopyTradeView is what followed lead traders currently do, with how much of
+// the picture is fresh. A rate-limited or partly stale monitor must not read
+// as "nobody holds this coin".
+type CopyTradeView struct {
+	Coins []CopyTradeCoin
+	// Fresh is how many followed traders have data newer than the freshness
+	// window, Total how many can have any (public portfolios).
+	Fresh int
+	Total int
+	// Reason explains missing data, e.g. "Binance is rate limiting requests".
+	Reason string
+}
+
+// complete tells whether every trader that can have data is fresh: only then
+// does a missing coin mean the traders truly do not hold it.
+func (v *CopyTradeView) complete() bool { return v == nil || (v.Total > 0 && v.Fresh >= v.Total) }
+
+// usable tells whether any fresh data arrived at all.
+func (v *CopyTradeView) usable() bool { return v == nil || v.Fresh > 0 }
+
+// note warns that the coin data below is incomplete, or "" when it is whole.
+func (v *CopyTradeView) note() string {
+	if v.complete() {
+		return ""
+	}
+	reason := v.Reason
+	if reason == "" {
+		reason = "data is stale"
+	}
+	if !v.usable() {
+		return fmt.Sprintf("⚠️ Lead traders: copy-trade data is unavailable right now (%s); nothing below tells whether they hold or left a coin.\n", reason)
+	}
+	return fmt.Sprintf("⚠️ Lead traders: only %d of %d followed traders have fresh data (%s); the counts below are incomplete.\n", v.Fresh, v.Total, reason)
+}
+
+// CopyTradeResolver returns the followed lead traders' view. It is set at
+// startup by the copy-trade monitor; nil means the monitor is not running.
+var CopyTradeResolver func() CopyTradeView
 
 // copyTradeCandidates picks the coins of the copy_trade source: the leading
 // side matches the direction setting, enough traders, confidence high
@@ -80,7 +115,12 @@ func copyTradeCandidates(source store.CoinSourceConfig) []CandidateCoin {
 		logger.Warnf("⚠️  Copy-trade monitor not running: no copy-trade coins")
 		return nil
 	}
-	coins := CopyTradeResolver()
+	view := CopyTradeResolver()
+	if !view.usable() {
+		logger.Warnf("⚠️  Copy-trade data unavailable: %s", view.Reason)
+		return nil
+	}
+	coins := view.Coins
 	picked := make([]CopyTradeCoin, 0, len(coins))
 	for _, c := range coins {
 		if c.Direction == "neutral" || c.Confidence < source.CopyTradeMinConfidence {
@@ -125,8 +165,10 @@ func enrichCopyTradeData(ctx *Context, engine *StrategyEngine) {
 	if !usesCopyTradeContext(engine.GetConfig().CoinSource) {
 		return
 	}
+	view := CopyTradeResolver()
+	ctx.CopyTradeCoverage = &view
 	ctx.CopyTradeMap = map[string]*CopyTradeCoin{}
-	for _, c := range CopyTradeResolver() {
+	for _, c := range view.Coins {
 		c := c
 		ctx.CopyTradeMap[copyTradeKey(c.Symbol)] = &c
 	}
@@ -150,12 +192,13 @@ func copyTradeSystemNote(follow string) string {
 
 Some coins carry a "Followed lead traders" block: what Binance copy-trading lead traders the user follows hold on that coin. Read it as one input, not an instruction:
 - It is delayed by a few minutes; their entry prices are already gone.
+- "⚠️ Lead traders: copy-trade data is unavailable..." or "...only N of M followed traders have fresh data" means the data is missing or partly refreshed: it says nothing about whether they hold the coin. Judge that coin on your own read, and do not close because of it.
 - Confidence (0-100) combines how much they agree, how credible their records are, and how many hold the coin. It is not a win probability.
-- "Trapped" traders sit on deep losses and may just be waiting to break even; "fresh" ones opened or added in the last 24 hours and reflect a current view.
+- "Trapped" traders sit on deep losses and may just be waiting to break even; "fresh" ones opened or added in the last 24 hours and reflect a current view. A trader who averaged down is judged from the first entry, so adding to a losing position still shows as trapped.
 - High-frequency traders (bots, grids) are weighted down; their positions churn.
 - "Price vs lead avg entry": far beyond their average in their direction means chasing a move they already made; near or better than their average is a better entry.
 - Lead traders hold for days. Judge their coins on the higher timeframes and give stops room for normal swings.
-- A "⚠️ Lead traders" line on a coin you hold means the traders behind it reduced, closed or flipped. Treat it as an exit signal: tighten the stop or close unless your own read is clearly still valid.
+- A line on a coin you hold saying the traders "closed or reduced recently", that no one holds it any more, or that they flipped means the side behind your position left. Treat it as an exit signal: tighten the stop or close unless your own read is clearly still valid.
 - Agreement with your own technical read can raise conviction; disagreement or mostly trapped holders should lower it. Never open a trade only because lead traders hold it.
 `)
 	switch follow {
@@ -170,15 +213,32 @@ Some coins carry a "Followed lead traders" block: what Binance copy-trading lead
 
 // formatCopyTrade writes one coin's copy-trade block for the user prompt.
 // price is the current price (0 = unknown); held is the side the account
-// holds ("" = none), for exit alerts.
-func formatCopyTrade(c *CopyTradeCoin, now time.Time, price float64, held string) string {
+// holds ("" = none), for exit alerts. cov tells how much of the data is
+// fresh: with stale data a missing coin says nothing about the traders.
+func formatCopyTrade(c *CopyTradeCoin, cov *CopyTradeView, now time.Time, price float64, held string) string {
 	if c == nil {
-		if held != "" {
-			return "⚠️ Lead traders: none of the followed lead traders holds or recently traded this coin.\n"
+		if held == "" || (cov != nil && cov.Total == 0) {
+			// Nothing at stake, or nobody followed at all: stay quiet.
+			return ""
 		}
-		return ""
+		switch {
+		case !cov.usable():
+			reason := "data is stale"
+			if cov != nil && cov.Reason != "" {
+				reason = cov.Reason
+			}
+			return fmt.Sprintf("⚠️ Lead traders: copy-trade data is unavailable right now (%s). That is not a signal that they left this coin.\n", reason)
+		case !cov.complete():
+			return fmt.Sprintf("⚠️ Lead traders: no data on this coin from the %d of %d followed traders that refreshed; that is not evidence of an exit.\n", cov.Fresh, cov.Total)
+		}
+		return "⚠️ Lead traders: none of the followed lead traders holds or recently traded this coin.\n"
 	}
 	var sb strings.Builder
+	// Only tell the model about a gap in the data on a coin the account holds:
+	// there a missing holder would otherwise read as an exit.
+	if held != "" {
+		sb.WriteString(cov.note())
+	}
 	if c.Long.Traders+c.Short.Traders == 0 {
 		sb.WriteString("Followed lead traders: none hold it now\n")
 	} else {
@@ -187,8 +247,10 @@ func formatCopyTrade(c *CopyTradeCoin, now time.Time, price float64, held string
 	if line := copyTradeVsAvg(c, price); line != "" {
 		sb.WriteString(line)
 	}
-	if line := copyTradeExitAlert(c, held); line != "" {
-		sb.WriteString(line)
+	if cov.complete() {
+		if line := copyTradeExitAlert(c, held); line != "" {
+			sb.WriteString(line)
+		}
 	}
 	side := func(name string, s CopyTradeSide) {
 		if s.Traders == 0 {
@@ -333,7 +395,7 @@ func CopyTradeText(ctx *Context, symbol string, now time.Time) string {
 			}
 		}
 	}
-	return formatCopyTrade(copyTradeFor(ctx, symbol), now, price, held)
+	return formatCopyTrade(copyTradeFor(ctx, symbol), ctx.CopyTradeCoverage, now, price, held)
 }
 
 // copyTradeVsAvg compares the price with the leading side's average entry.
@@ -363,7 +425,12 @@ func copyTradeVsAvg(c *CopyTradeCoin, price float64) string {
 	return fmt.Sprintf("- Price vs lead %s avg entry: %+.1f%% (%s)\n", side, diff, note)
 }
 
+// exitAlertShare is how much of one side must have left before the prompt
+// warns: one trader reducing says little about the rest.
+const exitAlertShare = 3
+
 // copyTradeExitAlert warns when traders on the side the account holds left.
+// One or two of many leaving is not a signal; a third of them is.
 func copyTradeExitAlert(c *CopyTradeCoin, held string) string {
 	if held != "long" && held != "short" {
 		return ""
@@ -373,18 +440,25 @@ func copyTradeExitAlert(c *CopyTradeCoin, held string) string {
 	if held == "short" {
 		same, other, opposite = c.Short, c.Long, "long"
 	}
-	exits, reduces := 0, 0
-	for _, a := range c.Recent {
+	leavers := map[string]bool{}
+	exits := 0
+	for i, a := range c.Recent {
 		if a.Side != held {
 			continue
 		}
 		switch a.Action {
-		case "close":
-			exits++
-		case "reduce":
-			reduces++
+		case "close", "reduce":
+			key := a.Trader
+			if key == "" {
+				key = "#" + strconv.Itoa(i) // no nickname: count the action
+			}
+			leavers[key] = true
+			if a.Action == "close" {
+				exits++
+			}
 		}
 	}
+	left := len(leavers)
 	switch {
 	case same.Traders == 0 && other.Traders > 0:
 		return fmt.Sprintf("⚠️ Lead traders: no one holds %s any more and %d now hold %s (flipped against your position)\n", held, other.Traders, opposite)
@@ -392,8 +466,8 @@ func copyTradeExitAlert(c *CopyTradeCoin, held string) string {
 		return fmt.Sprintf("⚠️ Lead traders: no one holds %s any more (%d closed recently)\n", held, exits)
 	case c.Direction == opposite:
 		return fmt.Sprintf("⚠️ Lead traders: they now lean %s, against your %s position\n", opposite, held)
-	case exits+reduces > 0:
-		return fmt.Sprintf("⚠️ Lead traders: %d of the recent %s actions were closes or reductions\n", exits+reduces, held)
+	case left > 0 && left*exitAlertShare >= same.Traders+left:
+		return fmt.Sprintf("⚠️ Lead traders: %d of the %d traders on the %s side closed or reduced recently\n", left, same.Traders+left, held)
 	}
 	return ""
 }

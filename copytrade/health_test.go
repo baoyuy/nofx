@@ -125,3 +125,30 @@ func TestHighFrequencyTradersCountLessAndCanBeHidden(t *testing.T) {
 		t.Fatal("picking a high-frequency trader shows them anyway")
 	}
 }
+
+// Averaging down hides how deep a position is: the loss is measured from the
+// average entry, so an add at a better price makes a routed position look
+// healthy. The first entry is the evidence that it is not.
+func TestAveragingDownKeepsTheLossVisible(t *testing.T) {
+	now := time.Now()
+	// Long 1 opened at 100, averaged to 96 at 20x, mark 94: -41.7% of margin
+	// from the average, -120% from the first entry.
+	p := Position{Symbol: "BTCUSDT", Side: "long", Qty: 1, EntryPrice: 96, EntryValue: 96, FirstEntry: 100,
+		Leverage: 20, Margin: 4.8, MarkPrice: 94, UnrealizedPnL: -2, Source: "public",
+		LastAddAt: now.Add(-time.Hour).UnixMilli()}
+	got := assessHealth([]Position{p}, nil, 1000, now)[0]
+	if got.Trapped != true || got.ReturnPct != -41.66666666666667 {
+		t.Fatalf("deep position measured from the first entry: %+v", got)
+	}
+	// Without the deeper first entry the same position is merely losing.
+	p.FirstEntry = p.EntryPrice
+	plain := assessHealth([]Position{p}, nil, 1000, now)[0]
+	if plain.Trapped {
+		t.Fatalf("nothing deeper than the average: %+v", plain)
+	}
+	// Adding to a trapped position is doubling down, not a fresh view.
+	if healthFactor(got) >= healthFactor(plain) {
+		t.Fatalf("a fresh add to a trapped position must not boost it: %.3f vs %.3f",
+			healthFactor(got), healthFactor(plain))
+	}
+}

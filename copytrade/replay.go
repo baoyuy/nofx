@@ -29,6 +29,12 @@ type Position struct {
 	EntryPrice float64 `json:"entry_price"`
 	// EntryValue is qty × entry price: the money put to work at entry.
 	EntryValue float64 `json:"entry_value"`
+	// FirstEntry is the price of the first fill seen for the position: the
+	// real entry when OpenedAt is known, else the earliest evidence of it.
+	FirstEntry float64 `json:"first_entry,omitempty"`
+	// PreExisting marks a position opened before the stored fills begin: its
+	// quantity, average and holding time are only partly known then.
+	PreExisting bool `json:"pre_existing,omitempty"`
 	// OpenedAt is the first fill of the position in ms; 0 if it opened
 	// before monitoring started.
 	OpenedAt int64 `json:"opened_at"`
@@ -73,6 +79,10 @@ type bucket struct {
 	cost     float64 // |q| × average entry
 	openedAt int64
 	addedAt  int64
+	// first is the price of the first fill of the book, pre whether the book
+	// was already open before the stored fills.
+	first float64
+	pre   bool
 }
 
 func sideOf(q float64) string {
@@ -87,7 +97,15 @@ func near0(q, ref float64) bool { return math.Abs(q) <= 1e-9+1e-7*math.Abs(ref) 
 // Replay rebuilds held positions and actions from fills. Fills may come in
 // any order. Positions opened before the first fill are not visible; their
 // reductions are reported as Untracked.
-func Replay(fills []Fill) ([]Position, []Event) {
+func Replay(fills []Fill) ([]Position, []Event) { return ReplayKnown(fills, nil) }
+
+// PreKey names the side a fill or position belongs to, as ReplayKnown wants.
+func PreKey(symbol, side string) string { return strings.ToUpper(symbol) + "|" + side }
+
+// ReplayKnown is Replay for books held before the first stored fill: pre
+// carries their symbol|side keys (see PreKey), so their first same-direction
+// fill is an add to a position of unknown size, not a new open.
+func ReplayKnown(fills []Fill, pre map[string]bool) ([]Position, []Event) {
 	sorted := append([]Fill(nil), fills...)
 	sort.SliceStable(sorted, func(a, b int) bool {
 		if sorted[a].Time != sorted[b].Time {
@@ -135,6 +153,7 @@ func Replay(fills []Fill) ([]Position, []Event) {
 		if b == nil {
 			b = &bucket{}
 			books[key] = b
+			b.first = f.Price
 		}
 		delta := f.Qty
 		if strings.ToUpper(f.Side) == "SELL" {
@@ -155,8 +174,12 @@ func Replay(fills []Fill) ([]Position, []Event) {
 		case b.q == 0 || (b.q > 0) == (delta > 0):
 			action := "add"
 			if b.q == 0 {
-				action = "open"
-				b.openedAt = f.Time
+				action, b.openedAt, b.first = "open", f.Time, f.Price
+				// Already held before the stored fills: this fill adds to a
+				// position whose open time and size we never saw.
+				if pre[PreKey(f.Symbol, sideOf(delta))] {
+					action, b.openedAt, b.pre = "add", 0, true
+				}
 			}
 			b.q += delta
 			b.cost += f.Qty * f.Price
@@ -194,6 +217,7 @@ func Replay(fills []Fill) ([]Position, []Event) {
 			b.cost, b.openedAt, b.addedAt = excess*f.Price, f.Time, f.Time
 			emit(key, Event{Time: f.Time, Symbol: f.Symbol, Side: sideOf(b.q), Action: "open", Qty: excess,
 				Price: f.Price, Value: excess * f.Price, Fee: f.Fee * excess / f.Qty, PositionQty: excess})
+			b.first = f.Price
 		}
 	}
 
@@ -204,7 +228,8 @@ func Replay(fills []Fill) ([]Position, []Event) {
 		}
 		qty := math.Abs(b.q)
 		positions = append(positions, Position{Symbol: strings.SplitN(key, "|", 2)[0], Side: sideOf(b.q), Qty: qty,
-			EntryPrice: b.cost / qty, EntryValue: b.cost, OpenedAt: b.openedAt, LastAddAt: b.addedAt, Source: "inferred"})
+			EntryPrice: b.cost / qty, EntryValue: b.cost, OpenedAt: b.openedAt, LastAddAt: b.addedAt, Source: "inferred",
+			FirstEntry: b.first, PreExisting: b.pre})
 	}
 	sort.Slice(positions, func(a, b int) bool { return positions[a].EntryValue > positions[b].EntryValue })
 	return positions, events
@@ -244,11 +269,44 @@ func LivePositions(live []LivePosition, inferred []Position) []Position {
 		p := Position{Symbol: l.Symbol, Side: side, Qty: qty, EntryPrice: entry, EntryValue: qty * entry,
 			OpenedAt: r.OpenedAt, LastAddAt: r.LastAddAt, Source: "public", MarkPrice: float64(l.MarkPrice), Leverage: lev,
 			UnrealizedPnL: float64(l.UnrealizedProfit)}
+		p.FirstEntry, p.PreExisting = r.FirstEntry, r.PreExisting
 		if lev > 0 {
 			p.Margin = p.EntryValue / lev
 		}
 		out = append(out, p)
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].EntryValue > out[b].EntryValue })
+	return out
+}
+
+// preOpenedBooks lists the symbol|side keys Binance shows bigger than the
+// fills explain: those positions were opened before the stored fills begin,
+// so the first fill we have for them is an add, not an open. Live positions
+// are the only evidence of that.
+func preOpenedBooks(live []LivePosition, inferred []Position) map[string]bool {
+	if len(live) == 0 {
+		return nil
+	}
+	seen := map[string]float64{}
+	for _, p := range inferred {
+		seen[PreKey(p.Symbol, p.Side)] += p.Qty
+	}
+	out := map[string]bool{}
+	for _, l := range live {
+		amt := float64(l.PositionAmount)
+		if amt == 0 {
+			continue
+		}
+		side := sideOf(amt)
+		if strings.EqualFold(l.PositionSide, "SHORT") {
+			side = "short"
+		} else if strings.EqualFold(l.PositionSide, "LONG") {
+			side = "long"
+		}
+		key := PreKey(l.Symbol, side)
+		if math.Abs(amt) > seen[key]*(1+1e-6)+1e-9 {
+			out[key] = true
+		}
+	}
 	return out
 }

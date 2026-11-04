@@ -58,16 +58,45 @@ func (h Health) marginLossPct() float64 {
 
 // healthFactor scales a position's vote: a losing position counts less
 // (0.55 at 50% of margin lost, 0.1 at 100%), a liquidated one not at all,
-// and a fresh open or add counts more.
+// and a fresh open or add counts more. An add that deepens a loss is
+// doubling down, not a fresh view, so it gets no boost.
 func healthFactor(p Position) float64 {
 	if p.Liquidated {
 		return 0
 	}
 	f := 1 - 0.9*math.Min(100, p.marginLossPct())/100
-	if p.Fresh {
+	if p.Fresh && !p.Trapped {
 		f *= freshBoost
 	}
 	return f
+}
+
+// firstEntryMarginLoss is the loss as % of margin measured from the entry
+// furthest against the position, so averaging down does not hide how deep it
+// actually is. Zero when it is not losing or nothing is priced.
+func (p Position) firstEntryMarginLoss() float64 {
+	if p.FirstEntry <= 0 || p.MarkPrice <= 0 || p.EntryPrice <= 0 {
+		return 0
+	}
+	dir := 1.0
+	if p.Side == "short" {
+		dir = -1
+	}
+	worst := p.EntryPrice
+	switch {
+	case dir > 0 && p.FirstEntry > worst:
+		worst = p.FirstEntry
+	case dir < 0 && p.FirstEntry < worst:
+		worst = p.FirstEntry
+	}
+	move := -dir * (p.MarkPrice - worst) / worst * 100 // positive = losing
+	if move <= 0 {
+		return 0
+	}
+	if p.Leverage > 0 {
+		return move * p.Leverage
+	}
+	return move * assumedLeverage
 }
 
 // assessHealth prices positions at marks and flags trapped, fresh and likely
@@ -102,6 +131,11 @@ func assessHealth(positions []Position, marks map[string]float64, balance float6
 				p.Trapped = p.ReturnPct <= -trappedMarginPct
 			} else {
 				p.Trapped = p.ReturnPct <= -trappedMovePct
+			}
+			// A trader who averaged down sits on a bigger loss than the
+			// average entry shows: check the loss from the first entry too.
+			if !p.Trapped && p.firstEntryMarginLoss() >= trappedMarginPct {
+				p.Trapped = true
 			}
 		}
 		last := p.LastAddAt

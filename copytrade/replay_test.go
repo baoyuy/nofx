@@ -96,6 +96,61 @@ func TestLivePositionsUseRebuiltOpenTime(t *testing.T) {
 	}
 }
 
+// A position opened before the stored fills begins: its first fill we see is
+// an add, not a new open, and its holding time is unknown.
+func TestReplayPreOpenedPosition(t *testing.T) {
+	fills := []Fill{
+		fill(1000, "BUY", "BOTH", 2, 90, 0), // opened before monitoring
+		fill(5000, "BUY", "BOTH", 1, 80, 0), // averaged down, seen
+		fill(6000, "BUY", "BOTH", 1, 70, 0), // averaged down again, seen
+	}
+	pre := map[string]bool{PreKey("BTCUSDT", "long"): true}
+	positions, events := ReplayKnown(fills, pre)
+	if len(positions) != 1 {
+		t.Fatalf("positions = %+v", positions)
+	}
+	p := positions[0]
+	if !p.PreExisting || p.OpenedAt != 0 {
+		t.Fatalf("position must be marked pre-existing with no open time: %+v", p)
+	}
+	// We saw 4 contracts enter at 90, 80 and 70; the size below them is unseen.
+	if !approx(p.EntryPrice, 82.5) || !approx(p.FirstEntry, 90) || p.Qty != 4 {
+		t.Fatalf("averages = %+v", p)
+	}
+	for _, e := range events {
+		if e.Action == "open" {
+			t.Fatalf("nothing here opened the position: %+v", events)
+		}
+	}
+	if events[0].Action != "add" {
+		t.Fatalf("first fill adds: %+v", events[0])
+	}
+	// Without the hint the same fills look like a new position.
+	plain, _ := Replay(fills)
+	if plain[0].OpenedAt != 1000 || plain[0].PreExisting {
+		t.Fatalf("without the hint it is an open: %+v", plain[0])
+	}
+}
+
+// Binance showing more than the fills explain is what marks a position as
+// opened before the stored fills.
+func TestPreOpenedBooksFromLivePositions(t *testing.T) {
+	live := []LivePosition{
+		{Symbol: "BTCUSDT", PositionSide: "BOTH", PositionAmount: 3, EntryPrice: 80},    // exactly what the fills say
+		{Symbol: "ETHUSDT", PositionSide: "LONG", PositionAmount: 5, EntryPrice: 2000},  // 5 held, 2 seen
+		{Symbol: "SOLUSDT", PositionSide: "SHORT", PositionAmount: -1, EntryPrice: 100}, // exactly seen
+	}
+	inferred := []Position{
+		{Symbol: "BTCUSDT", Side: "long", Qty: 3},
+		{Symbol: "ETHUSDT", Side: "long", Qty: 2},
+		{Symbol: "SOLUSDT", Side: "short", Qty: 1},
+	}
+	pre := preOpenedBooks(live, inferred)
+	if len(pre) != 1 || !pre[PreKey("ETHUSDT", "long")] {
+		t.Fatalf("pre-opened = %+v", pre)
+	}
+}
+
 func TestSymbolsAveragesEntryBySize(t *testing.T) {
 	snaps := []Snapshot{
 		{Positions: []Position{{Symbol: "BTCUSDT", Side: "long", Qty: 1, EntryPrice: 100, EntryValue: 100}}},

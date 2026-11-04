@@ -113,8 +113,10 @@ type Context struct {
 	BTCETHLeverage     int                                `json:"-"`
 	AltcoinLeverage    int                                `json:"-"`
 	Timeframes         []string                           `json:"-"`
-	// Followed lead traders' view per coin, when the strategy uses it.
-	CopyTradeMap map[string]*CopyTradeCoin `json:"-"`
+	// Followed lead traders' view per coin, when the strategy uses it, and how
+	// much of that view is fresh.
+	CopyTradeMap      map[string]*CopyTradeCoin `json:"-"`
+	CopyTradeCoverage *CopyTradeView            `json:"-"`
 }
 
 // Decision AI trading decision
