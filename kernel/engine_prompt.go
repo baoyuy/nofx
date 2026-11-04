@@ -117,7 +117,7 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	}
 
 	if usesCopyTradeContext(e.config.CoinSource) {
-		sb.WriteString(copyTradeSystemNote(copyTradeFollowMode(e.config.CoinSource)))
+		sb.WriteString(copyTradeSystemNote(e.config.CoinSource))
 	}
 
 	// 6. Decision process (editable)

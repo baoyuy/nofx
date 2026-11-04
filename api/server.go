@@ -368,11 +368,13 @@ IMPORTANT: For most use cases just POST {"name":"<name>"} — the backend fills 
 StrategyConfig fields:
   coin_source.source_type: "static" (fixed coin list, free; default and recommended) | "bollinger_horn" (free Binance; re-screens the top gainers for the Bollinger horn every cycle and trades the top 10 matches) | "hyper_all" | "hyper_main" | "hyper_rank" (free Hyperliquid public data)
   coin_source.horn_interval: Bollinger horn interval when source_type is "bollinger_horn": "15m"|"1h"|"4h" (default "1h")
-  coin_source.source_type "copy_trade": trades the coins the user's followed Binance lead traders hold (copy-trade page), highest direction confidence first; settings copy_trade_min_confidence (0-100, default 40), copy_trade_direction "both"|"long"|"short", copy_trade_limit (1-10, default 5), copy_trade_min_traders (default 2)
+  coin_source.source_type "copy_trade": trades the coins the user's followed Binance lead traders hold (copy-trade page), highest direction confidence first; settings copy_trade_min_confidence (1-100, default 40), copy_trade_direction "both"|"long"|"short", copy_trade_limit (1-10, default 5), copy_trade_min_traders (1-20, default 2)
+  coin_source.copy_trade_follow "follow"|"fade"|"free" (enforced by the program): follow = only open on the lead traders' side, fade = only the opposite side, free = the AI decides. Default "follow" for the copy_trade source, "free" when copy-trade data is only context. Closes are never blocked.
   coin_source.copy_trade_context: true shows the AI followed lead traders' positions on every candidate and held coin, with any coin source
+  coin_source.copy_trade_context_min_confidence (1-100, default 40): when copy_trade_follow is follow or fade on another coin source, an open needs the lead traders' direction confidence on that coin to reach this, otherwise it is rejected
   coin_source.static_coins: e.g. ["BTCUSDT","ETHUSDT","SOLUSDT"]
   indicators.klines.primary_timeframe: "1m"|"3m"|"5m"|"15m"|"1h"|"4h" — scalping→"5m", trend/swing→"1h"/"4h"
-  indicators.klines.primary_count: number of candles (20-100)
+  indicators.klines.primary_count: number of candles (10-30)
   indicators.klines.enable_multi_timeframe: true for trend/swing analysis
   indicators.klines.selected_timeframes: e.g. ["5m","15m","1h","4h"]
   indicators.enable_raw_klines: ALWAYS true (raw OHLCV required)

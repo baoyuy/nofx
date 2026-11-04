@@ -190,6 +190,11 @@ func (c *StrategyConfig) ClampLimits() {
 		default:
 			c.CoinSource.CopyTradeFollow = "free"
 		}
+		// 0 means unset (the engine applies the default); anything out of
+		// range goes back to it.
+		if v := c.CoinSource.CopyTradeContextMinConfidence; v != 0 && (v < 1 || v > 100) {
+			c.CoinSource.CopyTradeContextMinConfidence = DefaultCopyTradeContextMinConfidence
+		}
 	}
 	if c.RiskControl.MaxMarginUsage > MaxMarginUsage {
 		c.RiskControl.MaxMarginUsage = MaxMarginUsage
@@ -917,6 +922,11 @@ type CoinSourceConfig struct {
 	// candidate and held coin, whatever the coin source. Always on for the
 	// copy_trade source.
 	CopyTradeContext bool `json:"copy_trade_context,omitempty"`
+	// CopyTradeContextMinConfidence is the direction confidence an open needs
+	// when copy-trade data is only context (copy_trade_context on another
+	// source): follow/fade refuse coins the lead traders do not lean on
+	// clearly enough. Default 40.
+	CopyTradeContextMinConfidence float64 `json:"copy_trade_context_min_confidence,omitempty"`
 	// static coin list (used when source_type = "static")
 	StaticCoins []string `json:"static_coins,omitempty"`
 	// excluded coins list (filtered out from all sources)
@@ -1683,10 +1693,14 @@ func (c *StrategyConfig) getEffectiveTimeframeCount() int {
 }
 
 // Copy-trade source defaults.
+// Copy-trade source defaults.
 const (
 	DefaultCopyTradeMinConfidence = 40
 	DefaultCopyTradeLimit         = 5
 	DefaultCopyTradeMinTraders    = 2
+	// DefaultCopyTradeContextMinConfidence gates follow/fade when copy-trade
+	// data is only context: one trader agreeing is not a direction.
+	DefaultCopyTradeContextMinConfidence = 40
 )
 
 // NormalizeCopyTrade fills the copy-trade source defaults and keeps its
@@ -1719,5 +1733,11 @@ func (c *CoinSourceConfig) NormalizeCopyTrade() {
 	}
 	if c.CopyTradeMinTraders > 20 {
 		c.CopyTradeMinTraders = 20
+	}
+	if c.CopyTradeContextMinConfidence < 0 {
+		c.CopyTradeContextMinConfidence = 0
+	}
+	if c.CopyTradeContextMinConfidence > 100 {
+		c.CopyTradeContextMinConfidence = 100
 	}
 }

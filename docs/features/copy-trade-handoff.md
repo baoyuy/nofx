@@ -64,6 +64,7 @@ copytrade 和 kernel 互不 import，只靠 `kernel.CopyTradeResolver` 这个函
 | `copy_trade_min_traders` | 2 | 至少几人持有 |
 | `copy_trade_context` | copy_trade 时恒为 true | 提示词里附带带单参考 |
 | `copy_trade_follow` | copy_trade 为 follow，否则 free | follow / free / fade，程序强制 |
+| `copy_trade_context_min_confidence` | 40 | 只加上下文时，跟随/反向的开仓需要的置信度 1–100（带单币源用 `copy_trade_min_confidence`） |
 
 `risk_control.min_stop_atr`（0–5）：止损离价格小于这个倍数的主周期 ATR14 时拒绝开仓。
 
@@ -120,8 +121,11 @@ gofmt 会对齐结构体字段；新字段加在结构体中间时注意对齐�
 - 加仓到已亏损仓位不再拿「新开 ×1.3」的加成（`healthFactor` 里 `p.Fresh && !p.Trapped`）。
 - 离场提醒阈值改成「离场人数 ≥ 同方向人数的 1/3」（`exitAlertShare`），不再是 1 个人减仓就提醒。
 
-**待做：跟随模式的置信度门槛**
-- 跟随/反向模式只看方向，不看置信度。非带单币源加上下文时，1 个人、置信度 5 也会放行。位置：`OpenBlockReason`。计划新增 `copy_trade_context_min_confidence`（默认 40），与带单币源的 `copy_trade_min_confidence` 分开，避免同一字段两处语义。
+**第二批已修（门槛、说明、迁移、预览）**
+- 跟随/反向模式原来只看方向：非带单币源加上下文时，1 个人、置信度 5 也能开仓。现在 `OpenBlockReason` 会检查置信度，带单币源用 `copy_trade_min_confidence`，只加上下文时用新字段 `copy_trade_context_min_confidence`（默认 40），策略页在选了跟随/反向时显示这个输入框，系统提示词也会写出这个门槛。
+- `api/server.go` 给 AI 的策略说明补上了 `copy_trade_follow` 和 `copy_trade_context_min_confidence`，`primary_count` 改回真实的 10–30。
+- PostgreSQL：`decision_records` 表已存在时会手动补 `copy_trade` 列，不再整条决策记录插入失败。
+- `/copytrade/symbols?fresh=1` 只返回 30 分钟内刷新过的带单员数据，策略页「当前会交易」用它，并在只有部分账户新鲜时提示实际可选币可能更少。
 
 **待做：带单员风格（用户提出的问题）**
 带单员有短线、波段、长线，还有亏了不断加仓的摊平型。计划：
@@ -133,11 +137,9 @@ gofmt 会对齐结构体字段；新字段加在结构体中间时注意对齐�
 - 注意成本：请求是全局 4s 一次串行，一个人回填 30 天最多 25 页 ≈100s，所以「发现交易员」列表里的风格标签不能对所有人预先算，只能按需或只算已关注的人。
 
 **其他**
-- 推断仓位假设 10 倍杠杆，判断被套可能不准。在提示词里标明"杠杆未知"。
+- 推断仓位假设 10 倍杠杆：杠杆未知时被套按 5% 价格折算，可能不准，提示词里还没写"杠杆未知"。
 - 私密账户批量换成公开账户，没有公开账户的取消关注；老关注重新回填到 30 天（把 `FillsUntil` 置 0 会触发回填，每个账户最多 25 页请求）。
-- 前端策略页的「当前会交易」预览没有实现 30 分钟新鲜度过滤（`CopyTradeSource.tsx` 注释已承认），预览可能比实际下单的币多。
-- PostgreSQL：`decision_records` 已存在时跳过 AutoMigrate，而 `copy_trade` 列没有补迁移语句，PG 部署下写带单摘要会整条决策记录插入失败（SQLite 不受影响）。
-- `api/server.go` 给 AI 的策略说明漏了 `copy_trade_follow`，`primary_count` 写的是 20-100 而实际夹到 10-30。
+
 ## 9. 工作约定
 
 - 用中文回复用户。用户说"先回答我"时，只解释，不改代码。

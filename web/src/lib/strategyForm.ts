@@ -36,6 +36,9 @@ export interface CopyTradeSettings {
   direction: CopyDirection
   limit: number
   minTraders: number
+  // Confidence an open needs under follow/fade when the data is only context
+  // (copy_trade_context on another source).
+  contextMinConfidence: number
 }
 // Same defaults and ranges as the backend (store.NormalizeCopyTrade).
 export const DEFAULT_COPY_TRADE: CopyTradeSettings = {
@@ -43,11 +46,13 @@ export const DEFAULT_COPY_TRADE: CopyTradeSettings = {
   direction: 'both',
   limit: 5,
   minTraders: 2,
+  contextMinConfidence: 40,
 }
 export const COPY_TRADE_LIMITS = {
   minConfidence: { min: 1, max: 100 },
   limit: { min: 1, max: 10 },
   minTraders: { min: 1, max: 20 },
+  contextMinConfidence: { min: 1, max: 100 },
 }
 const toHornInterval = (v?: string): HornInterval =>
   (hornIntervals as readonly string[]).includes(v || '')
@@ -287,6 +292,11 @@ export function formFromStrategy(strategy: Strategy): FreeForm {
         COPY_TRADE_LIMITS.minTraders,
         DEFAULT_COPY_TRADE.minTraders
       ),
+      contextMinConfidence: clampNumber(
+        src?.copy_trade_context_min_confidence,
+        COPY_TRADE_LIMITS.contextMinConfidence,
+        DEFAULT_COPY_TRADE.contextMinConfidence
+      ),
     },
     copyTradeContext: Boolean(src?.copy_trade_context),
     // Only a saved choice; unset takes the default of the source chosen
@@ -428,6 +438,13 @@ export function configFromForm(
         copy_trade_follow:
           copy || form.copyTradeContext
             ? form.copyTradeFollow || (copy ? 'follow' : 'free')
+            : undefined,
+        // Only the context mode gates on it; the copy source uses
+        // copy_trade_min_confidence.
+        copy_trade_context_min_confidence:
+          !copy && form.copyTradeContext
+            ? (copyTrade.contextMinConfidence ??
+              DEFAULT_COPY_TRADE.contextMinConfidence)
             : undefined,
         static_coins:
           horn || copy

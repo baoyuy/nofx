@@ -254,3 +254,36 @@ func TestCopyTradeCandidatesNeedFreshData(t *testing.T) {
 		t.Fatalf("stale data must not pick coins: %+v", got)
 	}
 }
+
+// One trader agreeing is not a direction: follow and fade need the lead
+// traders' confidence to clear the configured minimum, on any coin source.
+func TestFollowGateNeedsConfidence(t *testing.T) {
+	weak := []CopyTradeCoin{{Symbol: "XRPUSDT", Direction: "long", Confidence: 5, Long: CopyTradeSide{Traders: 1, AvgEntry: 1}}}
+	withCopyTrade(t, weak)
+	cfg := store.GetDefaultStrategyConfig("en")
+	// Copy-trade data as context on a static strategy: no candidate filter ran.
+	cfg.CoinSource = store.CoinSourceConfig{SourceType: "static", StaticCoins: []string{"XRPUSDT"},
+		CopyTradeContext: true, CopyTradeFollow: "follow"}
+	engine := NewStrategyEngine(&cfg)
+	ctx := &Context{}
+	enrichCopyTradeData(ctx, engine)
+	open := func() string { return engine.OpenBlockReason(Decision{Symbol: "XRPUSDT", Action: "open_long"}, ctx) }
+	if r := open(); !strings.Contains(r, "confidence 5") || !strings.Contains(r, "below the 40 minimum") {
+		t.Fatalf("confidence 5 must not force a direction: %q", r)
+	}
+	if !strings.Contains(engine.BuildSystemPrompt(1000, ""), "confidence is at least 40") {
+		t.Fatal("the system prompt states the confidence gate")
+	}
+	// The context threshold is its own setting.
+	cfg.CoinSource.CopyTradeContextMinConfidence = 5
+	if r := open(); r != "" {
+		t.Fatalf("lowering the threshold lets it through: %q", r)
+	}
+	// The copy_trade source keeps using its own minimum.
+	cfg.CoinSource = store.CoinSourceConfig{SourceType: "copy_trade", CopyTradeMinConfidence: 1}
+	engine = NewStrategyEngine(&cfg)
+	enrichCopyTradeData(ctx, engine)
+	if r := engine.OpenBlockReason(Decision{Symbol: "XRPUSDT", Action: "open_long"}, ctx); r != "" {
+		t.Fatalf("the copy_trade source uses its own minimum: %q", r)
+	}
+}

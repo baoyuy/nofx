@@ -103,6 +103,7 @@ describe('copy-trade source', () => {
       direction: 'short',
       limit: 3,
       minTraders: 4,
+      contextMinConfidence: 40,
     })
 
     const staticCfg = configFromForm(
@@ -160,5 +161,45 @@ describe('copy-trade source', () => {
     } as unknown as Strategy)
     expect(back.copyTradeFollow).toBe('fade')
     expect(back.minStopATR).toBe(1.5)
+  })
+
+  it('gates follow and fade on the context confidence', () => {
+    const base = formFromStrategy({
+      name: 'x',
+      config: null,
+    } as unknown as Strategy)
+    const ctx = configFromForm(
+      null,
+      {
+        ...base,
+        coinSource: 'static',
+        copyTradeContext: true,
+        copyTradeFollow: 'follow',
+        copyTrade: {
+          ...DEFAULT_COPY_TRADE,
+          contextMinConfidence: 55,
+        },
+      },
+      'zh',
+      null
+    )
+    expect(ctx.ai_config!.coin_source.copy_trade_context_min_confidence).toBe(
+      55
+    )
+    // The copy_trade source keeps its own selector threshold.
+    const copy = configFromForm(
+      null,
+      { ...base, coinSource: 'copy' },
+      'zh',
+      null
+    )
+    expect(
+      copy.ai_config!.coin_source.copy_trade_context_min_confidence
+    ).toBeUndefined()
+    const back = formFromStrategy({
+      name: 'x',
+      config: ctx,
+    } as unknown as Strategy)
+    expect(back.copyTrade?.contextMinConfidence).toBe(55)
   })
 })

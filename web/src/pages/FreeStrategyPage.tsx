@@ -22,6 +22,7 @@ import { hornOnBoard } from '../lib/api/coinPool'
 import { ROUTES } from '../router/paths'
 import {
   DEFAULT_COINS,
+  DEFAULT_COPY_TRADE,
   DEFAULT_HORN_INTERVAL,
   DEFAULT_MIN_OI_VALUE,
   LIMITS,
@@ -997,6 +998,18 @@ export function FreeStrategyPage() {
                   }
                   follow={form.copyTradeFollow || 'free'}
                   onFollow={(copyTradeFollow) => patchForm({ copyTradeFollow })}
+                  minConfidence={
+                    form.copyTrade?.contextMinConfidence ??
+                    DEFAULT_COPY_TRADE.contextMinConfidence
+                  }
+                  onMinConfidence={(contextMinConfidence) =>
+                    patchForm({
+                      copyTrade: {
+                        ...(form.copyTrade || DEFAULT_COPY_TRADE),
+                        contextMinConfidence,
+                      },
+                    })
+                  }
                 />
               ) : null}
             </Section>

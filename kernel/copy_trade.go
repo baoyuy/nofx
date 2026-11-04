@@ -186,7 +186,9 @@ func copyTradeKey(symbol string) string { return market.NormalizeFor(symbol, "bi
 
 // copyTradeSystemNote tells the model how to read the copy-trade lines and
 // which direction rule the program enforces.
-func copyTradeSystemNote(follow string) string {
+func copyTradeSystemNote(source store.CoinSourceConfig) string {
+	follow := copyTradeFollowMode(source)
+	min := copyTradeGateConfidence(source)
 	var sb strings.Builder
 	sb.WriteString(`# 👥 Followed Lead Traders (reference signal)
 
@@ -203,9 +205,9 @@ Some coins carry a "Followed lead traders" block: what Binance copy-trading lead
 `)
 	switch follow {
 	case "follow":
-		sb.WriteString("- RULE (enforced by the program): open only in the lead traders' leaning direction on each coin; opens against it, or on coins they do not lean on, are rejected. Closing is always allowed.\n")
+		sb.WriteString(fmt.Sprintf("- RULE (enforced by the program): open only in the lead traders' leaning direction on each coin, and only when their confidence is at least %.0f; opens against it, or on coins they do not lean on that clearly, are rejected. Closing is always allowed.\n", min))
 	case "fade":
-		sb.WriteString("- RULE (enforced by the program): open only AGAINST the lead traders' leaning direction on each coin; opens with it, or on coins they do not lean on, are rejected. Closing is always allowed.\n")
+		sb.WriteString(fmt.Sprintf("- RULE (enforced by the program): open only AGAINST the lead traders' leaning direction on each coin, and only when their confidence is at least %.0f; opens with it, or on coins they do not lean on that clearly, are rejected. Closing is always allowed.\n", min))
 	}
 	sb.WriteString("\n")
 	return sb.String()
@@ -481,6 +483,20 @@ func copyTradeFollowMode(source store.CoinSourceConfig) string {
 	return source.CopyTradeFollow
 }
 
+// copyTradeGateConfidence is the direction confidence an open needs under
+// follow or fade: the source's own threshold when the coins come from the lead
+// traders, a separate one when the copy-trade data is only context.
+func copyTradeGateConfidence(source store.CoinSourceConfig) float64 {
+	source.NormalizeCopyTrade()
+	if source.SourceType == "copy_trade" {
+		return source.CopyTradeMinConfidence
+	}
+	if source.CopyTradeContextMinConfidence > 0 && source.CopyTradeContextMinConfidence <= 100 {
+		return source.CopyTradeContextMinConfidence
+	}
+	return store.DefaultCopyTradeContextMinConfidence
+}
+
 // OpenBlockReason returns why the program rejects an open decision, or "":
 // the copy-trade direction rule, and a stop closer than MinStopATR × ATR14
 // of the primary timeframe. Closes are never blocked.
@@ -494,12 +510,21 @@ func (e *StrategyEngine) OpenBlockReason(d Decision, ctx *Context) string {
 	}
 	switch mode := copyTradeFollowMode(e.config.CoinSource); mode {
 	case "follow", "fade":
+		c := copyTradeFor(ctx, d.Symbol)
 		lean := ""
-		if c := copyTradeFor(ctx, d.Symbol); c != nil {
-			lean = c.Direction
+		confidence := 0.0
+		if c != nil {
+			lean, confidence = c.Direction, c.Confidence
 		}
 		if lean != "long" && lean != "short" {
 			return fmt.Sprintf("copy-trade %s mode: lead traders do not lean either way on %s", mode, d.Symbol)
+		}
+		// One trader agreeing is not a direction: the lean must be clear
+		// enough, whether the coins come from the lead traders or the
+		// copy-trade data is only context.
+		if min := copyTradeGateConfidence(e.config.CoinSource); confidence < min {
+			return fmt.Sprintf("copy-trade %s mode: lead traders' confidence %.0f on %s is below the %.0f minimum",
+				mode, confidence, d.Symbol, min)
 		}
 		if (mode == "follow") != (lean == side) {
 			return fmt.Sprintf("copy-trade %s mode: lead traders lean %s on %s, open %s rejected", mode, lean, d.Symbol, side)

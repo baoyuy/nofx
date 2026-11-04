@@ -124,6 +124,9 @@ export interface CoinSourceConfig {
   copy_trade_direction?: 'both' | 'long' | 'short'
   copy_trade_limit?: number // 1-10, default 5
   copy_trade_min_traders?: number // default 2
+  // Confidence an open needs under follow/fade when copy-trade data is only
+  // context: 0-100, default 40. The copy_trade source uses copy_trade_min_confidence.
+  copy_trade_context_min_confidence?: number
   // Show followed lead traders' positions to the AI with any coin source
   copy_trade_context?: boolean
   // Program-enforced: follow = open only their side, fade = only the other side, free = AI decides

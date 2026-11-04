@@ -166,7 +166,7 @@ func (s *Server) registerCopyTradeRoutes(protected *gin.RouterGroup) {
 	s.route(protected, "GET", "/copytrade/follows/:id", "One followed trader with positions and actions", s.handleCopyTradeFollowDetail)
 	s.route(protected, "DELETE", "/copytrade/follows/:id", "Unfollow a lead trader", s.handleCopyTradeUnfollow)
 	s.route(protected, "GET", "/copytrade/feed", "Actions of followed traders, newest first, paged (?portfolio_id=&symbol=&action=open|add|reduce|close&min_value=&hide_high_freq=1&page=1&page_size=50)", s.handleCopyTradeFeed)
-	s.route(protected, "GET", "/copytrade/symbols", "Long/short totals per coin across followed traders", s.handleCopyTradeSymbols)
+	s.route(protected, "GET", "/copytrade/symbols", "Long/short totals per coin across followed traders (?fresh=1 keeps only traders refreshed in the last 30 minutes, as the AI sees them)", s.handleCopyTradeSymbols)
 	s.route(protected, "GET", "/copytrade/symbols/:symbol", "Followed traders' positions in one coin with entry prices", s.handleCopyTradeSymbol)
 	s.route(protected, "GET", "/copytrade/hit-rate", "How often hourly coin confidence signals moved the called way after 4h and 24h (?days=30)", s.handleCopyTradeHitRate)
 	// The proxy URL may carry a password: keep these out of the AI route catalog.
@@ -353,7 +353,26 @@ func (s *Server) handleCopyTradeSymbols(c *gin.Context) {
 	if !s.copyTradeReady(c) {
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"symbols": copytrade.Symbols(s.copyTrade.Snapshots())})
+	snaps := s.copyTrade.Snapshots()
+	fresh, total := copyTradeCoverage(snaps)
+	// The strategy preview asks for fresh=1 so it matches what the AI gets.
+	shown := snaps
+	if c.Query("fresh") == "1" {
+		shown = copytrade.Fresh(snaps, copyTradeFreshness, time.Now())
+	}
+	c.JSON(http.StatusOK, gin.H{"symbols": copytrade.Symbols(shown), "fresh_traders": fresh, "total_traders": total})
+}
+
+// copyTradeCoverage counts the followed traders with fresh data and those that
+// can have any (private portfolios never do).
+func copyTradeCoverage(snaps []copytrade.Snapshot) (fresh, total int) {
+	fresh = len(copytrade.Fresh(snaps, copyTradeFreshness, time.Now()))
+	for _, s := range snaps {
+		if !s.Follow.Private {
+			total++
+		}
+	}
+	return fresh, total
 }
 
 func (s *Server) handleCopyTradeSymbol(c *gin.Context) {

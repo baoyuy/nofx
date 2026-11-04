@@ -119,6 +119,9 @@ func (s *DecisionStore) initTables() error {
 		var tableExists int64
 		s.db.Raw(`SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'decision_records'`).Scan(&tableExists)
 		if tableExists > 0 {
+			// Columns added after the table was created are not migrated by
+			// AutoMigrate here: add them by hand.
+			s.db.Exec(`ALTER TABLE decision_records ADD COLUMN IF NOT EXISTS copy_trade TEXT NOT NULL DEFAULT ''`)
 			return nil
 		}
 	}

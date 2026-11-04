@@ -289,8 +289,14 @@ export const copyTradeApi = {
       }
     ),
 
-  getCopyTradeSymbols: () =>
-    get<{ symbols: SymbolSummary[] }>('/copytrade/symbols'),
+  // onlyFresh keeps the traders refreshed in the last 30 minutes, as the AI
+  // sees them, so the strategy preview matches what will be traded.
+  getCopyTradeSymbols: (onlyFresh = false) =>
+    get<{
+      symbols: SymbolSummary[]
+      fresh_traders: number
+      total_traders: number
+    }>(`/copytrade/symbols${onlyFresh ? '?fresh=1' : ''}`),
 
   getCopyTradeSymbol: (symbol: string) =>
     get<{

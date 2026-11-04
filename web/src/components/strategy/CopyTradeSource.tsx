@@ -121,12 +121,23 @@ export function CopyTradeSourcePanel({
   const set = (patch: Partial<CopyTradeSettings>) =>
     onChange({ ...s, ...patch })
   const [coins, setCoins] = useState<SymbolSummary[] | null>(null)
+  const [coverage, setCoverage] = useState<{
+    fresh: number
+    total: number
+  } | null>(null)
   const [error, setError] = useState('')
   useEffect(() => {
     let alive = true
     api
-      .getCopyTradeSymbols()
-      .then((r) => alive && setCoins(r.symbols || []))
+      .getCopyTradeSymbols(true)
+      .then((r) => {
+        if (!alive) return
+        setCoins(r.symbols || [])
+        setCoverage({
+          fresh: r.fresh_traders ?? 0,
+          total: r.total_traders ?? 0,
+        })
+      })
       .catch((e) => alive && setError(String(e?.message || e)))
     return () => {
       alive = false
@@ -282,6 +293,15 @@ export function CopyTradeSourcePanel({
         >
           {text(language, '去带单页查看', 'Open the Copy trade page')}
         </button>
+        {coverage && coverage.total > 0 && coverage.fresh < coverage.total ? (
+          <span className="text-xs text-nofx-text-muted">
+            {text(
+              language,
+              `只有 ${coverage.fresh}/${coverage.total} 个带单员的数据是新鲜的（30 分钟内），实际可选币可能更少。`,
+              `Only ${coverage.fresh} of ${coverage.total} followed traders have fresh data (last 30 minutes); the coins actually traded may be fewer.`
+            )}
+          </span>
+        ) : null}
       </div>
     </>
   )
@@ -294,12 +314,16 @@ export function CopyTradeContextToggle({
   onChange,
   follow,
   onFollow,
+  minConfidence,
+  onMinConfidence,
 }: {
   language: string
   checked: boolean
   onChange: (v: boolean) => void
   follow: CopyFollow
   onFollow: (v: CopyFollow) => void
+  minConfidence: number
+  onMinConfidence: (v: number) => void
 }) {
   return (
     <>
@@ -325,6 +349,27 @@ export function CopyTradeContextToggle({
       </label>
       {checked ? (
         <FollowChoice language={language} value={follow} onChange={onFollow} />
+      ) : null}
+      {checked && follow !== 'free' ? (
+        <Field
+          language={language}
+          label={text(
+            language,
+            '带单员置信度不低于',
+            'Lead-trader confidence at least'
+          )}
+          hint={text(
+            language,
+            '跟随和反向由程序强制方向：带单员在这个币上的置信度低于这个值就不开仓。',
+            'Follow and fade make the program enforce the side: with less confidence than this on a coin, no open is allowed.'
+          )}
+        >
+          <NumberInput
+            value={minConfidence}
+            range={COPY_TRADE_LIMITS.contextMinConfidence}
+            onChange={onMinConfidence}
+          />
+        </Field>
       ) : null}
     </>
   )
