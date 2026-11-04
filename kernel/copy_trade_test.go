@@ -83,7 +83,7 @@ func TestCopyTradePromptOnlyWhenAsked(t *testing.T) {
 	for _, want := range []string{"leaning LONG, confidence 55/100", "6 traders", "4 trapped", "avg entry 1100.00",
 		"Short: none", "黑石策略 (score 80) add long 241 USDT @ 1146.40", "1.5h ago",
 		"Holders (most credible first)", "黑石策略 (score 80) long 1319 USDT @ 1090.30, 10x, -42.5% of margin, held 26.0h",
-		"小小羊 (score 86) long 2000 USDT @ 1150.00, -6.2% price, held since before monitoring [trapped, high-frequency, averages into losses]",
+		"小小羊 (score 86) long 2000 USDT @ 1150.00, -6.2% price (leverage unknown), held since before monitoring [trapped, high-frequency, averages into losses]",
 		"Price vs lead long avg entry: +5.0% (beyond their entry in their direction: chasing)"} {
 		if !strings.Contains(block, want) {
 			t.Fatalf("block missing %q:\n%s", want, block)
@@ -125,7 +125,7 @@ func TestCandidatesUseTheExchangeSymbols(t *testing.T) {
 			t.Fatalf("%s: no copy-trade data for %s", exchange, got[1].Symbol)
 		}
 		briefs := CopyTradeBriefs(ctx, time.Now())
-		if len(briefs) != 2 || briefs[1].Symbol != want || !strings.Contains(briefs[1].Text, "Holders") {
+		if len(briefs) != 2 || briefs[1].Symbol != want || briefs[1].Holders == 0 || briefs[1].Direction != "long" {
 			t.Fatalf("%s: briefs %+v", exchange, briefs)
 		}
 	}
@@ -260,8 +260,10 @@ func TestCopyTradeCandidatesNeedFreshData(t *testing.T) {
 // One trader agreeing is not a direction: follow and fade need the lead
 // traders' confidence to clear the configured minimum, on any coin source.
 func TestFollowGateNeedsConfidence(t *testing.T) {
-	weak := []CopyTradeCoin{{Symbol: "XRPUSDT", Direction: "long", Confidence: 5, Long: CopyTradeSide{Traders: 1, AvgEntry: 1}}}
-	withCopyTrade(t, weak)
+	coin := func(confidence float64) []CopyTradeCoin {
+		return []CopyTradeCoin{{Symbol: "XRPUSDT", Direction: "long", Confidence: confidence, Long: CopyTradeSide{Traders: 1, AvgEntry: 1}}}
+	}
+	withCopyTrade(t, coin(5))
 	cfg := store.GetDefaultStrategyConfig("en")
 	// Copy-trade data as context on a static strategy: no candidate filter ran.
 	cfg.CoinSource = store.CoinSourceConfig{SourceType: "static", StaticCoins: []string{"XRPUSDT"},
@@ -276,16 +278,27 @@ func TestFollowGateNeedsConfidence(t *testing.T) {
 	if !strings.Contains(engine.BuildSystemPrompt(1000, ""), "confidence is at least 40") {
 		t.Fatal("the system prompt states the confidence gate")
 	}
-	// The context threshold is its own setting.
+	// The context threshold is its own setting, and 10 is its floor.
 	cfg.CoinSource.CopyTradeContextMinConfidence = 5
-	if r := open(); r != "" {
-		t.Fatalf("lowering the threshold lets it through: %q", r)
+	if r := open(); !strings.Contains(r, "below the 10 minimum") {
+		t.Fatalf("a threshold under the floor is clamped to 10: %q", r)
 	}
-	// The copy_trade source keeps using its own minimum.
+	// Confidence 30 clears that floor.
+	withCopyTrade(t, coin(30))
+	ctx.CopyTradeMap = nil
+	enrichCopyTradeData(ctx, engine)
+	if r := open(); r != "" {
+		t.Fatalf("confidence 30 clears a 10 threshold: %q", r)
+	}
+	// The copy_trade source uses its own minimum, which has the same floor.
 	cfg.CoinSource = store.CoinSourceConfig{SourceType: "copy_trade", CopyTradeMinConfidence: 1}
+	cfg.CoinSource.NormalizeCopyTrade()
+	if got := cfg.CoinSource.CopyTradeMinConfidence; got != 10 {
+		t.Fatalf("copy_trade minimum 1 is clamped to 10, got %v", got)
+	}
 	engine = NewStrategyEngine(&cfg)
 	enrichCopyTradeData(ctx, engine)
 	if r := engine.OpenBlockReason(Decision{Symbol: "XRPUSDT", Action: "open_long"}, ctx); r != "" {
-		t.Fatalf("the copy_trade source uses its own minimum: %q", r)
+		t.Fatalf("confidence 30 clears the copy_trade minimum: %q", r)
 	}
 }

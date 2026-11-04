@@ -310,6 +310,12 @@ export function FollowingTab({
     if (sort === 'score')
       list.sort((a, b) => (b.score?.score || 0) - (a.score?.score || 0))
     if (sort === 'roi') list.sort((a, b) => b.trader.roi - a.trader.roi)
+    if (sort === 'followed')
+      list.sort(
+        (a, b) =>
+          new Date(b.trader.followed_at).getTime() -
+          new Date(a.trader.followed_at).getTime()
+      )
     return list
   }, [snaps, sort, style])
   if (!snaps.length) {

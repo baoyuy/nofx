@@ -83,12 +83,13 @@ type vote struct {
 	trader string
 	side   string
 	weight float64
-	// base is weight without the health factor.
+	// base is weight without the health, hold and style factors.
 	base  float64
 	score float64
-	// Summed while collecting: entry value, and entry value × health.
-	stake, health float64
-	highFreq      bool
+	// Summed while collecting: entry value, entry value × health, the value
+	// the position was opened with, and entry value × hold factor.
+	stake, health, opened, hold float64
+	highFreq                    bool
 }
 
 func confidence(votes []vote) Confidence {

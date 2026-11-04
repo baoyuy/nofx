@@ -49,10 +49,10 @@ export const DEFAULT_COPY_TRADE: CopyTradeSettings = {
   contextMinConfidence: 40,
 }
 export const COPY_TRADE_LIMITS = {
-  minConfidence: { min: 1, max: 100 },
+  minConfidence: { min: 10, max: 100 },
   limit: { min: 1, max: 10 },
   minTraders: { min: 1, max: 20 },
-  contextMinConfidence: { min: 1, max: 100 },
+  contextMinConfidence: { min: 10, max: 100 },
 }
 const toHornInterval = (v?: string): HornInterval =>
   (hornIntervals as readonly string[]).includes(v || '')

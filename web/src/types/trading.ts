@@ -106,7 +106,7 @@ export interface DecisionCopyTrade {
   trapped: number
   fresh: number
   holders: number
-  text: string
+  // The text the AI read is in the record's input_prompt, not repeated here.
 }
 
 export interface Statistics {

@@ -190,10 +190,10 @@ func (c *StrategyConfig) ClampLimits() {
 		default:
 			c.CoinSource.CopyTradeFollow = "free"
 		}
-		// 0 means unset (the engine applies the default); anything out of
-		// range goes back to it.
-		if v := c.CoinSource.CopyTradeContextMinConfidence; v != 0 && (v < 1 || v > 100) {
-			c.CoinSource.CopyTradeContextMinConfidence = DefaultCopyTradeContextMinConfidence
+		// 0 means unset (the engine applies the default); below the floor or
+		// above the ceiling is clamped rather than reset.
+		if v := c.CoinSource.CopyTradeContextMinConfidence; v != 0 {
+			c.CoinSource.CopyTradeContextMinConfidence = min(max(v, MinCopyTradeMinConfidence), 100)
 		}
 	}
 	if c.RiskControl.MaxMarginUsage > MaxMarginUsage {
@@ -1656,7 +1656,10 @@ func (c *StrategyConfig) getEffectiveCoinCount() int {
 	case "bollinger_horn":
 		count = HornCoinLimit
 	case "copy_trade":
-		count = c.CoinSource.CopyTradeLimit
+		// Normalize first: Limit 0 means the default, not "no coins".
+		src := c.CoinSource
+		src.NormalizeCopyTrade()
+		count = src.CopyTradeLimit
 	case "ai500":
 		count = c.CoinSource.AI500Limit
 	case "oi_top":
@@ -1692,12 +1695,14 @@ func (c *StrategyConfig) getEffectiveTimeframeCount() int {
 	return count
 }
 
-// Copy-trade source defaults.
-// Copy-trade source defaults.
+// Copy-trade source defaults and bounds.
 const (
 	DefaultCopyTradeMinConfidence = 40
 	DefaultCopyTradeLimit         = 5
 	DefaultCopyTradeMinTraders    = 2
+	// MinCopyTradeMinConfidence keeps the confidence bar meaningful: at 1 a
+	// single weak trader would be enough to pick or force a coin.
+	MinCopyTradeMinConfidence = 10
 	// DefaultCopyTradeContextMinConfidence gates follow/fade when copy-trade
 	// data is only context: one trader agreeing is not a direction.
 	DefaultCopyTradeContextMinConfidence = 40
@@ -1722,6 +1727,9 @@ func (c *CoinSourceConfig) NormalizeCopyTrade() {
 	if c.CopyTradeMinConfidence <= 0 || c.CopyTradeMinConfidence > 100 {
 		c.CopyTradeMinConfidence = DefaultCopyTradeMinConfidence
 	}
+	if c.CopyTradeMinConfidence < MinCopyTradeMinConfidence {
+		c.CopyTradeMinConfidence = MinCopyTradeMinConfidence
+	}
 	if c.CopyTradeLimit <= 0 {
 		c.CopyTradeLimit = DefaultCopyTradeLimit
 	}
@@ -1736,6 +1744,9 @@ func (c *CoinSourceConfig) NormalizeCopyTrade() {
 	}
 	if c.CopyTradeContextMinConfidence < 0 {
 		c.CopyTradeContextMinConfidence = 0
+	}
+	if v := c.CopyTradeContextMinConfidence; v > 0 && v < MinCopyTradeMinConfidence {
+		c.CopyTradeContextMinConfidence = MinCopyTradeMinConfidence
 	}
 	if c.CopyTradeContextMinConfidence > 100 {
 		c.CopyTradeContextMinConfidence = 100

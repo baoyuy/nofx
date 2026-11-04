@@ -37,7 +37,9 @@ export function DecisionCopyTradePanel({
           👥 {zh ? 'AI 看到的带单参考' : 'Lead-trader context the AI saw'}
         </span>
         <span className="text-xs" style={{ color: MUTED }}>
-          {zh ? '点币种看 AI 收到的完整内容' : 'Click a coin for the full text'}
+          {zh
+            ? '带单原文在下方「用户提示词」里'
+            : 'The text the AI read is in the user prompt below'}
         </span>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -97,12 +99,14 @@ export function DecisionCopyTradePanel({
         })}
       </div>
       {shown ? (
-        <pre
-          className="mt-2 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-md p-3 font-mono text-xs"
-          style={{ background: '#edf1f7', color: '#192434' }}
+        <div
+          className="mt-2 rounded-md p-2 text-xs"
+          style={{ background: '#edf1f7', color: MUTED }}
         >
-          {shown.text}
-        </pre>
+          {zh
+            ? `${shown.symbol}：完整带单原文在下方「用户提示词」中，可复制或下载。`
+            : `${shown.symbol}: the full copy-trade text is in the user prompt below, where you can copy or download it.`}
+        </div>
       ) : null}
     </div>
   )

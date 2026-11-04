@@ -133,12 +133,17 @@ gofmt 会对齐结构体字段；新字段加在结构体中间时注意对齐�
 - 提示词：持仓人明细带 `averages into losses` / `scalp` / `long` 标签，系统提示词解释这些标签和 0.3 的票权。
 - 前端：「我的关注」显示风格徽章并可按风格筛选；「按币种」的持仓人明细显示风格标签。
 
-**待做：按策略主周期给风格加权**（用户选择先不做）
-- 1h/4h 策略里波段满权重、短线和长线降权。代价：`copytrade.Symbols` 要接收策略周期（kernel、api、signals 三处调用点跟着改），并且带单页没有策略上下文，会出现「页面一套置信度、策略里另一套」。等风格标签观察准确后再定阈值。
+- 杠杆未知说清楚：推断出来的持仓（没有真实杠杆）在提示词里写成 `-6.2% price (leverage unknown)`，系统提示词说明百分比是价格变动、"被套"按 10x 假设。
+- 持仓时间参与权重：`holdFactor`（<1h ×0.6、<4h ×0.8、更久 ×1，开在成交记录之前的按长持算），在 `views.Symbols` 里和健康度、高频、风格一起算。
+- 加仓不再抬高票权：`Position.FirstValue` 记录首次成交的量价，`stakeFactor` 用它而不是累计成本；`openedValue` 在缺失时回退到当前价值。
+- 置信度下限 10：`store.MinCopyTradeMinConfidence`，`NormalizeCopyTrade`/`ClampLimits` 和前端 `COPY_TRADE_LIMITS` 一起改，避免把门槛设成 1 等于没有门槛。
+- `getEffectiveCoinCount` 先归一化 `CoinSourceConfig`，Limit 为 0 时按默认 5 个币估算 token，而不是退到 3。
+- 决策记录不再重复存带单原文：`DecisionCopyTrade.Text` 删除，原文本来就在 `input_prompt` 里；前端决策卡改为提示去「用户提示词」查看。
+- 「我的关注」的「关注时间」排序已实现（按 `followed_at` 倒序）。
 
 **其他**
-- 推断仓位假设 10 倍杠杆：杠杆未知时被套按 5% 价格折算，可能不准，提示词里还没写"杠杆未知"。
 - 私密账户批量换成公开账户，没有公开账户的取消关注；老关注重新回填到 30 天（把 `FillsUntil` 置 0 会触发回填，每个账户最多 25 页请求）。
+- 「代理设置」在设置页的「数据」标签里，不是带单页的 tab；要挪位置属于产品决定，没动。
 
 ## 9. 工作约定
 

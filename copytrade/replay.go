@@ -32,6 +32,10 @@ type Position struct {
 	// FirstEntry is the price of the first fill seen for the position: the
 	// real entry when OpenedAt is known, else the earliest evidence of it.
 	FirstEntry float64 `json:"first_entry,omitempty"`
+	// FirstValue is FirstEntry × the quantity of that first fill: the size the
+	// trader committed when the position was opened, before any adds. Adding
+	// must not make a position look like a bigger conviction.
+	FirstValue float64 `json:"first_value,omitempty"`
 	// PreExisting marks a position opened before the stored fills begin: its
 	// quantity, average and holding time are only partly known then.
 	PreExisting bool `json:"pre_existing,omitempty"`
@@ -79,10 +83,11 @@ type bucket struct {
 	cost     float64 // |q| × average entry
 	openedAt int64
 	addedAt  int64
-	// first is the price of the first fill of the book, pre whether the book
-	// was already open before the stored fills.
-	first float64
-	pre   bool
+	// first is the price of the first fill of the book and firstQty its size,
+	// pre whether the book was already open before the stored fills.
+	first    float64
+	firstQty float64
+	pre      bool
 }
 
 func sideOf(q float64) string {
@@ -153,7 +158,7 @@ func ReplayKnown(fills []Fill, pre map[string]bool) ([]Position, []Event) {
 		if b == nil {
 			b = &bucket{}
 			books[key] = b
-			b.first = f.Price
+			b.first, b.firstQty = f.Price, f.Qty
 		}
 		delta := f.Qty
 		if strings.ToUpper(f.Side) == "SELL" {
@@ -217,7 +222,7 @@ func ReplayKnown(fills []Fill, pre map[string]bool) ([]Position, []Event) {
 			b.cost, b.openedAt, b.addedAt = excess*f.Price, f.Time, f.Time
 			emit(key, Event{Time: f.Time, Symbol: f.Symbol, Side: sideOf(b.q), Action: "open", Qty: excess,
 				Price: f.Price, Value: excess * f.Price, Fee: f.Fee * excess / f.Qty, PositionQty: excess})
-			b.first = f.Price
+			b.first, b.firstQty = f.Price, excess
 		}
 	}
 
@@ -229,7 +234,7 @@ func ReplayKnown(fills []Fill, pre map[string]bool) ([]Position, []Event) {
 		qty := math.Abs(b.q)
 		positions = append(positions, Position{Symbol: strings.SplitN(key, "|", 2)[0], Side: sideOf(b.q), Qty: qty,
 			EntryPrice: b.cost / qty, EntryValue: b.cost, OpenedAt: b.openedAt, LastAddAt: b.addedAt, Source: "inferred",
-			FirstEntry: b.first, PreExisting: b.pre})
+			FirstEntry: b.first, FirstValue: b.first * b.firstQty, PreExisting: b.pre})
 	}
 	sort.Slice(positions, func(a, b int) bool { return positions[a].EntryValue > positions[b].EntryValue })
 	return positions, events
@@ -269,7 +274,7 @@ func LivePositions(live []LivePosition, inferred []Position) []Position {
 		p := Position{Symbol: l.Symbol, Side: side, Qty: qty, EntryPrice: entry, EntryValue: qty * entry,
 			OpenedAt: r.OpenedAt, LastAddAt: r.LastAddAt, Source: "public", MarkPrice: float64(l.MarkPrice), Leverage: lev,
 			UnrealizedPnL: float64(l.UnrealizedProfit)}
-		p.FirstEntry, p.PreExisting = r.FirstEntry, r.PreExisting
+		p.FirstEntry, p.FirstValue, p.PreExisting = r.FirstEntry, r.FirstValue, r.PreExisting
 		if lev > 0 {
 			p.Margin = p.EntryValue / lev
 		}

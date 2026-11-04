@@ -328,7 +328,8 @@ func (s *DecisionStore) GetLastCycleNumber(traderID string) (int, error) {
 }
 
 // DecisionCopyTrade is followed lead traders' view of one coin at decision
-// time; Text is the block the AI read.
+// time. The block the AI read is not repeated here: it is already in the
+// record's InputPrompt.
 type DecisionCopyTrade struct {
 	Symbol        string  `json:"symbol"`
 	Direction     string  `json:"direction"`
@@ -340,5 +341,4 @@ type DecisionCopyTrade struct {
 	Trapped       int     `json:"trapped"`
 	Fresh         int     `json:"fresh"`
 	Holders       int     `json:"holders"`
-	Text          string  `json:"text"`
 }

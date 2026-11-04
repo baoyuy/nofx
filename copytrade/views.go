@@ -103,11 +103,39 @@ type Holder struct {
 	Style string `json:"style,omitempty"`
 }
 
+// openedValue is the size a position was opened with: adding to it later must
+// not make the trader look more convinced. Falls back to the current value when
+// the opening fill is unknown.
+func openedValue(p Position) float64 {
+	if p.FirstValue > 0 {
+		return p.FirstValue
+	}
+	return p.EntryValue
+}
+
+// holdFactor scales a vote by how long the position has been held: one opened
+// minutes ago is a snapshot, one that survived moves for hours is a view. An
+// unknown age (opened before the stored fills) counts as long held.
+func holdFactor(p Position, now time.Time) float64 {
+	if p.PreExisting || p.OpenedAt <= 0 {
+		return 1
+	}
+	switch age := now.Sub(time.UnixMilli(p.OpenedAt)); {
+	case age < time.Hour:
+		return 0.6
+	case age < 4*time.Hour:
+		return 0.8
+	default:
+		return 1
+	}
+}
+
 // Symbols sums positions per coin with each coin's direction confidence,
 // most traders first. Snapshots must carry their Score and position health.
 // Votes weigh each trader's stake by its health, so traders sitting on deep
 // losses count less than ones who just opened or added.
 func Symbols(snaps []Snapshot) []SymbolSummary {
+	now := time.Now()
 	by := map[string]*SymbolSummary{}
 	qty := map[string]float64{}
 	balance := map[string]float64{}
@@ -149,6 +177,8 @@ func Symbols(snaps []Snapshot) []SymbolSummary {
 			}
 			v.stake += p.EntryValue
 			v.health += healthFactor(p) * p.EntryValue
+			v.opened += openedValue(p)
+			v.hold += holdFactor(p, now) * p.EntryValue
 			side := &sum.Long
 			if p.Side == "short" {
 				side = &sum.Short
@@ -172,11 +202,18 @@ func Symbols(snaps []Snapshot) []SymbolSummary {
 	for _, s := range by {
 		var list []vote
 		for _, v := range votes[s.Symbol] {
-			health := 1.0
+			health, hold := 1.0, 1.0
 			if v.stake > 0 {
 				health = v.health / v.stake
+				hold = v.hold / v.stake
 			}
-			base := math.Max(1, v.score) * stakeFactor(v.stake, balance[v.trader])
+			// Stake is what the position was opened with: adding to it must
+			// not make the vote weigh more.
+			size := v.opened
+			if size <= 0 {
+				size = v.stake
+			}
+			base := math.Max(1, v.score) * stakeFactor(size, balance[v.trader])
 			if v.highFreq {
 				base *= highFreqWeight
 			}
@@ -185,7 +222,8 @@ func Symbols(snaps []Snapshot) []SymbolSummary {
 			if martingale[v.trader] {
 				base *= martingaleWeight
 			}
-			list = append(list, vote{trader: v.trader, side: v.side, score: v.score, base: base, weight: base * health})
+			list = append(list, vote{trader: v.trader, side: v.side, score: v.score, base: base,
+				weight: base * health * hold})
 		}
 		s.Confidence = confidence(list)
 		if q := qty[s.Symbol+"long"]; q > 0 {

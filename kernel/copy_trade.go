@@ -200,6 +200,7 @@ Some coins carry a "Followed lead traders" block: what Binance copy-trading lead
 - "⚠️ Lead traders: copy-trade data is unavailable..." or "...only N of M followed traders have fresh data" means the data is missing or partly refreshed: it says nothing about whether they hold the coin. Judge that coin on your own read, and do not close because of it.
 - Confidence (0-100) combines how much they agree, how credible their records are, and how many hold the coin. It is not a win probability.
 - "Trapped" traders sit on deep losses and may just be waiting to break even; "fresh" ones opened or added in the last 24 hours and reflect a current view. A trader who averaged down is judged from the first entry, so adding to a losing position still shows as trapped.
+- A position inferred from fills has no leverage: its percentage is of price, and "trapped" assumes 10x. Read it as approximate; a public position shows its real leverage and margin.
 - High-frequency traders (bots, grids) are weighted down; their positions churn.
 - "averages into losses" marks a trader who keeps adding to losing positions: their votes count 0.3, so their size says little about conviction. The tags "scalp" and "long" are holding-time styles: a scalp closes within hours (a snapshot, not a view), a long holds for weeks (directionally meaningful, but their entry is old).
 - "Price vs lead avg entry": far beyond their average in their direction means chasing a move they already made; near or better than their average is a better entry.
@@ -295,7 +296,9 @@ func formatCopyTrade(c *CopyTradeCoin, cov *CopyTradeView, now time.Time, price 
 				if h.Leverage > 0 {
 					line += fmt.Sprintf(", %+.1f%% of margin", h.ReturnPct)
 				} else {
-					line += fmt.Sprintf(", %+.1f%% price", h.ReturnPct)
+					// Inferred from fills: no leverage, so this is a price
+					// move and "trapped" assumed 10x.
+					line += fmt.Sprintf(", %+.1f%% price (leverage unknown)", h.ReturnPct)
 				}
 			}
 			if h.OpenedAt > 0 {
@@ -376,8 +379,7 @@ func CopyTradeBriefs(ctx *Context, now time.Time) []store.DecisionCopyTrade {
 		seen[copyTradeKey(symbol)] = true
 		out = append(out, store.DecisionCopyTrade{Symbol: symbol, Direction: c.Direction, Confidence: c.Confidence,
 			LongTraders: c.Long.Traders, ShortTraders: c.Short.Traders, LongAvgEntry: c.Long.AvgEntry, ShortAvgEntry: c.Short.AvgEntry,
-			Trapped: c.Long.Trapped + c.Short.Trapped, Fresh: c.Long.Fresh + c.Short.Fresh, Holders: len(c.Holders),
-			Text: CopyTradeText(ctx, symbol, now)})
+			Trapped: c.Long.Trapped + c.Short.Trapped, Fresh: c.Long.Fresh + c.Short.Fresh, Holders: len(c.Holders)})
 	}
 	for _, p := range ctx.Positions {
 		add(p.Symbol)
