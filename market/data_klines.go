@@ -172,6 +172,7 @@ func calculateTimeframeSeries(klines []Kline, timeframe string, count int) *Time
 		BOLLMiddle:  make([]float64, 0, count),
 		BOLLLower:   make([]float64, 0, count),
 	}
+	data.AsOf, data.FreshnessIssue = candleMetadata(klines, timeframe, time.Now())
 
 	// Get latest N data points based on count from config
 	start := len(klines) - count

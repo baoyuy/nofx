@@ -6,6 +6,7 @@ import (
 	"nofx/logger"
 	"nofx/market"
 	"nofx/store"
+	"nofx/trader/binance"
 	"time"
 )
 
@@ -50,6 +51,10 @@ func (at *AutoTrader) executeDecisionWithRecord(decision *kernel.Decision, actio
 
 // executeOpenLongWithRecord executes open long position and records detailed information
 func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actionRecord *store.DecisionAction) error {
+	unlockLifecycle := at.LockPositionLifecycle(decision.Symbol, "long")
+	defer unlockLifecycle()
+	at.positionActionMu.Lock()
+	defer at.positionActionMu.Unlock()
 	logger.Infof("  📈 Open long: %s", decision.Symbol)
 
 	// ⚠️ Get current positions for multiple checks
@@ -169,11 +174,20 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actio
 		return at.closeUnprotectedPosition(decision.Symbol, "long", quantity, fmt.Errorf("failed to set mandatory take profit: %w", err))
 	}
 
+	if at.exchange == binance.PaperExchangeType {
+		if err := at.ProfitProtectionOpened(decision.Symbol, "long"); err != nil {
+			logger.Warnf("Paper profit protection lifecycle initialization failed: %v", err)
+		}
+	}
 	return nil
 }
 
 // executeOpenShortWithRecord executes open short position and records detailed information
 func (at *AutoTrader) executeOpenShortWithRecord(decision *kernel.Decision, actionRecord *store.DecisionAction) error {
+	unlockLifecycle := at.LockPositionLifecycle(decision.Symbol, "short")
+	defer unlockLifecycle()
+	at.positionActionMu.Lock()
+	defer at.positionActionMu.Unlock()
 	logger.Infof("  📉 Open short: %s", decision.Symbol)
 
 	// ⚠️ Get current positions for multiple checks
@@ -293,133 +307,10 @@ func (at *AutoTrader) executeOpenShortWithRecord(decision *kernel.Decision, acti
 		return at.closeUnprotectedPosition(decision.Symbol, "short", quantity, fmt.Errorf("failed to set mandatory take profit: %w", err))
 	}
 
-	return nil
-}
-
-// executeCloseLongWithRecord executes close long position and records detailed information
-func (at *AutoTrader) executeCloseLongWithRecord(decision *kernel.Decision, actionRecord *store.DecisionAction) error {
-	logger.Infof("  🔄 Close long: %s", decision.Symbol)
-
-	// Get current price
-	marketData, err := market.GetWithExchange(decision.Symbol, at.exchange)
-	if err != nil {
-		return fmt.Errorf("failed to get market data for %s: %w", decision.Symbol, err)
-	}
-	actionRecord.Price = marketData.CurrentPrice
-
-	// Normalize symbol for database lookup
-	normalizedSymbol := at.normSymbol(decision.Symbol)
-
-	// Get entry price and quantity - prioritize local database for accurate quantity
-	var entryPrice float64
-	var quantity float64
-
-	// First try to get from local database (more accurate for quantity)
-	if at.store != nil {
-		if openPos, err := at.store.Position().GetOpenPositionBySymbol(at.id, normalizedSymbol, "LONG"); err == nil && openPos != nil {
-			quantity = openPos.Quantity
-			entryPrice = openPos.EntryPrice
-			logger.Infof("  📊 Using local position data: qty=%.8f, entry=%.2f", quantity, entryPrice)
+	if at.exchange == binance.PaperExchangeType {
+		if err := at.ProfitProtectionOpened(decision.Symbol, "short"); err != nil {
+			logger.Warnf("Paper profit protection lifecycle initialization failed: %v", err)
 		}
 	}
-
-	// Fallback to exchange API if local data not found
-	if quantity == 0 {
-		positions, err := at.trader.GetPositions()
-		if err == nil {
-			for _, pos := range positions {
-				if pos["symbol"] == decision.Symbol && pos["side"] == "long" {
-					if ep, ok := pos["entryPrice"].(float64); ok {
-						entryPrice = ep
-					}
-					if amt, ok := pos["positionAmt"].(float64); ok && amt > 0 {
-						quantity = amt
-					}
-					break
-				}
-			}
-		}
-		logger.Infof("  📊 Using exchange position data: qty=%.8f, entry=%.2f", quantity, entryPrice)
-	}
-
-	// Close position
-	order, err := at.trader.CloseLong(decision.Symbol, 0) // 0 = close all
-	if err != nil {
-		return fmt.Errorf("failed to close long position for %s: %w", decision.Symbol, err)
-	}
-
-	// Record order ID
-	if orderID, ok := order["orderId"].(int64); ok {
-		actionRecord.OrderID = orderID
-	}
-
-	// Record order to database and poll for confirmation
-	at.recordAndConfirmOrder(order, decision.Symbol, "close_long", quantity, marketData.CurrentPrice, 0, entryPrice)
-
-	logger.Infof("  ✓ Position closed successfully")
-	return nil
-}
-
-// executeCloseShortWithRecord executes close short position and records detailed information
-func (at *AutoTrader) executeCloseShortWithRecord(decision *kernel.Decision, actionRecord *store.DecisionAction) error {
-	logger.Infof("  🔄 Close short: %s", decision.Symbol)
-
-	// Get current price
-	marketData, err := market.GetWithExchange(decision.Symbol, at.exchange)
-	if err != nil {
-		return fmt.Errorf("failed to get market data for %s: %w", decision.Symbol, err)
-	}
-	actionRecord.Price = marketData.CurrentPrice
-
-	// Normalize symbol for database lookup
-	normalizedSymbol := at.normSymbol(decision.Symbol)
-
-	// Get entry price and quantity - prioritize local database for accurate quantity
-	var entryPrice float64
-	var quantity float64
-
-	// First try to get from local database (more accurate for quantity)
-	if at.store != nil {
-		if openPos, err := at.store.Position().GetOpenPositionBySymbol(at.id, normalizedSymbol, "SHORT"); err == nil && openPos != nil {
-			quantity = openPos.Quantity
-			entryPrice = openPos.EntryPrice
-			logger.Infof("  📊 Using local position data: qty=%.8f, entry=%.2f", quantity, entryPrice)
-		}
-	}
-
-	// Fallback to exchange API if local data not found
-	if quantity == 0 {
-		positions, err := at.trader.GetPositions()
-		if err == nil {
-			for _, pos := range positions {
-				if pos["symbol"] == decision.Symbol && pos["side"] == "short" {
-					if ep, ok := pos["entryPrice"].(float64); ok {
-						entryPrice = ep
-					}
-					if amt, ok := pos["positionAmt"].(float64); ok {
-						quantity = -amt // positionAmt is negative for short
-					}
-					break
-				}
-			}
-		}
-		logger.Infof("  📊 Using exchange position data: qty=%.8f, entry=%.2f", quantity, entryPrice)
-	}
-
-	// Close position
-	order, err := at.trader.CloseShort(decision.Symbol, 0) // 0 = close all
-	if err != nil {
-		return fmt.Errorf("failed to close short position for %s: %w", decision.Symbol, err)
-	}
-
-	// Record order ID
-	if orderID, ok := order["orderId"].(int64); ok {
-		actionRecord.OrderID = orderID
-	}
-
-	// Record order to database and poll for confirmation
-	at.recordAndConfirmOrder(order, decision.Symbol, "close_short", quantity, marketData.CurrentPrice, 0, entryPrice)
-
-	logger.Infof("  ✓ Position closed successfully")
 	return nil
 }

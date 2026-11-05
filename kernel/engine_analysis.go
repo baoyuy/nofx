@@ -99,6 +99,7 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 			return nil, fmt.Errorf("failed to fetch market data: %w", err)
 		}
 	}
+	alignPositionQuotes(ctx, engine.Exchange())
 	pruneCandidateCoinsWithoutMarketData(ctx)
 	enrichVergexDataWithStrategy(ctx, engine)
 	enrichCopyTradeData(ctx, engine)
@@ -148,6 +149,9 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 		engine.usesVergexSignalPrompt(),
 	)
 
+	if decision != nil {
+		blockUnsafeOpenings(decision.Decisions, ctx, engine.Exchange(), time.Now())
+	}
 	if decision != nil {
 		decision.Timestamp = time.Now()
 		decision.SystemPrompt = systemPrompt
@@ -222,13 +226,14 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 
 	// 1. First fetch data for position coins (must fetch)
 	for _, pos := range ctx.Positions {
-		data, err := market.GetWithTimeframesFor(pos.Symbol, engine.Exchange(), timeframes, primaryTimeframe, klineCount)
+		data, err := fetchStrategyCandles(pos.Symbol, engine.Exchange(), timeframes, primaryTimeframe, klineCount)
 		if err != nil {
 			logger.Infof("⚠️  Failed to fetch market data for position %s: %v", pos.Symbol, err)
 			continue
 		}
 		ctx.MarketDataMap[pos.Symbol] = data
 	}
+	alignPositionQuotes(ctx, engine.Exchange())
 
 	// 2. Fetch data for all candidate coins
 	positionSymbols := make(map[string]bool)
@@ -241,7 +246,7 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 			continue
 		}
 
-		data, err := market.GetWithTimeframesFor(coin.Symbol, engine.Exchange(), timeframes, primaryTimeframe, klineCount)
+		data, err := fetchStrategyCandles(coin.Symbol, engine.Exchange(), timeframes, primaryTimeframe, klineCount)
 		if err != nil {
 			logger.Infof("⚠️  Failed to fetch market data for %s: %v", coin.Symbol, err)
 			continue
@@ -251,6 +256,13 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 			continue
 		}
 
+		if !positionSymbols[coin.Symbol] {
+			quote, quoteErr := fetchStrategyQuote(coin.Symbol, engine.Exchange())
+			if quoteErr != nil {
+				logger.Infof("⚠️ Reference quote unavailable for %s: %v (opening disabled)", coin.Symbol, quoteErr)
+			}
+			data.SetQuote(quote)
+		}
 		ctx.MarketDataMap[coin.Symbol] = data
 	}
 
@@ -270,8 +282,12 @@ func skipLowOpenInterest(symbol string, data *market.Data, existingPosition bool
 		logger.Infof("%s open interest unavailable; OI liquidity filter not evaluated", symbol)
 		return false
 	}
-	if data.CurrentPrice > 0 {
-		oiValueInMillions := data.OpenInterest.Latest * data.CurrentPrice / 1_000_000
+	price := data.CurrentPrice
+	if price <= 0 {
+		price = data.IndicatorPrice
+	} // valuation estimate only, not a live quote
+	if price > 0 {
+		oiValueInMillions := data.OpenInterest.Latest * price / 1_000_000
 		if oiValueInMillions < minOIThresholdMillions {
 			logger.Infof("%s OI value too low (%.2fM USD < %.1fM), skipping coin",
 				symbol, oiValueInMillions, minOIThresholdMillions)
@@ -294,6 +310,61 @@ func pruneCandidateCoinsWithoutMarketData(ctx *Context) {
 		logger.Infof("⚠️  Skipping candidate %s in AI prompt: no valid market/K-line data", coin.Symbol)
 	}
 	ctx.CandidateCoins = kept
+}
+
+var fetchStrategyCandles = market.GetWithTimeframesFor
+var fetchStrategyQuote = market.GetReferenceQuote
+
+// alignPositionQuotes shares the account snapshot's price/PnL basis with the
+// market section. Never refetch/replace a held symbol with a different quote.
+// Shallow-copy Data so shared candle/indicator snapshots remain unchanged.
+func alignPositionQuotes(ctx *Context, exchange string) {
+	if ctx.MarketDataMap == nil {
+		ctx.MarketDataMap = make(map[string]*market.Data)
+	}
+	for _, pos := range ctx.Positions {
+		key := pos.Symbol
+		data := ctx.MarketDataMap[key]
+		if data == nil {
+			data = ctx.MarketDataMap[market.NormalizeFor(key, exchange)]
+		}
+		if data == nil {
+			data = &market.Data{Symbol: key, IndicatorIssue: "candles unavailable"}
+		}
+		copyData := *data
+		quote := &market.Quote{Price: pos.MarkPrice, Source: "account_position_mark (same snapshot as PnL; not a fill guarantee)"}
+		if pos.MarkObservedAt > 0 {
+			quote.ObservedAt = time.UnixMilli(pos.MarkObservedAt)
+		}
+		if pos.MarkPriceTime > 0 {
+			quote.AsOf = time.UnixMilli(pos.MarkPriceTime)
+		}
+		copyData.SetQuote(quote)
+		ctx.MarketDataMap[key] = &copyData
+		if normalized := market.NormalizeFor(key, exchange); normalized != key {
+			ctx.MarketDataMap[normalized] = &copyData
+		}
+	}
+}
+
+// Independent of prompt compliance: stale/unknown quote or indicator data may
+// never create exposure. Hold/close actions are intentionally untouched.
+func blockUnsafeOpenings(decisions []Decision, ctx *Context, exchange string, now time.Time) {
+	for i := range decisions {
+		d := &decisions[i]
+		if d.Action != "open_long" && d.Action != "open_short" {
+			continue
+		}
+		data := ctx.MarketDataMap[d.Symbol]
+		if data == nil {
+			data = ctx.MarketDataMap[market.NormalizeFor(d.Symbol, exchange)]
+		}
+		if !data.OpeningAllowed(now) {
+			logger.Infof("🚫 Opening %s blocked: stale/unavailable quote or indicator timestamps", d.Symbol)
+			d.Action = "wait"
+			d.Reasoning = "Opening blocked: stale/unavailable quote or indicator timestamps. " + d.Reasoning
+		}
+	}
 }
 
 // ============================================================================

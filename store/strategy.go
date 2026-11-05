@@ -184,6 +184,7 @@ func (c *StrategyConfig) ClampLimits() {
 	if c.RiskControl.MinStopATR > 5 {
 		c.RiskControl.MinStopATR = 5
 	}
+	c.RiskControl.ProfitProtection = NormalizeProfitProtection(c.RiskControl.ProfitProtection)
 	if c.CoinSource.CopyTradeContext && c.CoinSource.SourceType != "copy_trade" {
 		switch c.CoinSource.CopyTradeFollow {
 		case "follow", "fade", "free":
@@ -1076,6 +1077,9 @@ type RiskControlConfig struct {
 	// this many ATR14 of the primary timeframe (0 = off), so normal noise
 	// does not stop the trade out.
 	MinStopATR float64 `json:"min_stop_atr,omitempty"`
+
+	// Optional, price-basis protection for NEW Binance paper positions only.
+	ProfitProtection ProfitProtectionConfig `json:"profit_protection,omitempty"`
 }
 
 // MinOIValueMillionsOrDefault returns the candidate OI filter threshold.

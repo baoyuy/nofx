@@ -25,78 +25,34 @@ func leveragedThrottleContext(symbol, side string, heldFor time.Duration, pnlPct
 	}
 }
 
-func TestTradeThrottleBlocksEarlyNoiseClose(t *testing.T) {
-	at := &AutoTrader{}
-	ctx := throttleContext("xyz:INTC", "long", 20*time.Minute, -0.3)
-
-	reason := at.tradeThrottleReason(kernel.Decision{Symbol: "xyz:INTC", Action: "close_long"}, ctx)
-	if !strings.Contains(reason, "min AI-managed hold") {
-		t.Fatalf("expected early close to be blocked by min hold, got %q", reason)
+func TestTradeThrottleNeverBlocksRiskReducingClose(t *testing.T) {
+	for _, side := range []string{"long", "short"} {
+		for _, held := range []time.Duration{time.Minute, 75 * time.Minute, 90 * time.Minute, 150 * time.Minute, 3 * time.Hour} {
+			for _, pnl := range []float64{-60, -7.7, -5.4, -1.67, 0, 4.6, 20, 80} {
+				ctx := leveragedThrottleContext("SOLUSDT", side, held, pnl, 10)
+				at := &AutoTrader{}
+				if reason := at.tradeThrottleReason(kernel.Decision{Symbol: "SOLUSDT", Action: "close_" + side}, ctx); reason != "" {
+					t.Fatalf("risk exit blocked for %s held %s ROI %.2f: %s", side, held, pnl, reason)
+				}
+			}
+		}
 	}
 }
 
-func TestTradeThrottleAllowsEarlyHardStop(t *testing.T) {
-	at := &AutoTrader{}
-	// A price loss beyond the default -3% bypass unlocks the min hold.
-	ctx := throttleContext("xyz:INTC", "long", 20*time.Minute, -6.0)
-
-	reason := at.tradeThrottleReason(kernel.Decision{Symbol: "xyz:INTC", Action: "close_long"}, ctx)
-	if reason != "" {
-		t.Fatalf("expected hard stop close to pass, got %q", reason)
-	}
-}
-
-func TestTradeThrottleBypassIsPriceBasisNotMarginBasis(t *testing.T) {
-	at := &AutoTrader{}
-	// At 10x leverage the exchange reports margin-based PnL: -6% margin is
-	// only a -0.6% price move — noise, must NOT bypass the min hold.
-	ctx := leveragedThrottleContext("xyz:INTC", "long", 20*time.Minute, -6.0, 10)
-
-	reason := at.tradeThrottleReason(kernel.Decision{Symbol: "xyz:INTC", Action: "close_long"}, ctx)
-	if !strings.Contains(reason, "min AI-managed hold") {
-		t.Fatalf("expected -0.6%% price move to stay blocked at 10x, got %q", reason)
-	}
-
-	// -60% margin at 10x is a real -6% price move — bypass allowed.
-	ctx = leveragedThrottleContext("xyz:INTC", "long", 20*time.Minute, -60.0, 10)
-	reason = at.tradeThrottleReason(kernel.Decision{Symbol: "xyz:INTC", Action: "close_long"}, ctx)
-	if reason != "" {
-		t.Fatalf("expected -6%% price move to bypass min hold at 10x, got %q", reason)
-	}
-}
-
-func TestTradeThrottleNoiseBandIsPriceBasisNotMarginBasis(t *testing.T) {
-	at := &AutoTrader{}
-	// Past min hold at 10x: +20% margin is only a +2% price move, still
-	// inside the default -2%..+3% noise band — flat close must stay blocked.
-	ctx := leveragedThrottleContext("xyz:INTC", "long", 2*time.Hour, 20.0, 10)
-
-	reason := at.tradeThrottleReason(kernel.Decision{Symbol: "xyz:INTC", Action: "close_long"}, ctx)
-	if !strings.Contains(reason, "noise band") {
-		t.Fatalf("expected +2%% price move to be blocked inside noise band at 10x, got %q", reason)
-	}
-}
-
-func TestTradeThrottleBlocksFlatCloseInsideNoiseWindow(t *testing.T) {
-	at := &AutoTrader{}
-	// Held past the default 90m min hold but still inside the noise band and
-	// under the 3h noise window.
-	ctx := throttleContext("xyz:INTC", "long", 2*time.Hour, 0.4)
-
-	reason := at.tradeThrottleReason(kernel.Decision{Symbol: "xyz:INTC", Action: "close_long"}, ctx)
-	if !strings.Contains(reason, "noise band") {
-		t.Fatalf("expected flat close to be blocked inside noise window, got %q", reason)
-	}
-}
-
-func TestTradeThrottleAllowsConfirmedLossAfterMinimumHold(t *testing.T) {
-	at := &AutoTrader{}
-	// Past the min hold, loss beyond the -2% noise floor → close allowed.
-	ctx := throttleContext("xyz:INTC", "long", 2*time.Hour, -2.5)
-
-	reason := at.tradeThrottleReason(kernel.Decision{Symbol: "xyz:INTC", Action: "close_long"}, ctx)
-	if reason != "" {
-		t.Fatalf("expected confirmed loss after min hold to pass, got %q", reason)
+// These snapshots are from the server's rejected SOL exits. They check only
+// permission to reduce risk, not a hypothetical fill or improved profit.
+func TestServerSOLExitReplayIsNotAgeGated(t *testing.T) {
+	for _, tc := range []struct {
+		held         time.Duration
+		marginReturn float64
+	}{
+		{75 * time.Minute, -5.4}, {90 * time.Minute, -5.3}, {150 * time.Minute, -7.7}, {180*time.Minute - time.Second, -1.67},
+	} {
+		at := &AutoTrader{}
+		ctx := leveragedThrottleContext("SOLUSDT", "long", tc.held, tc.marginReturn, 10)
+		if reason := at.tradeThrottleReason(kernel.Decision{Symbol: "SOLUSDT", Action: "close_long"}, ctx); reason != "" {
+			t.Fatal(reason)
+		}
 	}
 }
 

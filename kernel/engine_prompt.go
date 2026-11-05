@@ -786,16 +786,17 @@ func (e *StrategyEngine) writeAvailableIndicators(sb *strings.Builder, zh bool) 
 // BuildUserPrompt builds User Prompt based on strategy configuration
 func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 	var sb strings.Builder
+	alignPositionQuotes(ctx, e.Exchange())
+	sb.WriteString("Price basis: held symbols use the account position mark from the same snapshot as PnL. Public candidate quotes are references, not guaranteed fills. Candle closes/indicators are historical or unfinished-bar observations, NEVER real-time execution quotes. Unknown/stale quote or candle timestamps prohibit opening/increasing exposure, but must not prevent managing or exiting holdings.\n\n")
 
 	// System status
 	sb.WriteString(fmt.Sprintf("Time: %s | Period: #%d | Runtime: %d minutes\n\n",
 		ctx.CurrentTime, ctx.CallCount, ctx.RuntimeMinutes))
 
 	// BTC market
-	if btcData, hasBTC := ctx.MarketDataMap["BTCUSDT"]; hasBTC {
-		sb.WriteString(fmt.Sprintf("BTC: %.2f (1h: %+.2f%%, 4h: %+.2f%%) | MACD: %.4f | RSI: %.2f\n\n",
-			btcData.CurrentPrice, btcData.PriceChange1h, btcData.PriceChange4h,
-			btcData.CurrentMACD, btcData.CurrentRSI7))
+	if btcData, hasBTC := ctx.MarketDataMap["BTCUSDT"]; hasBTC && btcData != nil {
+		sb.WriteString(fmt.Sprintf("BTC indicator-only changes: 1h: %+.2f%%, 4h: %+.2f%% | MACD: %.4f | RSI: %.2f | candle_as_of (bar open): %s\n\n",
+			btcData.PriceChange1h, btcData.PriceChange4h, btcData.CurrentMACD, btcData.CurrentRSI7, quoteTimeText(btcData.IndicatorAsOf)))
 	}
 
 	// Account information
@@ -1084,6 +1085,13 @@ func (e *StrategyEngine) formatVergexData(data *vergex.MarketAnalysis) string {
 	return sb.String()
 }
 
+func quoteTimeText(t time.Time) string {
+	if t.IsZero() {
+		return "unknown"
+	}
+	return t.UTC().Format(time.RFC3339Nano)
+}
+
 // ============================================================================
 // Market Data Formatting
 // ============================================================================
@@ -1094,7 +1102,18 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 
 	// Clearly label the coin symbol
 	sb.WriteString(fmt.Sprintf("=== %s Market Data ===\n\n", data.Symbol))
-	sb.WriteString(fmt.Sprintf("current_price = %.4f", data.CurrentPrice))
+	if q := data.Quote; q != nil {
+		if q.Fresh(time.Now()) || strings.HasPrefix(q.Source, "account_position_mark") {
+			sb.WriteString(fmt.Sprintf("current_price = %.4f", data.CurrentPrice))
+		} else {
+			sb.WriteString(fmt.Sprintf("current_price = unavailable; last_reference_quote = %.4f", q.Price))
+		}
+		sb.WriteString(fmt.Sprintf(" | quote_source = %s | quote_as_of = %s | quote_observed_at = %s | quote_fresh = %t\n", q.Source, quoteTimeText(q.AsOf), quoteTimeText(q.ObservedAt), q.Fresh(time.Now())))
+	} else {
+		sb.WriteString("current_price = not provided (no independent quote; candle-only data is NOT real-time)\n")
+	}
+	sb.WriteString(fmt.Sprintf("opening_allowed = %t (fresh quote AND known fresh candle timestamps required)\n", data.OpeningAllowed(time.Now())))
+	sb.WriteString(fmt.Sprintf("indicator_close = %.4f | indicator_as_of (bar open, not quote time) = %s | timeframe = %s | candle_issue = %q\nCandle-derived indicators", data.IndicatorPrice, quoteTimeText(data.IndicatorAsOf), data.IndicatorTimeframe, data.IndicatorIssue))
 
 	if indicators.EnableEMA {
 		sb.WriteString(fmt.Sprintf(", current_ema20 = %.3f", data.CurrentEMA20))
@@ -1132,6 +1151,7 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 		for _, tf := range timeframeOrder {
 			if tfData, ok := data.TimeframeData[tf]; ok {
 				sb.WriteString(fmt.Sprintf("=== %s Timeframe (oldest → latest) ===\n\n", strings.ToUpper(tf)))
+				sb.WriteString(fmt.Sprintf("indicator_as_of (bar open) = %s | candle_issue = %q\n", quoteTimeText(tfData.AsOf), tfData.FreshnessIssue))
 				e.formatTimeframeSeriesData(&sb, tfData, indicators)
 			}
 		}

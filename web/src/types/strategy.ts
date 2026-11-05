@@ -223,6 +223,15 @@ export interface ExternalDataSource {
   refresh_secs?: number
 }
 
+// Percentages are underlying price moves, not leveraged ROI. Paper accounts only.
+export interface ProfitProtectionConfig {
+  enabled: boolean
+  breakeven_activation_pct: number
+  breakeven_lock_pct: number
+  trailing_activation_pct: number
+  trailing_giveback_pct: number
+}
+
 export interface RiskControlConfig {
   // Max number of coins held simultaneously (CODE ENFORCED)
   max_positions: number
@@ -243,4 +252,5 @@ export interface RiskControlConfig {
   min_stop_atr?: number // Stop at least this many ATR14 from price (0 = off), enforced by the program
   min_confidence: number // Min AI confidence to open position (AI guided)
   min_oi_value_millions?: number // Skip candidates with OI value below this (million USD), 0 = off (CODE ENFORCED)
+  profit_protection?: ProfitProtectionConfig
 }

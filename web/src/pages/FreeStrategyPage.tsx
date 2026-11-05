@@ -38,6 +38,7 @@ import {
   type FreeForm,
 } from '../lib/strategyForm'
 import { parseStrategyFile, strategyToJsonc } from '../lib/strategyFile'
+import { ProfitProtectionPanel } from '../components/strategy/ProfitProtectionPanel'
 import {
   CopyTradeContextToggle,
   CopyTradeSourcePanel,
@@ -1477,6 +1478,11 @@ export function FreeStrategyPage() {
                 </Field>
               </div>
               <RiskSummary form={form} language={language} />
+              <ProfitProtectionPanel
+                value={form.profitProtection}
+                onChange={(profitProtection) => patchForm({ profitProtection })}
+                language={language}
+              />
             </Section>
 
             <Section

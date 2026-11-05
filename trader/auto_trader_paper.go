@@ -33,7 +33,7 @@ func (at *AutoTrader) recordPaperCloses(pt *binance.PaperTrader) {
 		symbol := at.normSymbol(ev.Symbol)
 		order := at.createOrderRecord(ev.OrderID, symbol, action, positionSide, ev.Quantity, ev.ExitPrice, ev.Leverage)
 		switch ev.Reason {
-		case "stop_loss":
+		case "stop_loss", "profit_protection":
 			order.Type = "STOP_MARKET"
 		case "take_profit":
 			order.Type = "TAKE_PROFIT_MARKET"
@@ -50,5 +50,13 @@ func (at *AutoTrader) recordPaperCloses(pt *binance.PaperTrader) {
 			at.recordOrderFill(order.ID, ev.OrderID, symbol, action, ev.ExitPrice, ev.Quantity, ev.Fee)
 		}
 		at.recordPositionChange(ev.OrderID, symbol, positionSide, action, ev.Quantity, ev.ExitPrice, ev.Leverage, ev.EntryPrice, ev.Fee)
+		// An older queued close must never erase a replacement position's peak.
+		unlock := at.LockPositionLifecycle(ev.Symbol, ev.Side)
+		if _, exists := pt.ProfitPosition(ev.Symbol, ev.Side); !exists {
+			if err := at.ProfitProtectionClosed(ev.Symbol, ev.Side); err != nil {
+				logger.Warnf("[Paper] Failed to clear profit lifecycle: %v", err)
+			}
+		}
+		unlock()
 	}
 }

@@ -222,11 +222,9 @@ func GetWithTimeframesFor(symbol, exchange string, timeframes []string, primaryT
 		return nil, fmt.Errorf("Primary timeframe %s K-line data is empty", primaryTimeframe)
 	}
 
-	// Data staleness detection
-	if isStaleData(primaryKlines, symbol) {
-		logger.Infof("⚠️  WARNING: %s detected stale data (consecutive price freeze), skipping symbol", symbol)
-		return nil, fmt.Errorf("%s data is stale, possible cache failure", symbol)
-	}
+	// Retain stale candles for position management, but never permit an opening
+	// from stale/unknown timestamps (or frozen data).
+	asOf, indicatorIssue := candleMetadata(primaryKlines, primaryTimeframe, time.Now())
 
 	// Calculate current indicators (based on primary timeframe latest data)
 	currentPrice := primaryKlines[len(primaryKlines)-1].Close
@@ -248,16 +246,20 @@ func GetWithTimeframesFor(symbol, exchange string, timeframes []string, primaryT
 	fundingRate, _ := getFundingRate(symbol)
 
 	return &Data{
-		Symbol:        symbol,
-		CurrentPrice:  currentPrice,
-		PriceChange1h: priceChange1h,
-		PriceChange4h: priceChange4h,
-		CurrentEMA20:  currentEMA20,
-		CurrentMACD:   currentMACD,
-		CurrentRSI7:   currentRSI7,
-		OpenInterest:  oiData,
-		FundingRate:   fundingRate,
-		TimeframeData: timeframeData,
+		Symbol:             symbol,
+		IndicatorPrice:     currentPrice,
+		IndicatorAsOf:      asOf,
+		IndicatorTimeframe: primaryTimeframe,
+		IndicatorIssue:     indicatorIssue,
+		FetchedAt:          time.Now(),
+		PriceChange1h:      priceChange1h,
+		PriceChange4h:      priceChange4h,
+		CurrentEMA20:       currentEMA20,
+		CurrentMACD:        currentMACD,
+		CurrentRSI7:        currentRSI7,
+		OpenInterest:       oiData,
+		FundingRate:        fundingRate,
+		TimeframeData:      timeframeData,
 	}, nil
 }
 

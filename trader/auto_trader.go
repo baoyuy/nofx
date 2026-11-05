@@ -194,6 +194,7 @@ type AutoTrader struct {
 	positionFirstSeenTime map[string]int64   // Position first seen time (symbol_side -> timestamp in milliseconds)
 	stopMonitorCh         chan struct{}      // Used to stop monitoring goroutine
 	monitorWg             sync.WaitGroup     // Used to wait for monitoring goroutine to finish
+	positionActionMu      sync.Mutex         // Serializes opens/closes and protection changes for this trader.
 	peakPnLCache          map[string]float64 // Peak profit cache (symbol -> peak P&L percentage)
 	peakPnLCacheMutex     sync.RWMutex       // Cache read-write lock
 	lastBalanceSyncTime   time.Time          // Last balance sync time
@@ -308,6 +309,11 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	// Set default trading platform
 	if config.Exchange == "" {
 		config.Exchange = "binance"
+	}
+	if config.StrategyConfig != nil {
+		if err := store.ValidateProfitProtectionExchange(config.Exchange, config.StrategyConfig.RiskControl.ProfitProtection); err != nil {
+			return nil, err
+		}
 	}
 
 	// Create corresponding trader based on configuration
@@ -480,6 +486,9 @@ func (at *AutoTrader) reloadStrategyConfigIfChanged() error {
 	strategyConfig.ClampLimits()
 	// The running loop selects its AI/grid branch once. Never hot-switch it,
 	// or hot-reconfigure a live grid's capital, leverage or order structure.
+	if err := store.ValidateProfitProtectionExchange(at.exchange, strategyConfig.RiskControl.ProfitProtection); err != nil {
+		return err
+	}
 	at.isRunningMutex.RLock()
 	running := at.isRunning
 	at.isRunningMutex.RUnlock()

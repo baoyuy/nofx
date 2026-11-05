@@ -1,4 +1,5 @@
 import type { AIStrategyConfig, Strategy, StrategyConfig } from '../types'
+import type { ProfitProtectionConfig } from '../types/strategy'
 
 // Form model of the free strategy editor and its conversion to and from the
 // backend StrategyConfig. Limits mirror store/strategy.go ClampLimits, so the
@@ -165,6 +166,7 @@ export interface FreeForm {
   minRiskReward: number
   // Program-enforced: stop at least this many ATR14 from the price; 0 = off.
   minStopATR?: number
+  profitProtection?: ProfitProtectionConfig
   customPrompt: string
   // Editable rule sections; undefined keeps the saved ones.
   rules?: Partial<Record<RuleSection, string>>
@@ -223,6 +225,29 @@ export function clampNumber(
   const n = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(n)) return fallback
   return Math.min(range.max, Math.max(range.min, n))
+}
+
+export const DEFAULT_PROFIT_PROTECTION: ProfitProtectionConfig = {
+  enabled: false,
+  breakeven_activation_pct: 2,
+  breakeven_lock_pct: 0,
+  trailing_activation_pct: 5,
+  trailing_giveback_pct: 40,
+}
+
+// Mirrors store.NormalizeProfitProtection. Zero activations/giveback use defaults;
+// a zero lock means fee/slippage-adjusted breakeven, NOT zero-cost execution.
+export function normalizeProfitProtection(value?: Partial<ProfitProtectionConfig>): ProfitProtectionConfig {
+  const positive = (v: number | undefined, fallback: number, min: number, max: number) =>
+    !Number.isFinite(v) || v === 0 ? fallback : Math.max(min, Math.min(max, v!))
+  const activation = positive(value?.breakeven_activation_pct, 2, 0.1, 100)
+  return {
+    enabled: value?.enabled === true,
+    breakeven_activation_pct: activation,
+    breakeven_lock_pct: clampNumber(value?.breakeven_lock_pct, { min: 0, max: activation }, 0),
+    trailing_activation_pct: positive(value?.trailing_activation_pct, 5, 0.1, 100),
+    trailing_giveback_pct: positive(value?.trailing_giveback_pct, 40, 1, 99),
+  }
 }
 
 export function usesPaidSource(config?: StrategyConfig | null): boolean {
@@ -373,6 +398,7 @@ export function formFromStrategy(strategy: Strategy): FreeForm {
       SAFE_DEFAULTS.minConfidence
     ),
     minStopATR: clampNumber(risk?.min_stop_atr, LIMITS.minStopATR, 0),
+    profitProtection: normalizeProfitProtection(risk?.profit_protection),
     minRiskReward: clampNumber(
       risk?.min_risk_reward_ratio,
       LIMITS.riskReward,
@@ -523,6 +549,7 @@ export function configFromForm(
         min_risk_reward_ratio: form.minRiskReward,
         min_stop_atr: form.minStopATR || 0,
         min_confidence: form.minConfidence,
+        profit_protection: normalizeProfitProtection(form.profitProtection ?? ai?.risk_control.profit_protection),
       },
       custom_prompt: form.customPrompt.trim(),
       prompt_sections: sections,

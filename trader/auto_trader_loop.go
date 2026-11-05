@@ -525,6 +525,7 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get positions: %w", err)
 	}
+	markObservedAt := time.Now().UnixMilli() // receipt, not exchange quote time
 
 	var positionInfos []kernel.PositionInfo
 	totalMarginUsed := 0.0
@@ -598,6 +599,7 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 			Side:             side,
 			EntryPrice:       entryPrice,
 			MarkPrice:        markPrice,
+			MarkObservedAt:   markObservedAt,
 			Quantity:         quantity,
 			Leverage:         leverage,
 			UnrealizedPnL:    unrealizedPnl,

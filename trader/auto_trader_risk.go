@@ -23,15 +23,18 @@ const (
 	autopilotBookMarginBudget = 0.96
 )
 
-// shouldDrawdownClose reports whether the profit-protection close should fire.
-// pricePnLPct is the price-basis move in the position's favor; drawdownPct is
-// the relative giveback from the position's peak profit.
-func shouldDrawdownClose(pricePnLPct, drawdownPct float64) bool {
-	return pricePnLPct > drawdownClosePriceGainPct && drawdownPct >= drawdownCloseGivebackPct
+// shouldDrawdownClose arms from the lifecycle's historical PRICE peak, not
+// current profit. Once >5% was reached, falling back below 5% cannot disarm it.
+func shouldDrawdownClose(peakPricePnLPct, drawdownPct float64) bool {
+	return peakPricePnLPct > drawdownClosePriceGainPct && drawdownPct >= drawdownCloseGivebackPct
 }
 
 // startDrawdownMonitor starts drawdown monitoring
 func (at *AutoTrader) startDrawdownMonitor() {
+	if _, err := at.store.ProfitState(); err != nil {
+		logger.Errorf("Cannot start trusted profit monitoring: %v", err)
+		return
+	}
 	at.monitorWg.Add(1)
 	go func() {
 		defer at.monitorWg.Done()
@@ -53,91 +56,40 @@ func (at *AutoTrader) startDrawdownMonitor() {
 	}()
 }
 
-// checkPositionDrawdown checks position drawdown situation
+// checkPositionDrawdown reuses the one-minute position/quote snapshot. Optional
+// protection never adds a second market feed or a faster polling loop.
 func (at *AutoTrader) checkPositionDrawdown() {
-	// Get current positions
+	snapshotStarted := time.Now().UnixMilli()
 	positions, err := at.trader.GetPositions()
 	if err != nil {
 		logger.Infof("❌ Drawdown monitoring: failed to get positions: %v", err)
 		return
 	}
-
+	active := make(map[string]bool)
 	for _, pos := range positions {
-		symbol := pos["symbol"].(string)
-		side := pos["side"].(string)
-		entryPrice := pos["entryPrice"].(float64)
-		markPrice := pos["markPrice"].(float64)
-		quantity := pos["positionAmt"].(float64)
-		if quantity < 0 {
-			quantity = -quantity // Short position quantity is negative, convert to positive
-		}
-
-		// Guard: skip if entry price is zero (prevents division by zero panic)
-		if entryPrice <= 0 {
-			logger.Warnf("⚠️ Drawdown monitoring: %s %s has zero entry price, skipping", symbol, side)
+		symbol, _ := pos["symbol"].(string)
+		side, _ := pos["side"].(string)
+		quantity, _ := pos["positionAmt"].(float64)
+		if quantity == 0 {
 			continue
 		}
-
-		// Calculate current P&L percentage
-		leverage := 10 // Default value
-		if lev, ok := pos["leverage"].(float64); ok {
-			leverage = int(lev)
-		}
-
-		// Price-basis move drives the close decision so the trigger point does
-		// not tighten as leverage grows; the margin-basis (leveraged) value is
-		// only kept for the peak cache shown alongside margin-based PnL% in
-		// prompts.
-		var pricePnLPct float64
-		if side == "long" {
-			pricePnLPct = ((markPrice - entryPrice) / entryPrice) * 100
-		} else {
-			pricePnLPct = ((entryPrice - markPrice) / entryPrice) * 100
-		}
-		currentPnLPct := pricePnLPct * float64(leverage)
-
-		// Construct unique position identifier (distinguish long/short)
-		posKey := symbol + "_" + side
-
-		// Get historical peak profit for this position
-		at.peakPnLCacheMutex.RLock()
-		peakPnLPct, exists := at.peakPnLCache[posKey]
-		at.peakPnLCacheMutex.RUnlock()
-
-		if !exists {
-			// If no historical peak record, use current P&L as initial value
-			peakPnLPct = currentPnLPct
-			at.UpdatePeakPnL(symbol, side, currentPnLPct)
-		} else {
-			// Update peak cache
-			at.UpdatePeakPnL(symbol, side, currentPnLPct)
-		}
-
-		// Calculate drawdown (magnitude of decline from peak)
-		var drawdownPct float64
-		if peakPnLPct > 0 && currentPnLPct < peakPnLPct {
-			drawdownPct = ((peakPnLPct - currentPnLPct) / peakPnLPct) * 100
-		}
-
-		// Check close position condition: price move > +5% and drawdown >= 40%
-		if shouldDrawdownClose(pricePnLPct, drawdownPct) {
-			logger.Infof("🚨 Drawdown close position condition triggered: %s %s | Price move: %.2f%% | Current profit: %.2f%% | Peak profit: %.2f%% | Drawdown: %.2f%%",
-				symbol, side, pricePnLPct, currentPnLPct, peakPnLPct, drawdownPct)
-
-			// Execute close position
-			if err := at.emergencyClosePosition(symbol, side, quantity, markPrice, entryPrice); err != nil {
-				logger.Infof("❌ Drawdown close position failed (%s %s): %v", symbol, side, err)
-			} else {
-				logger.Infof("✅ Drawdown close position succeeded: %s %s", symbol, side)
-				// Clear cache for this position after closing
-				at.ClearPeakPnLCache(symbol, side)
-			}
-		} else if pricePnLPct > drawdownClosePriceGainPct {
-			// Record situations close to close position condition (for debugging)
-			logger.Infof("📊 Drawdown monitoring: %s %s | Price move: %.2f%% | Profit: %.2f%% | Peak: %.2f%% | Drawdown: %.2f%%",
-				symbol, side, pricePnLPct, currentPnLPct, peakPnLPct, drawdownPct)
+		active[symbol+"_"+strings.ToLower(side)] = true
+		if err := at.protectPositionProfit(pos); err != nil {
+			logger.Warnf("Profit monitoring %s %s: %v", symbol, side, err)
 		}
 	}
+	if ps, err := at.store.ProfitState(); err == nil {
+		if err := ps.Prune(at.id, active, snapshotStarted); err != nil {
+			logger.Warnf("Profit state cleanup failed: %v", err)
+		}
+	}
+	at.peakPnLCacheMutex.Lock()
+	for key := range at.peakPnLCache {
+		if !active[key] {
+			delete(at.peakPnLCache, key)
+		}
+	}
+	at.peakPnLCacheMutex.Unlock()
 }
 
 // emergencyClosePosition emergency close position function. The close is
@@ -183,6 +135,9 @@ func (at *AutoTrader) GetPeakPnLCache() map[string]float64 {
 func (at *AutoTrader) UpdatePeakPnL(symbol, side string, currentPnLPct float64) {
 	at.peakPnLCacheMutex.Lock()
 	defer at.peakPnLCacheMutex.Unlock()
+	if at.peakPnLCache == nil {
+		at.peakPnLCache = make(map[string]float64)
+	}
 
 	posKey := symbol + "_" + side
 	if peak, exists := at.peakPnLCache[posKey]; exists {

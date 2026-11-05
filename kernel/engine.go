@@ -31,6 +31,8 @@ type PositionInfo struct {
 	Side             string  `json:"side"` // "long" or "short"
 	EntryPrice       float64 `json:"entry_price"`
 	MarkPrice        float64 `json:"mark_price"`
+	MarkPriceTime    int64   `json:"mark_price_time,omitempty"`  // exchange quote time, NOT position creation/update time
+	MarkObservedAt   int64   `json:"mark_observed_at,omitempty"` // local account snapshot receipt time
 	Quantity         float64 `json:"quantity"`
 	Leverage         int     `json:"leverage"`
 	UnrealizedPnL    float64 `json:"unrealized_pnl"`
