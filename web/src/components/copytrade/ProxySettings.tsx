@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { notify } from '../../lib/notify'
+import { NoticeText } from '../NoticeText'
+import { localizeNotice } from '../../i18n/notices'
 
 // Proxy for the copy-trade monitor's Binance requests. Empty = the server's
 // own IP. The saved URL is stored encrypted and shown with the password masked.
@@ -40,7 +42,7 @@ export function ProxySettings({
             }
           : {
               ok: false,
-              text: tt(`Failed: ${r.error}`, `连接失败：${r.error}`),
+              text: tt(`Failed: ${r.error}`, `连接失败：${localizeNotice(r.error || 'Test failed', 'zh')}`),
             }
       )
     } catch (e) {
@@ -152,7 +154,7 @@ export function ProxySettings({
           role="status"
           className={`text-sm ${result.ok ? 'text-nofx-success' : 'text-nofx-danger'}`}
         >
-          {result.text}
+          <NoticeText text={result.text} />
         </p>
       ) : null}
     </div>

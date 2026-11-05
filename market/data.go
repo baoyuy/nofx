@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"nofx/logger"
 	"nofx/provider/hyperliquid"
 	"strconv"
@@ -268,7 +269,7 @@ func getOpenInterestData(symbol string) (*OIData, error) {
 func fetchOpenInterestData(client *http.Client, symbol string) (*OIData, error) {
 	url := fmt.Sprintf("https://fapi.binance.com/fapi/v1/openInterest?symbol=%s", symbol)
 
-	resp, err := client.Get(url)
+	resp, err := apischeduler.Get(client, url)
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +320,7 @@ func getFundingRate(symbol string) (float64, error) {
 	url := fmt.Sprintf("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=%s", symbol)
 
 	apiClient := NewAPIClient()
-	resp, err := apiClient.client.Get(url)
+	resp, err := apischeduler.Get(apiClient.client, url)
 	if err != nil {
 		return 0, err
 	}

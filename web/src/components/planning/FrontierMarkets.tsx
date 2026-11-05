@@ -1,3 +1,4 @@
+import { NoticeText } from '../NoticeText'
 import { useEffect, useState } from 'react'
 import { planningAPI } from '../../lib/planning'
 import { PlanningTrendBoard } from './PlanningTrendBoard'
@@ -180,7 +181,7 @@ export function FrontierMarkets({
               {zh ? '正在加载交易所市场…' : 'Loading exchange markets…'}
             </small>
           )}
-          {error && <p role="alert">{error}</p>}
+          {error && <p role="alert"><NoticeText text={error} language={language} /></p>}
           <div className="frontier-market-shortcuts">
             {rows.slice(0, limit).map((m) => (
               <button

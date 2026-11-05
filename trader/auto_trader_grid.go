@@ -561,6 +561,8 @@ func (at *AutoTrader) executeGridDecision(d *kernel.Decision) error {
 
 // IsGridStrategy returns true if current strategy is grid trading
 func (at *AutoTrader) IsGridStrategy() bool {
+	at.strategyMu.RLock()
+	defer at.strategyMu.RUnlock()
 	if at.config.StrategyConfig == nil {
 		return false
 	}

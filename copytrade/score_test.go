@@ -86,9 +86,11 @@ func TestSignalsRecordEvaluateAndHitRate(t *testing.T) {
 	for i, side := range []string{"long", "long", "long", "long", "long", "short"} {
 		id := string(rune('a' + i))
 		m.snaps[id] = &Snapshot{
-			Follow:    store.CopyTradeFollow{PortfolioID: id, ROI: 50, MDD: 10, WinRate: 70, StartTime: start, PositionShow: true, MarginBalance: 1000},
-			Positions: []Position{{Symbol: "BTCUSDT", Side: side, Qty: 1, EntryPrice: 100, EntryValue: 500}},
-			UpdatedAt: hour.Add(10 * time.Minute),
+			Follow:             store.CopyTradeFollow{PortfolioID: id, ROI: 50, MDD: 10, WinRate: 70, StartTime: start, PositionShow: true, MarginBalance: 1000},
+			Positions:          []Position{{Symbol: "BTCUSDT", Side: side, Qty: 1, EntryPrice: 100, EntryValue: 500}},
+			UpdatedAt:          hour.Add(10 * time.Minute),
+			PositionsUpdatedAt: hour.Add(10 * time.Minute), FillsUpdatedAt: hour.Add(10 * time.Minute),
+			ProfileUpdatedAt: hour.Add(10 * time.Minute), HistoryComplete: true,
 		}
 	}
 	if err := m.RecordSignals(ctx, hour.Add(10*time.Minute)); err != nil {

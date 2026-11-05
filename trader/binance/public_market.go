@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"sort"
 	"strconv"
 	"strings"
@@ -73,7 +74,7 @@ func publicGet(ctx context.Context, path string, out interface{}) error {
 	if err != nil {
 		return err
 	}
-	resp, err := publicHTTPClient.Do(req)
+	resp, err := apischeduler.Do(publicHTTPClient, req)
 	if err != nil {
 		return err
 	}

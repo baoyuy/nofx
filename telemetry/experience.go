@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"sync"
 	"time"
 )
@@ -151,7 +152,7 @@ func sendTradeEvent(event TradeEvent) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := httpClient.Do(req)
+	resp, err := apischeduler.Do(httpClient, req)
 	if err != nil {
 		return err
 	}
@@ -189,7 +190,7 @@ func TrackStartup(version string) {
 		req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 		if req != nil {
 			req.Header.Set("Content-Type", "application/json")
-			resp, err := httpClient.Do(req)
+			resp, err := apischeduler.Do(httpClient, req)
 			if err == nil {
 				resp.Body.Close()
 			}
@@ -233,7 +234,7 @@ func TrackAIUsage(event AIUsageEvent) {
 		req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 		if req != nil {
 			req.Header.Set("Content-Type", "application/json")
-			resp, err := httpClient.Do(req)
+			resp, err := apischeduler.Do(httpClient, req)
 			if err == nil {
 				resp.Body.Close()
 			}

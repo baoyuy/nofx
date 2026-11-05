@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from '../ui/alert-dialog'
 import { setGlobalConfirm } from '../../lib/notify'
+import { localizeNotice } from '../../i18n/notices'
 import { useLanguage } from '../../contexts/LanguageContext'
 
 interface ConfirmOptions {
@@ -117,10 +118,10 @@ export function ConfirmDialogProvider({
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => handleClose(false)}>
-              {state.cancelText}
+              {localizeNotice(state.cancelText, language, 'info')}
             </AlertDialogCancel>
             <AlertDialogAction onClick={() => handleClose(true)}>
-              {state.okText}
+              {localizeNotice(state.okText, language, 'info')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

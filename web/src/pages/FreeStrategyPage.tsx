@@ -94,6 +94,7 @@ export function FreeStrategyPage() {
   )
   const usingPool = form?.coinSource === 'pool'
   const usingHorn = form?.coinSource === 'horn'
+  const preservingSource = form?.coinSource === 'preserved'
   const hornInterval = form?.hornInterval || DEFAULT_HORN_INTERVAL
   const selectedPool = pools.find((p) => p.id === form?.coinPoolID)
   // Preview of what the live horn source would trade right now.
@@ -184,6 +185,22 @@ export function FreeStrategyPage() {
     setHasChanges(true)
   }
 
+  const changeCoinSource = async (value: FreeForm['coinSource']) => {
+    if (form?.coinSource === value) return
+    if (preservingSource) {
+      const ok = await confirmToast(
+        text(
+          language,
+          '切换选币来源会替换原动态源及其参数，并改变交易行为。确认迁移？',
+          'Switching coin sources replaces the original dynamic source and its settings, changing trading behavior. Migrate?'
+        ),
+        { title: text(language, '确认迁移选币源', 'Confirm source migration') }
+      )
+      if (!ok) return
+    }
+    patchForm({ coinSource: value, copyTradeFollow: undefined })
+  }
+
   const buildConfig = () =>
     configFromForm(selected?.config || null, form!, lang, defaultConfig)
 
@@ -206,7 +223,13 @@ export function FreeStrategyPage() {
       notify.error(text(language, '请选择一个币池', 'Choose a coin pool'))
       return false
     }
-    if (!usingPool && !usingHorn && parsedCoins.length === 0) {
+    if (
+      !usingPool &&
+      !usingHorn &&
+      !preservingSource &&
+      form.coinSource !== 'copy' &&
+      parsedCoins.length === 0
+    ) {
       notify.error(
         text(
           language,
@@ -640,8 +663,12 @@ export function FreeStrategyPage() {
                 <span>
                   {text(
                     language,
-                    '这个策略原来用的是付费数据源（Claw402 / Vergex / AI500）。点「保存」后会改成下面的币种，之后不再产生费用。',
-                    'This strategy used a paid source (Claw402 / Vergex / AI500). Saving switches it to the coins below, with no further charges.'
+                    preservingSource
+                      ? '此策略使用付费动态源；保存将保留该源和参数，可能继续产生费用。切换来源需明确确认。'
+                      : '这个策略原来用的是付费数据源（Claw402 / Vergex / AI500）。点「保存」后会改成下面的币种，之后不再产生费用。',
+                    preservingSource
+                      ? 'This strategy uses a paid dynamic source. Saving preserves it and its settings; charges may continue. Switching sources requires confirmation.'
+                      : 'This strategy used a paid source (Claw402 / Vergex / AI500). Saving switches it to the coins below, with no further charges.'
                   )}
                 </span>
               </div>
@@ -737,14 +764,7 @@ export function FreeStrategyPage() {
                     type="button"
                     role="radio"
                     aria-checked={(form.coinSource || 'static') === value}
-                    onClick={() =>
-                      // A new source starts from its own direction default.
-                      patchForm(
-                        (form.coinSource || 'static') === value
-                          ? { coinSource: value }
-                          : { coinSource: value, copyTradeFollow: undefined }
-                      )
-                    }
+                    onClick={() => void changeCoinSource(value)}
                     className={`flex-1 rounded-lg border px-3 py-2 text-left ${(form.coinSource || 'static') === value ? 'border-nofx-gold bg-nofx-gold/10' : 'border-[rgba(25,36,52,0.14)]'}`}
                   >
                     <span className="block text-sm font-semibold text-nofx-text">
@@ -756,7 +776,15 @@ export function FreeStrategyPage() {
                   </button>
                 ))}
               </div>
-              {form.coinSource === 'copy' ? (
+              {preservingSource ? (
+                <p role="status" className="text-sm text-nofx-text-muted">
+                  {text(
+                    language,
+                    `保留原选币源 ${form.preservedCoinSource?.source_type} 及全部参数。本编辑器暂不支持编辑它；修改其他字段不会改变选币源。切换来源需要确认。`,
+                    `Preserving original source ${form.preservedCoinSource?.source_type} and all its settings. This editor cannot edit it; other changes keep the source unchanged. Switching requires confirmation.`
+                  )}
+                </p>
+              ) : form.coinSource === 'copy' ? (
                 <CopyTradeSourcePanel
                   language={language}
                   settings={form.copyTrade}
@@ -989,7 +1017,7 @@ export function FreeStrategyPage() {
                   </div>
                 </>
               )}
-              {form.coinSource !== 'copy' ? (
+              {!preservingSource && form.coinSource !== 'copy' ? (
                 <CopyTradeContextToggle
                   language={language}
                   checked={Boolean(form.copyTradeContext)}

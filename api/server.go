@@ -8,6 +8,7 @@ import (
 	"nofx/auth"
 	"nofx/copytrade"
 	"nofx/crypto"
+	"nofx/internal/apischeduler"
 	"nofx/logger"
 	"nofx/manager"
 	"nofx/store"
@@ -213,6 +214,7 @@ func (s *Server) setupRoutes() {
 		s.registerCoinPoolRoutes(protected)
 		s.registerMarketBoardRoutes(protected)
 		s.registerCopyTradeRoutes(protected)
+		protected.GET("/api-scheduler/status", s.handleAPISchedulerStatus)
 		// UI-only secret export: do not register in the AI route/tool catalog.
 		protected.POST("/wallet/export", s.handleWalletExport)
 		{
@@ -534,7 +536,7 @@ func getPublicIPFromAPI() string {
 	}
 
 	for _, service := range services {
-		resp, err := client.Get(service)
+		resp, err := apischeduler.Get(client, service)
 		if err != nil {
 			continue
 		}

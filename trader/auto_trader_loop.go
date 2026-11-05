@@ -33,7 +33,7 @@ func (at *AutoTrader) runCycle() error {
 	}
 
 	if err := at.reloadStrategyConfigIfChanged(); err != nil {
-		at.logWarnf("⚠️ Strategy refresh failed, using current in-memory config: %v", err)
+		return fmt.Errorf("strategy refresh failed; refusing stale-strategy execution: %w", err)
 	}
 
 	// Check USDC balance periodically for claw402 users (every 10 cycles)
@@ -123,7 +123,7 @@ func (at *AutoTrader) runCycle() error {
 
 	// 5. Use strategy engine to call AI for decision
 	at.logInfof("🤖 Requesting AI analysis and decision... [Strategy Engine]")
-	aiDecision, err := kernel.GetFullDecisionWithStrategy(ctx, at.mcpClient, at.strategyEngine, "balanced")
+	aiDecision, err := at.requestAIDecision(ctx)
 
 	// The kernel drops candidates without usable market data or below the OI
 	// filter before prompting; record the coins the AI actually analysed.

@@ -132,6 +132,7 @@ export interface UpdateExchangeConfigRequest {
   exchanges: {
     [key: string]: {
       enabled: boolean
+      account_name?: string // Omitted preserves; explicit empty names are invalid.
       api_key: string
       secret_key: string
       passphrase?: string

@@ -1,3 +1,4 @@
+import { NoticeText } from '../NoticeText'
 import { useState, useEffect, useMemo } from 'react'
 import { api } from '../../lib/api'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -490,7 +491,7 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
           color: '#D6433A',
         }}
       >
-        {error}
+        <NoticeText text={error} />
       </div>
     )
   }

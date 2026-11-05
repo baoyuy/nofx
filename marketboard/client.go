@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"nofx/internal/apischeduler"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,7 +23,8 @@ import (
 )
 
 const (
-	cacheTTL    = 60 * time.Second
+	cacheTTL    = 30 * time.Second
+	staleTTL    = 2 * time.Minute
 	universe    = 30 // markets ranked by 24h quote volume
 	concurrency = 8
 )
@@ -33,14 +35,17 @@ type Client struct {
 	BaseURL string
 	HTTP    *http.Client
 
-	mu     sync.Mutex
-	cache  map[string]cached
-	flight singleflight.Group
+	mu         sync.Mutex
+	cache      map[string]cached
+	flight     singleflight.Group
+	refreshing map[string]bool
 }
 
 type cached struct {
-	at time.Time
-	v  any
+	at      time.Time
+	v       any
+	retryAt time.Time
+	err     error
 }
 
 func New() *Client {
@@ -52,7 +57,7 @@ func (c *Client) get(ctx context.Context, path string, out any) error {
 	if err != nil {
 		return err
 	}
-	resp, err := c.HTTP.Do(req)
+	resp, err := apischeduler.Do(c.HTTP, req)
 	if err != nil {
 		return err
 	}
@@ -63,28 +68,70 @@ func (c *Client) get(ctx context.Context, path string, out any) error {
 	return json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(out)
 }
 
-// cachedDo returns the value cached under key, or runs fn once for every
-// waiting caller. fn gets its own deadline so one caller leaving early does not
-// cancel the shared scan.
-func (c *Client) cachedDo(key string, fn func(ctx context.Context) (any, error)) (any, error) {
+// cachedDo serves a bounded stale snapshot while a single refresh runs in the
+// background. Cold requests wait only for their own context; shared work has
+// its own deadline. Original data timestamps are left untouched.
+func (c *Client) cachedDo(ctx context.Context, key string, fn func(ctx context.Context) (any, error)) (any, error) {
 	c.mu.Lock()
 	hit, ok := c.cache[key]
-	c.mu.Unlock()
 	if ok && time.Since(hit.at) < cacheTTL {
+		c.mu.Unlock()
 		return hit.v, nil
 	}
-	v, err, _ := c.flight.Do(key, func() (any, error) {
-		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-		defer cancel()
-		v, err := fn(ctx)
-		if err == nil {
-			c.mu.Lock()
-			c.cache[key] = cached{at: time.Now(), v: v}
-			c.mu.Unlock()
+	load := func() (any, error) {
+		// A previous refresh may have completed between the cache lookup and
+		// singleflight admission. Do not immediately scan the same data again.
+		c.mu.Lock()
+		fresh, found := c.cache[key]
+		c.mu.Unlock()
+		if found && time.Since(fresh.at) < cacheTTL {
+			return fresh.v, nil
 		}
+		if found && time.Now().Before(fresh.retryAt) {
+			return nil, fresh.err
+		}
+		shared, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
+		v, err := fn(shared)
+		c.mu.Lock()
+		if err == nil {
+			c.cache[key] = cached{at: time.Now(), v: v}
+		} else {
+			old := c.cache[key]
+			old.retryAt, old.err = time.Now().Add(15*time.Second), err
+			c.cache[key] = old
+		}
+		c.mu.Unlock()
 		return v, err
-	})
-	return v, err
+	}
+	if ok && time.Since(hit.at) < staleTTL {
+		if !c.refreshing[key] && !time.Now().Before(hit.retryAt) {
+			if c.refreshing == nil {
+				c.refreshing = make(map[string]bool)
+			}
+			c.refreshing[key] = true
+			go func() {
+				_, _, _ = c.flight.Do(key, load)
+				c.mu.Lock()
+				delete(c.refreshing, key)
+				c.mu.Unlock()
+			}()
+		}
+		c.mu.Unlock()
+		return hit.v, nil
+	}
+	if ok && time.Now().Before(hit.retryAt) {
+		c.mu.Unlock()
+		return nil, hit.err
+	}
+	c.mu.Unlock()
+	result := c.flight.DoChan(key, load)
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case r := <-result:
+		return r.Val, r.Err
+	}
 }
 
 // Ticker is a perpetual's 24h statistics.
@@ -98,7 +145,7 @@ type Ticker struct {
 // topByVolume returns the n most traded USDT-margined crypto perpetuals, or
 // all of them when n <= 0.
 func (c *Client) topByVolume(ctx context.Context, n int) ([]Ticker, error) {
-	v, err := c.cachedDo("top", func(ctx context.Context) (any, error) {
+	v, err := c.cachedDo(ctx, "top", func(ctx context.Context) (any, error) {
 		var info struct {
 			Symbols []struct{ Symbol, QuoteAsset, MarginAsset, Status, ContractType, UnderlyingType string }
 		}

@@ -85,7 +85,7 @@ func (c *Client) Heatmap(ctx context.Context, rawSymbol string) (HeatmapResponse
 		return resp, nil
 	}
 	resp.Data.Market.IsActive = true
-	v, err := c.cachedDo("heatmap:"+symbol, func(ctx context.Context) (any, error) {
+	v, err := c.cachedDo(ctx, "heatmap:"+symbol, func(ctx context.Context) (any, error) {
 		candles, err := c.klines(ctx, symbol, "1h", heatmapBars)
 		if err != nil || len(candles) < 24 {
 			return nil, errors.New("Binance candles unavailable for the heatmap")

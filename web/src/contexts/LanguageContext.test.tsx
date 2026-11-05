@@ -1,38 +1,64 @@
-import { render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { LanguageProvider, useLanguage } from './LanguageContext'
-import { Header } from '../components/common/Header'
+import { getDisplayLanguage, setDisplayLanguage } from '../i18n/displayLanguage'
 
 function LanguageProbe() {
-  const { language } = useLanguage()
-  return <div>{language}</div>
+  const { language, setLanguage } = useLanguage()
+  return (
+    <>
+      <div data-testid="language">{language}</div>
+      <button onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}>
+        切换语言
+      </button>
+    </>
+  )
 }
 
-describe('English-only language policy', () => {
-  beforeEach(() => localStorage.clear())
+describe('language preference', () => {
+  beforeEach(() => {
+    setDisplayLanguage('zh')
+    localStorage.clear()
+  })
+  afterEach(() => {
+    cleanup()
+    setDisplayLanguage('zh')
+    localStorage.clear()
+  })
 
-  it('ignores stale Chinese browser state and normalizes storage to English', async () => {
-    localStorage.setItem('language', 'zh')
-
+  it('defaults to Chinese when no preference is saved', () => {
     render(
       <LanguageProvider>
         <LanguageProbe />
       </LanguageProvider>
     )
-
-    expect(screen.getByText('en')).toBeTruthy()
-    await waitFor(() => expect(localStorage.getItem('language')).toBe('en'))
+    expect(screen.getByTestId('language')).toHaveTextContent('zh')
   })
 
-  it('does not render a language switcher anywhere in the English-only header', () => {
+  it.each(['zh', 'en', 'id'])(
+    'respects the saved %s preference',
+    (language) => {
+      localStorage.setItem('language', language)
+      render(
+        <LanguageProvider>
+          <LanguageProbe />
+        </LanguageProvider>
+      )
+      expect(screen.getByTestId('language')).toHaveTextContent(language)
+    }
+  )
+
+  it('updates React, persistent storage and non-React notifications together', () => {
     render(
       <LanguageProvider>
-        <Header simple />
+        <LanguageProbe />
       </LanguageProvider>
     )
-
-    expect(screen.queryByRole('button', { name: 'Chinese' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'EN' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'ID' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '切换语言' }))
+    expect(screen.getByTestId('language')).toHaveTextContent('en')
+    expect(localStorage.getItem('language')).toBe('en')
+    expect(getDisplayLanguage()).toBe('en')
+    fireEvent.click(screen.getByRole('button', { name: '切换语言' }))
+    expect(getDisplayLanguage()).toBe('zh')
   })
 })

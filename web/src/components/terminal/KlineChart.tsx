@@ -203,7 +203,9 @@ function KlineChartSession({ symbol, height = 360, fill = false, demo = false }:
 
   // merge the live bar into the seeded history
   const realCandles = useMemo(() => {
-    if (error || !seed?.length) return []
+    // SWR retains this market's seed on refresh failure. Do not blank a usable
+    // chart; the keyed session still prevents data leaking across markets.
+    if (!seed?.length) return []
     const hist = seed
     if (!liveBar) return hist
     const arr = [...hist]
@@ -217,7 +219,7 @@ function KlineChartSession({ symbol, height = 360, fill = false, demo = false }:
   const last = candles.length ? candles[candles.length - 1].close : 0
   const first = candles.length ? candles[0].open : 0
   const chg = first ? ((last - first) / first) * 100 : 0
-  const live = (demo || wsLive) && candles.length > 0
+  const live = (demo || (wsLive && !error)) && candles.length > 0
 
   return (
     <div style={{ fontFamily: 'var(--tm-mono)', ...(fill ? { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 } : {}) }}>
@@ -240,6 +242,11 @@ function KlineChartSession({ symbol, height = 360, fill = false, demo = false }:
                 : '○ —'}
         </span>
       </div>
+      {error && !demo && candles.length > 0 && (
+        <div role="status" className="tm-sc">
+          {isZh ? '刷新失败，保留该市场最近一次K线。' : 'Refresh failed; showing the last candles for this market.'}
+        </div>
+      )}
       {last > 0 && (
         <div className="tm-mono" style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4, fontSize: 12 }}>
           <span style={{ fontWeight: 600 }}>${last.toLocaleString('en-US', { maximumFractionDigits: 4 })}</span>

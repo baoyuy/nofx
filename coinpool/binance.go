@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"nofx/internal/apischeduler"
 	"sort"
 	"strconv"
 	"sync"
@@ -118,7 +119,7 @@ func (s *Screener) get(ctx context.Context, path string, out any) error {
 	if err != nil {
 		return err
 	}
-	resp, err := s.HTTP.Do(req)
+	resp, err := apischeduler.Do(s.HTTP, req)
 	if err != nil {
 		return err
 	}

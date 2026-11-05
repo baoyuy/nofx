@@ -1,3 +1,4 @@
+import { NoticeText } from '../NoticeText'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { api } from '../../lib/api'
@@ -202,7 +203,7 @@ export function BollingerScreener({
       {error ? (
         <p role="alert" className="mb-2 text-sm" style={{ color: BN.down }}>
           {tr(language, '扫描失败：', 'Scan failed: ')}
-          {error}
+          <NoticeText text={error} />
         </p>
       ) : null}
 

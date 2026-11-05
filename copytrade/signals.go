@@ -68,14 +68,9 @@ func (m *Monitor) RecordSignals(ctx context.Context, now time.Time) error {
 	if done, err := m.store.HasSignals(hour); err != nil || done {
 		return err
 	}
-	// Only traders refreshed recently: right after a restart public
-	// positions are not loaded yet.
-	var fresh []Snapshot
-	for _, s := range m.Snapshots() {
-		if now.Sub(s.UpdatedAt) < time.Hour {
-			fresh = append(fresh, s)
-		}
-	}
+	// Use the same complete-data contract as AI context, not a position-only
+	// update timestamp that says nothing about trade history/profile quality.
+	fresh := Fresh(m.Snapshots(), time.Hour, now)
 	coins := Symbols(fresh)
 	sort.SliceStable(coins, func(a, b int) bool { return coins[a].Confidence.Score > coins[b].Confidence.Score })
 	var rows []store.CopyTradeSignal

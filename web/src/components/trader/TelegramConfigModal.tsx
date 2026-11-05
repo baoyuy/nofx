@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Check, ChevronLeft, ExternalLink, MessageCircle, Unlink, ArrowRight } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '../../lib/toast'
 import { api } from '../../lib/api'
 import type { TelegramConfig, AIModel } from '../../types'
 import { t, type Language } from '../../i18n/translations'

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"sort"
@@ -65,11 +66,21 @@ const copyTradeFreshness = 30 * time.Minute
 func copyTradeView(m *copytrade.Monitor, now time.Time) kernel.CopyTradeView {
 	all := m.Snapshots()
 	snaps := copytrade.Fresh(all, copyTradeFreshness, now)
-	view := kernel.CopyTradeView{Fresh: len(snaps)}
+	view := kernel.CopyTradeView{Fresh: len(snaps), QualityKnown: true}
 	// Private portfolios never have data: they cannot be missing any.
 	for _, s := range all {
 		if !s.Follow.Private {
 			view.Total++
+			q := s.Quality(copyTradeFreshness, now)
+			if q.PositionsFresh {
+				view.PositionsFresh++
+			}
+			if q.FillsFresh {
+				view.FillsFresh++
+			}
+			if q.ProfileFresh {
+				view.ProfilesFresh++
+			}
 		}
 	}
 	view.Reason = copyTradeGapReason(m, view)
@@ -147,7 +158,8 @@ func copyTradeGapReason(m *copytrade.Monitor, view kernel.CopyTradeView) string 
 	} else if st.LastError != "" {
 		return st.LastError
 	}
-	return "no refresh in the last 30 minutes"
+	return fmt.Sprintf("copy-trade data incomplete or stale: fresh positions %d/%d, complete recent fills %d/%d, profiles %d/%d",
+		view.PositionsFresh, view.Total, view.FillsFresh, view.Total, view.ProfilesFresh, view.Total)
 }
 
 func (s *Server) loadCopyTradeProxy() (string, error) {
@@ -199,7 +211,25 @@ func (s *Server) handleCopyTradeStatus(c *gin.Context) {
 	snaps := s.copyTrade.Snapshots()
 	hot, failing := 0, 0
 	var oldest time.Time
+	now := time.Now()
+	aiReady, total, positionsFresh, fillsFresh, profilesFresh := 0, 0, 0, 0, 0
 	for _, sn := range snaps {
+		if !sn.Follow.Private {
+			total++
+			q := sn.Quality(copyTradeFreshness, now)
+			if q.Complete() && sn.Error == "" {
+				aiReady++
+			}
+			if q.PositionsFresh {
+				positionsFresh++
+			}
+			if q.FillsFresh {
+				fillsFresh++
+			}
+			if q.ProfileFresh {
+				profilesFresh++
+			}
+		}
 		if sn.Hot {
 			hot++
 		}
@@ -213,6 +243,8 @@ func (s *Server) handleCopyTradeStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"client": s.copyTrade.Client.Status(), "follows": len(snaps), "max_follows": copytrade.MaxFollows,
 		"hot": hot, "failing": failing, "oldest_update": oldest,
+		"ai_ready": aiReady, "ai_total": total,
+		"positions_fresh": positionsFresh, "fills_fresh": fillsFresh, "profiles_fresh": profilesFresh,
 	})
 }
 
@@ -522,7 +554,12 @@ func copyTradeHolders(holders []copytrade.Holder, highFreq map[string]bool) []ke
 			break
 		}
 		out = append(out, kernel.CopyTradeHolder{Trader: h.Nickname, Score: h.Score, Side: h.Side, Entry: h.EntryPrice,
-			Value: h.EntryValue, Leverage: h.Leverage, ReturnPct: h.ReturnPct, Priced: h.Priced, OpenedAt: h.OpenedAt,
+			Value: h.EntryValue, Leverage: h.Leverage, ReturnPct: h.ReturnPct, PctOfMargin: h.PctOfMargin,
+			Priced: h.Priced, Source: h.Source, OpenedAt: h.OpenedAt,
+			HistoricalEntryWarning: h.HistoricalEntryWarning, FirstEntry: h.FirstEntry,
+			FirstEntryReturnPct: h.FirstEntryReturnPct, FirstEntryPctOfMargin: h.FirstEntryPctOfMargin,
+			FirstEntryThresholdPct: h.FirstEntryThresholdPct, PositionsUpdatedAt: h.PositionsUpdatedAt,
+			FillsUpdatedAt: h.FillsUpdatedAt, ProfileUpdatedAt: h.ProfileUpdatedAt,
 			Trapped: h.Trapped, Fresh: h.Fresh, HighFreq: highFreq[h.PortfolioID], Style: h.Style})
 	}
 	return out

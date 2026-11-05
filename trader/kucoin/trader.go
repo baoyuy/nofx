@@ -10,6 +10,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"nofx/logger"
 	"strconv"
 	"strings"
@@ -121,7 +122,7 @@ func NewKuCoinTrader(apiKey, secretKey, passphrase string) *KuCoinTrader {
 
 // syncServerTime fetches KuCoin server time and calculates offset
 func (t *KuCoinTrader) syncServerTime() error {
-	resp, err := t.httpClient.Get(kucoinBaseURL + "/api/v1/timestamp")
+	resp, err := apischeduler.Get(t.httpClient, kucoinBaseURL+"/api/v1/timestamp")
 	if err != nil {
 		return fmt.Errorf("failed to get server time: %w", err)
 	}
@@ -226,7 +227,7 @@ func (t *KuCoinTrader) doRequest(method, path string, body interface{}) ([]byte,
 	req.Header.Set("KC-API-PARTNER-SIGN", t.signPartner(timestamp))
 	req.Header.Set("KC-API-PARTNER-VERIFY", "true")
 
-	resp, err := t.httpClient.Do(req)
+	resp, err := apischeduler.Do(t.httpClient, req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}

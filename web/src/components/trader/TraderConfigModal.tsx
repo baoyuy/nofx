@@ -222,6 +222,8 @@ export function TraderConfigModal({
 
     setIsSaving(true)
     try {
+      // Legacy prompt/symbol fields are not edited here: omit them so PUT
+      // preserves them. Keep strategy_id explicit so an empty choice detaches.
       const saveData: CreateTraderRequest = {
         name: formData.trader_name,
         ai_model_id: formData.ai_model,
@@ -391,7 +393,13 @@ export function TraderConfigModal({
                   onChange={(val) => handleInputChange('strategy_id', val)}
                   className="w-full px-3 py-2 bg-nofx-bg-lighter border border-nofx-gold/20 rounded-sm text-nofx-text"
                   options={[
-                    { value: '', label: t('noStrategyManual', language) },
+                    {
+                      value: '',
+                      label:
+                        language === 'zh'
+                          ? '不绑定策略（无法启动自动交易）'
+                          : 'No strategy (cannot start Autopilot)',
+                    },
                     ...strategies.map((strategy) => ({
                       value: strategy.id,
                       label:
@@ -405,6 +413,16 @@ export function TraderConfigModal({
                     })),
                   ]}
                 />
+                {!formData.strategy_id && (
+                  <p
+                    role="status"
+                    className="text-xs text-nofx-text-muted mt-2"
+                  >
+                    {language === 'zh'
+                      ? '当前运行时要求绑定策略；不绑定不会自动使用默认策略。手动交易请使用交易终端。'
+                      : 'Autopilot requires a saved strategy; no default is applied when detached. Use the trading terminal for manual trades.'}
+                  </p>
+                )}
                 {strategies.length === 0 && (
                   <p className="text-xs text-nofx-text-muted mt-2">
                     {t('noStrategyHint', language)}

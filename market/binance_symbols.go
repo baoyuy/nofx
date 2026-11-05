@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"strconv"
 	"strings"
 	"time"
@@ -59,7 +60,7 @@ func getKlinesFromBinance(symbol, interval string, limit int) ([]Kline, error) {
 		limit = 500
 	}
 	url := fmt.Sprintf("https://fapi.binance.com/fapi/v1/klines?symbol=%s&interval=%s&limit=%d", symbol, interval, limit)
-	resp, err := binanceKlineClient.Get(url)
+	resp, err := apischeduler.Get(binanceKlineClient, url)
 	if err != nil {
 		return nil, err
 	}

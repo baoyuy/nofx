@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"nofx/logger"
 	"nofx/trader/types"
 	"strconv"
@@ -690,7 +691,7 @@ func (t *BybitTrader) GetOrderBook(symbol string, depth int) (bids, asks [][]flo
 
 	// Use HTTP request directly since the SDK doesn't expose GetOrderbook
 	url := fmt.Sprintf("https://api.bybit.com/v5/market/orderbook?category=linear&symbol=%s&limit=%d", symbol, depth)
-	resp, err := http.Get(url)
+	resp, err := apischeduler.Get(http.DefaultClient, url)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get order book: %w", err)
 	}

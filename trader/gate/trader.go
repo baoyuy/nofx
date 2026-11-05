@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"nofx/trader/types"
 	"strings"
 	"sync"
@@ -37,7 +38,7 @@ func NewGateTrader(apiKey, secretKey string) *GateTrader {
 	config.AddDefaultHeader("X-Gate-Channel-Id", "nofx")
 	// The SDK default HTTP client has no timeout — a hung connection would
 	// stall the trading loop indefinitely.
-	config.HTTPClient = &http.Client{Timeout: 30 * time.Second}
+	config.HTTPClient = apischeduler.Wrap(&http.Client{Timeout: 30 * time.Second})
 	client := gateapi.NewAPIClient(config)
 
 	ctx := context.WithValue(context.Background(),

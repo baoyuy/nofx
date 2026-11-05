@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"nofx/hook"
+	"nofx/internal/apischeduler"
 	"strconv"
 	"time"
 )
@@ -37,7 +38,7 @@ func NewAPIClient() *APIClient {
 
 func (c *APIClient) GetExchangeInfo() (*ExchangeInfo, error) {
 	url := fmt.Sprintf("%s/fapi/v1/exchangeInfo", baseURL)
-	resp, err := c.client.Get(url)
+	resp, err := apischeduler.Get(c.client, url)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +70,7 @@ func (c *APIClient) GetKlines(symbol, interval string, limit int) ([]Kline, erro
 	q.Add("limit", strconv.Itoa(limit))
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := c.client.Do(req)
+	resp, err := apischeduler.Do(c.client, req)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +135,7 @@ func (c *APIClient) GetCurrentPrice(symbol string) (float64, error) {
 	q.Add("symbol", symbol)
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := c.client.Do(req)
+	resp, err := apischeduler.Do(c.client, req)
 	if err != nil {
 		return 0, err
 	}

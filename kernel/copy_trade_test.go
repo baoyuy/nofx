@@ -26,7 +26,7 @@ var sampleCoins = []CopyTradeCoin{
 	{Symbol: "SNDKUSDT", Direction: "long", Confidence: 55, Long: CopyTradeSide{Traders: 6, Value: 5000, AvgEntry: 1100, Trapped: 4},
 		Recent: []CopyTradeAction{{Time: time.Now().Add(-90 * time.Minute).UnixMilli(), Trader: "黑石策略", Score: 80, Side: "long", Action: "add", Value: 241, Price: 1146.4}},
 		Holders: []CopyTradeHolder{
-			{Trader: "黑石策略", Score: 80, Side: "long", Entry: 1090.3, Value: 1319, Leverage: 10, ReturnPct: -42.5, Priced: true,
+			{Trader: "黑石策略", Score: 80, Side: "long", Entry: 1090.3, Value: 1319, Leverage: 10, ReturnPct: -42.5, PctOfMargin: true, Priced: true,
 				OpenedAt: time.Now().Add(-26 * time.Hour).UnixMilli(), Trapped: false},
 			{Trader: "小小羊", Score: 86, Side: "long", Entry: 1150, Value: 2000, ReturnPct: -6.2, Priced: true, Trapped: true,
 				HighFreq: true, Style: "martingale"},
@@ -83,7 +83,7 @@ func TestCopyTradePromptOnlyWhenAsked(t *testing.T) {
 	for _, want := range []string{"leaning LONG, confidence 55/100", "6 traders", "4 trapped", "avg entry 1100.00",
 		"Short: none", "黑石策略 (score 80) add long 241 USDT @ 1146.40", "1.5h ago",
 		"Holders (most credible first)", "黑石策略 (score 80) long 1319 USDT @ 1090.30, 10x, -42.5% of margin, held 26.0h",
-		"小小羊 (score 86) long 2000 USDT @ 1150.00, -6.2% price (leverage unknown), held since before monitoring [trapped, high-frequency, averages into losses]",
+		"小小羊 (score 86) long 2000 USDT @ 1150.00, -6.2% price (margin unavailable), held since before monitoring [trapped, high-frequency, averages into losses]",
 		"Price vs lead long avg entry: +5.0% (beyond their entry in their direction: chasing)"} {
 		if !strings.Contains(block, want) {
 			t.Fatalf("block missing %q:\n%s", want, block)
@@ -222,9 +222,9 @@ func TestCopyTradeStaleDataIsNotAnExitSignal(t *testing.T) {
 		strings.Contains(got, "none of the followed lead traders") {
 		t.Errorf("no data at all: %q", got)
 	}
-	// No position at stake: stay quiet instead of adding noise to every coin.
-	if got := formatCopyTrade(nil, gap, now, 0, ""); got != "" {
-		t.Errorf("candidate coin without data: %q", got)
+	// New candidates must also be told when copy-trade data is missing.
+	if got := formatCopyTrade(nil, gap, now, 0, ""); !strings.Contains(got, "unavailable right now") {
+		t.Errorf("candidate coin must receive a data-gap warning: %q", got)
 	}
 	partial := &CopyTradeView{Fresh: 2, Total: 5, Reason: "no refresh in the last 30 minutes"}
 	if got := formatCopyTrade(nil, partial, now, 0, "long"); !strings.Contains(got, "2 of 5 followed traders") ||

@@ -9,6 +9,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"strings"
 	"time"
 
@@ -138,7 +139,7 @@ func readRPC(ctx context.Context, endpoint, method string, params []any, out any
 	}
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	resp, err := client.Do(req)
+	resp, err := apischeduler.Do(client, req)
 	if err != nil {
 		return fmt.Errorf("receipt RPC request failed")
 	}

@@ -1,5 +1,12 @@
-import { cleanup, render, screen, fireEvent } from '@testing-library/react'
+import { cleanup, render as renderComponent, screen, fireEvent, waitFor } from '@testing-library/react'
 import { afterEach, describe, it, expect, vi } from 'vitest'
+import { SWRConfig } from 'swr'
+import type { ReactElement } from 'react'
+function render(ui: ReactElement) {
+  return renderComponent(ui, {
+    wrapper: ({ children }) => <SWRConfig value={{ provider: () => new Map() }}>{children}</SWRConfig>,
+  })
+}
 import { PlanningTrendBoard } from './PlanningTrendBoard'
 const mocks = vi.hoisted(() => ({ api: vi.fn() }))
 vi.mock('../../lib/planning', () => ({ planningAPI: mocks.api }))
@@ -85,5 +92,27 @@ describe('free trend board', () => {
     expect(
       await screen.findByText('No market is currently in an uptrend.')
     ).toBeVisible()
+  })
+  it('reuses the scan across rerenders and keeps markets visible during refresh failures', async () => {
+    mocks.api.mockResolvedValue({
+      coins: [{ pair: 'BTCUSDT', score: 80 }],
+      fetched_at: new Date().toISOString(),
+    })
+    const view = render(
+      <PlanningTrendBoard venue="binance" disabled={false} onSelect={() => {}} onMarkets={() => {}} />
+    )
+    await screen.findByRole('button', { name: /BTC/ })
+    view.rerender(
+      <PlanningTrendBoard venue="binance" disabled={false} onSelect={() => {}} onMarkets={() => {}} />
+    )
+    expect(mocks.api).toHaveBeenCalledTimes(1)
+    let reject!: (reason: Error) => void
+    mocks.api.mockReturnValue(new Promise((_, fail) => { reject = fail }))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh list' }))
+    await waitFor(() => expect(mocks.api).toHaveBeenCalledTimes(2))
+    expect(screen.getByRole('button', { name: /BTC/ })).toBeVisible()
+    reject(new Error('Scan unavailable'))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Scan unavailable')
+    expect(screen.getByRole('button', { name: /BTC/ })).toBeVisible()
   })
 })

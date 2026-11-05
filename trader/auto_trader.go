@@ -178,11 +178,13 @@ type AutoTrader struct {
 	mcpClient             mcp.AIClient
 	store                 *store.Store           // Data storage (decision records, etc.)
 	strategyEngine        *kernel.StrategyEngine // Strategy engine (uses strategy configuration)
+	strategyMu            sync.RWMutex           // Guards strategy replacement and API snapshots
 	cycleNumber           int                    // Current cycle number
 	initialBalance        float64
 	dailyPnL              float64
-	customPrompt          string // Custom trading strategy prompt
-	overrideBasePrompt    bool   // Whether to override base prompt
+	customPrompt          string       // Custom trading strategy prompt
+	overrideBasePrompt    bool         // Whether to override base prompt
+	promptMu              sync.RWMutex // Guards trader-local rules as one atomic setting
 	lastResetTime         time.Time
 	stopUntil             time.Time
 	isRunning             bool
@@ -213,6 +215,18 @@ type AutoTrader struct {
 // NewAutoTrader creates an automatic trader
 // st parameter is used to store decision records to database
 func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*AutoTrader, error) {
+	if config.StrategyConfig != nil && config.StrategyConfig.StrategyType == "grid_trading" && st != nil && config.ID != "" {
+		persisted, err := st.Trader().GetByID(config.ID)
+		if err != nil {
+			return nil, fmt.Errorf("cannot verify grid trader prompt capability: %w", err)
+		}
+		if persisted.UserID != userID {
+			return nil, fmt.Errorf("trader does not belong to user")
+		}
+		if err := ValidateTraderPrompt("grid_trading", persisted.CustomPrompt, persisted.OverrideBasePrompt); err != nil {
+			return nil, err
+		}
+	}
 	// Check before constructing exchange clients; legacy constructors may change
 	// account settings even before their Run loop starts.
 	if st != nil && config.ExchangeID != "" {
@@ -453,6 +467,8 @@ func (at *AutoTrader) reloadStrategyConfigIfChanged() error {
 		return fmt.Errorf("failed to load strategy %s: %w", at.config.StrategyID, err)
 	}
 
+	at.strategyMu.Lock()
+	defer at.strategyMu.Unlock()
 	if at.strategyEngine != nil && strategy.Config == at.config.StrategyConfigRaw {
 		return nil
 	}
@@ -462,6 +478,21 @@ func (at *AutoTrader) reloadStrategyConfigIfChanged() error {
 		return fmt.Errorf("failed to parse strategy %s: %w", strategy.Name, err)
 	}
 	strategyConfig.ClampLimits()
+	// The running loop selects its AI/grid branch once. Never hot-switch it,
+	// or hot-reconfigure a live grid's capital, leverage or order structure.
+	at.isRunningMutex.RLock()
+	running := at.isRunning
+	at.isRunningMutex.RUnlock()
+	if running && at.config.StrategyConfig != nil {
+		oldGrid := at.config.StrategyConfig.StrategyType == "grid_trading"
+		newGrid := strategyConfig.StrategyType == "grid_trading"
+		if oldGrid || oldGrid != newGrid {
+			return fmt.Errorf("stop the trader before changing a grid strategy or switching AI/grid strategy type")
+		}
+	}
+	if err := validatePromptRulesForStrategy(strategyConfig, at.promptRules()); err != nil {
+		return err
+	}
 
 	// NOTE: this used to hardcode the Autopilot book shape (6 positions ×
 	// equity×1.2 notional), silently overriding whatever the user configured in
@@ -484,6 +515,12 @@ func (at *AutoTrader) reloadStrategyConfigIfChanged() error {
 
 // Run runs the automatic trading main loop
 func (at *AutoTrader) Run() error {
+	unlockStrategy := LockStrategyLifecycle()
+	defer unlockStrategy()
+	// Refresh while stopped, before selecting the fixed runtime branch.
+	if err := at.reloadStrategyConfigIfChanged(); err != nil {
+		return err
+	}
 	// All launch paths (API, restoration and manager) respect a planning lease.
 	var unlock func()
 	if at.store != nil && at.exchangeID != "" {
@@ -506,6 +543,7 @@ func (at *AutoTrader) Run() error {
 	at.isRunningMutex.Lock()
 	at.isRunning = true
 	at.isRunningMutex.Unlock()
+	unlockStrategy()
 	if unlock != nil {
 		unlock()
 	}
@@ -715,18 +753,38 @@ func (at *AutoTrader) SetShowInCompetition(show bool) {
 	at.showInCompetition = show
 }
 
-// SetCustomPrompt sets custom trading strategy prompt
-func (at *AutoTrader) SetCustomPrompt(prompt string) {
+// SetCustomPrompt preserves compatibility for callers loading one field at a time.
+func (at *AutoTrader) SetCustomPrompt(prompt string) error {
+	at.strategyMu.RLock()
+	defer at.strategyMu.RUnlock()
+	at.promptMu.Lock()
+	defer at.promptMu.Unlock()
+	if err := validatePromptRulesForStrategy(at.config.StrategyConfig, kernel.TraderPromptRules{CustomPrompt: prompt, OverrideBasePrompt: at.overrideBasePrompt}); err != nil {
+		return err
+	}
 	at.customPrompt = prompt
+	return nil
 }
 
-// SetOverrideBasePrompt sets whether to override base prompt
-func (at *AutoTrader) SetOverrideBasePrompt(override bool) {
+func (at *AutoTrader) SetOverrideBasePrompt(override bool) error {
+	at.strategyMu.RLock()
+	defer at.strategyMu.RUnlock()
+	at.promptMu.Lock()
+	defer at.promptMu.Unlock()
+	if err := validatePromptRulesForStrategy(at.config.StrategyConfig, kernel.TraderPromptRules{CustomPrompt: at.customPrompt, OverrideBasePrompt: override}); err != nil {
+		return err
+	}
 	at.overrideBasePrompt = override
+	return nil
 }
 
 // GetSystemPromptTemplate gets current system prompt template name (from strategy config)
 func (at *AutoTrader) GetSystemPromptTemplate() string {
+	if at.promptRules().CustomPrompt != "" {
+		return "custom"
+	}
+	at.strategyMu.RLock()
+	defer at.strategyMu.RUnlock()
 	if at.strategyEngine != nil {
 		config := at.strategyEngine.GetConfig()
 		if config.CustomPrompt != "" {
@@ -738,6 +796,8 @@ func (at *AutoTrader) GetSystemPromptTemplate() string {
 
 // GetCandidateCoins returns the current candidate coin set from the trader's strategy engine.
 func (at *AutoTrader) GetCandidateCoins() ([]kernel.CandidateCoin, error) {
+	at.strategyMu.RLock()
+	defer at.strategyMu.RUnlock()
 	if at.strategyEngine == nil {
 		return nil, fmt.Errorf("strategy engine not configured")
 	}
@@ -746,10 +806,17 @@ func (at *AutoTrader) GetCandidateCoins() ([]kernel.CandidateCoin, error) {
 
 // GetStrategyConfig returns the current strategy config used by the trader.
 func (at *AutoTrader) GetStrategyConfig() *store.StrategyConfig {
-	if at.strategyEngine == nil {
-		return at.config.StrategyConfig
+	at.strategyMu.RLock()
+	defer at.strategyMu.RUnlock()
+	config := at.config.StrategyConfig
+	if at.strategyEngine != nil {
+		config = at.strategyEngine.GetConfig()
 	}
-	return at.strategyEngine.GetConfig()
+	if config == nil {
+		return nil
+	}
+	// The published config is immutable; callers receive their own copy.
+	return cloneTraderStrategyConfig(config)
 }
 
 // GetStore gets data store (for external access to decision records, etc.)

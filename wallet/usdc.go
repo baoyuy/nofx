@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"strings"
 	"time"
 )
@@ -60,7 +61,7 @@ func queryUSDCBalanceRPC(address string) (float64, error) {
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Post(BaseRPCURL, "application/json", bytes.NewReader(body))
+	resp, err := apischeduler.Post(client, BaseRPCURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return 0, fmt.Errorf("rpc post: %w", err)
 	}

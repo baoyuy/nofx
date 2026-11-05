@@ -1,3 +1,4 @@
+import { localizeNotice } from '../i18n/notices'
 function errorText(error: unknown): string {
   if (error instanceof Error) return error.message
   if (typeof error === 'string') return error
@@ -59,6 +60,7 @@ export function formatRequestError(
     return language === 'zh'
       ? '请求失败，请检查服务状态。'
       : 'Request failed. Check the service status.'
-  return text.length > 500 ? `${text.slice(0, 500)}…` : text
+  const display = localizeNotice(text, language)
+  return display.length > 500 ? `${display.slice(0, 500)}…` : display
 }
 import type { Language } from '../i18n/translations'

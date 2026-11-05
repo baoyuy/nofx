@@ -1,8 +1,9 @@
+import { NoticeText } from '../NoticeText'
 import React, { useEffect, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import PasswordChecklist from 'react-password-checklist'
-import { toast } from 'sonner'
+import { toast } from '../../lib/toast'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { t } from '../../i18n/translations'
@@ -284,7 +285,7 @@ export function RegisterPage() {
 
               {error && (
                 <div className="text-xs bg-nofx-danger/10 border border-nofx-danger/30 text-nofx-danger px-3 py-2 rounded-lg font-sans">
-                  {error}
+                  <NoticeText text={error} />
                 </div>
               )}
 

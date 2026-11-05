@@ -104,7 +104,9 @@ func (s *TraderStore) UpdateShowInCompetition(userID, id string, showInCompetiti
 		Update("show_in_competition", showInCompetition).Error
 }
 
-// Update updates trader configuration
+// Update writes a complete trader configuration, including zero-valued legacy
+// fields and an empty StrategyID (detach). Partial-request callers must merge
+// omitted fields with the stored trader first; do not skip zero values here.
 func (s *TraderStore) Update(trader *Trader) error {
 	fmt.Printf("📝 TraderStore.Update: ID=%s, Name=%s, AIModelID=%s, StrategyID=%s\n",
 		trader.ID, trader.Name, trader.AIModelID, trader.StrategyID)

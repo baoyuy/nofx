@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"nofx/config"
 	nofxcrypto "nofx/crypto"
+	"nofx/internal/apischeduler"
 	"nofx/store"
 	hltrader "nofx/trader/hyperliquid"
 	"os"
@@ -20,7 +21,7 @@ type clearinghouseState struct {
 	CrossMarginSummary struct {
 		AccountValue string `json:"accountValue"`
 	} `json:"crossMarginSummary"`
-	Withdrawable    string `json:"withdrawable"`
+	Withdrawable   string `json:"withdrawable"`
 	AssetPositions []struct {
 		Position struct {
 			Coin          string `json:"coin"`
@@ -33,7 +34,7 @@ type clearinghouseState struct {
 
 func fetchState(wallet string) (*clearinghouseState, error) {
 	body := strings.NewReader(fmt.Sprintf(`{"type":"clearinghouseState","user":%q}`, wallet))
-	resp, err := http.Post("https://api.hyperliquid.xyz/info", "application/json", body)
+	resp, err := apischeduler.Post(http.DefaultClient, "https://api.hyperliquid.xyz/info", "application/json", body)
 	if err != nil {
 		return nil, err
 	}

@@ -7,6 +7,7 @@ import (
 	"nofx/coinpool"
 	"nofx/config"
 	"nofx/crypto"
+	"nofx/internal/apischeduler"
 	"nofx/kernel"
 	"nofx/logger"
 	"nofx/manager"
@@ -37,6 +38,10 @@ func main() {
 
 	// Initialize logger
 	logger.Init(nil)
+
+	if err := apischeduler.ConfigureFromEnv(); err != nil {
+		logger.Fatalf("Invalid API scheduler configuration: %v", err)
+	}
 
 	logger.Info("╔════════════════════════════════════════════════════════════╗")
 	logger.Info("║           🚀 NOFX - AI-Powered Trading System              ║")

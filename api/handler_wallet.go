@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"nofx/store"
 	"nofx/wallet"
 	"strings"
@@ -143,7 +144,7 @@ func writeWalletBalance(c *gin.Context, query func(string) (float64, error)) {
 
 func checkClaw402Health() string {
 	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get("https://claw402.ai/health")
+	resp, err := apischeduler.Get(client, "https://claw402.ai/health")
 	if err != nil {
 		return "unreachable"
 	}

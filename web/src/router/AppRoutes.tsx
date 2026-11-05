@@ -232,7 +232,6 @@ function DashboardRoute() {
   const [searchParams] = useSearchParams()
   const selectedTraderSlug = searchParams.get('trader') || undefined
   const [selectedTraderId, setSelectedTraderId] = useState<string | undefined>()
-  const [, setLastUpdate] = useState<string>('--:--:--')
   const [decisionsLimit] = useState(5)
   const [accountPollOff, setAccountPollOff] = useState(false)
   const [positionsPollOff, setPositionsPollOff] = useState(false)
@@ -350,18 +349,14 @@ function DashboardRoute() {
     }
   )
 
-  useEffect(() => {
-    if (account) {
-      setLastUpdate(new Date().toLocaleTimeString())
-    }
-  }, [account])
 
   const selectedTrader = traders?.find(
     (trader) => trader.trader_id === selectedTraderId
   )
 
   return (
-    <AppChrome currentPage="trader" animateContent>
+    // Query-string trader changes must not remount charts or their live sockets.
+    <AppChrome currentPage="trader">
       <TerminalDashboard
         selectedTrader={selectedTrader}
         status={status}

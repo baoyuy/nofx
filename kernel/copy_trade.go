@@ -37,18 +37,28 @@ type CopyTradeAction struct {
 
 // CopyTradeHolder is one followed lead trader's position in a coin.
 type CopyTradeHolder struct {
-	Trader    string
-	Score     float64 // credibility 0-100
-	Side      string  // long | short
-	Entry     float64
-	Value     float64 // USDT at entry
-	Leverage  float64 // 0 = unknown (position inferred from trades)
-	ReturnPct float64 // unrealized, % of margin when Leverage > 0, else % of price
-	Priced    bool    // ReturnPct is known
-	OpenedAt  int64   // ms; 0 = before monitoring
-	Trapped   bool
-	Fresh     bool
-	HighFreq  bool
+	Trader                 string
+	Score                  float64 // credibility 0-100
+	Side                   string  // long | short
+	Entry                  float64
+	Value                  float64 // USDT at entry
+	Leverage               float64 // 0 = unknown (position inferred from trades)
+	ReturnPct              float64 // unrealized return on the explicitly supplied basis
+	PctOfMargin            bool
+	Priced                 bool
+	Source                 string
+	HistoricalEntryWarning bool
+	FirstEntry             float64
+	FirstEntryReturnPct    float64
+	FirstEntryPctOfMargin  bool
+	FirstEntryThresholdPct float64
+	PositionsUpdatedAt     time.Time
+	FillsUpdatedAt         time.Time
+	ProfileUpdatedAt       time.Time
+	OpenedAt               int64 // ms; 0 = before monitoring
+	Trapped                bool
+	Fresh                  bool
+	HighFreq               bool
 	// Style is how they trade: scalp, swing, long or martingale. Empty when
 	// there are too few trades to tell.
 	Style string
@@ -77,6 +87,11 @@ type CopyTradeView struct {
 	// window, Total how many can have any (public portfolios).
 	Fresh int
 	Total int
+	// Component coverage is available for monitor-backed views, not test mocks.
+	QualityKnown   bool
+	PositionsFresh int
+	FillsFresh     int
+	ProfilesFresh  int
 	// Reason explains missing data, e.g. "Binance is rate limiting requests".
 	Reason string
 }
@@ -199,8 +214,8 @@ Some coins carry a "Followed lead traders" block: what Binance copy-trading lead
 - It is delayed by a few minutes; their entry prices are already gone.
 - "⚠️ Lead traders: copy-trade data is unavailable..." or "...only N of M followed traders have fresh data" means the data is missing or partly refreshed: it says nothing about whether they hold the coin. Judge that coin on your own read, and do not close because of it.
 - Confidence (0-100) combines how much they agree, how credible their records are, and how many hold the coin. It is not a win probability.
-- "Trapped" traders sit on deep losses and may just be waiting to break even; "fresh" ones opened or added in the last 24 hours and reflect a current view. A trader who averaged down is judged from the first entry, so adding to a losing position still shows as trapped.
-- A position inferred from fills has no leverage: its percentage is of price, and "trapped" assumes 10x. Read it as approximate; a public position shows its real leverage and margin.
+- "Trapped" uses current unrealized return only: a loss of at least 50% of margin, or a 5% adverse move from the current average entry when margin is unavailable. Historical first-entry prices never set this flag. "Fresh" means opened or added in the last 24 hours.
+- A historical entry-deviation warning is a separate reference from the first recorded fill, not current PnL or evidence of liquidation. It does not add trapped counts or a separate confidence penalty; history and past leverage may be incomplete. An inferred position's displayed percentage is of price; a public position with margin data shows the margin return.
 - High-frequency traders (bots, grids) are weighted down; their positions churn.
 - "averages into losses" marks a trader who keeps adding to losing positions: their votes count 0.3, so their size says little about conviction. The tags "scalp" and "long" are holding-time styles: a scalp closes within hours (a snapshot, not a view), a long holds for weeks (directionally meaningful, but their entry is old).
 - "Price vs lead avg entry": far beyond their average in their direction means chasing a move they already made; near or better than their average is a better entry.
@@ -224,8 +239,8 @@ Some coins carry a "Followed lead traders" block: what Binance copy-trading lead
 // fresh: with stale data a missing coin says nothing about the traders.
 func formatCopyTrade(c *CopyTradeCoin, cov *CopyTradeView, now time.Time, price float64, held string) string {
 	if c == nil {
-		if held == "" || (cov != nil && cov.Total == 0) {
-			// Nothing at stake, or nobody followed at all: stay quiet.
+		if (cov != nil && cov.Total == 0) || (held == "" && cov.complete()) {
+			// No follows, or complete data for an unheld/unfollowed coin.
 			return ""
 		}
 		switch {
@@ -241,11 +256,8 @@ func formatCopyTrade(c *CopyTradeCoin, cov *CopyTradeView, now time.Time, price 
 		return "⚠️ Lead traders: none of the followed lead traders holds or recently traded this coin.\n"
 	}
 	var sb strings.Builder
-	// Only tell the model about a gap in the data on a coin the account holds:
-	// there a missing holder would otherwise read as an exit.
-	if held != "" {
-		sb.WriteString(cov.note())
-	}
+	// New entries need the same completeness warning as held positions.
+	sb.WriteString(cov.note())
 	if c.Long.Traders+c.Short.Traders == 0 {
 		sb.WriteString("Followed lead traders: none hold it now\n")
 	} else {
@@ -293,12 +305,10 @@ func formatCopyTrade(c *CopyTradeCoin, cov *CopyTradeView, now time.Time, price 
 				line += fmt.Sprintf(", %.0fx", h.Leverage)
 			}
 			if h.Priced {
-				if h.Leverage > 0 {
+				if h.PctOfMargin {
 					line += fmt.Sprintf(", %+.1f%% of margin", h.ReturnPct)
 				} else {
-					// Inferred from fills: no leverage, so this is a price
-					// move and "trapped" assumed 10x.
-					line += fmt.Sprintf(", %+.1f%% price (leverage unknown)", h.ReturnPct)
+					line += fmt.Sprintf(", %+.1f%% price (margin unavailable)", h.ReturnPct)
 				}
 			}
 			if h.OpenedAt > 0 {
@@ -326,7 +336,22 @@ func formatCopyTrade(c *CopyTradeCoin, cov *CopyTradeView, now time.Time, price 
 			if len(tags) > 0 {
 				line += " [" + strings.Join(tags, ", ") + "]"
 			}
+			if h.Source != "" {
+				line += " (" + h.Source + " position)"
+			}
 			sb.WriteString(line + "\n")
+			if !h.PositionsUpdatedAt.IsZero() || !h.FillsUpdatedAt.IsZero() || !h.ProfileUpdatedAt.IsZero() {
+				sb.WriteString(fmt.Sprintf("    Data timestamps (UTC): positions %s; fills %s; profile %s\n",
+					copyTradeDataTime(h.PositionsUpdatedAt), copyTradeDataTime(h.FillsUpdatedAt), copyTradeDataTime(h.ProfileUpdatedAt)))
+			}
+			if h.HistoricalEntryWarning {
+				basis := "price"
+				if h.FirstEntryPctOfMargin {
+					basis = "reference scaled by current leverage"
+				}
+				sb.WriteString(fmt.Sprintf("    Historical entry deviation: first recorded entry %s, %+.1f%% (%s), adverse threshold %.1f%%. Not current PnL; not counted as trapped or a separate confidence penalty. History/past leverage may be incomplete.\n",
+					formatCopyPrice(h.FirstEntry), h.FirstEntryReturnPct, basis, h.FirstEntryThresholdPct))
+			}
 		}
 	}
 	if len(c.Recent) > 0 {
@@ -573,4 +598,11 @@ func (e *StrategyEngine) primaryATR(ctx *Context, symbol string) (float64, float
 		}
 	}
 	return 0, data.CurrentPrice
+}
+
+func copyTradeDataTime(at time.Time) string {
+	if at.IsZero() {
+		return "unknown"
+	}
+	return at.UTC().Format(time.RFC3339)
 }

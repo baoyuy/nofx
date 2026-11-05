@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"nofx/internal/apischeduler"
 	"strings"
 	"time"
 )
@@ -41,8 +42,8 @@ func init() {
 
 // SSRFError represents a Server-Side Request Forgery attempt
 type SSRFError struct {
-	URL     string
-	Reason  string
+	URL    string
+	Reason string
 }
 
 func (e *SSRFError) Error() string {
@@ -213,5 +214,5 @@ func SafeGet(rawURL string, timeout time.Duration) (*http.Response, error) {
 
 	// Use the safe HTTP client
 	client := SafeHTTPClient(timeout)
-	return client.Get(rawURL)
+	return apischeduler.Get(client, rawURL)
 }

@@ -28,7 +28,10 @@ type CopyTradeFollow struct {
 	WinRate float64 `gorm:"column:win_rate" json:"win_rate"`
 
 	// Fills up to this time (ms) are stored; 0 = not backfilled yet.
-	FillsUntil     int64 `gorm:"column:fills_until" json:"-"`
+	FillsUntil int64 `gorm:"column:fills_until" json:"-"`
+	// Wall-clock completion time of a full catch-up, never a profile/page write.
+	FillsSyncedAt  int64 `gorm:"column:fills_synced_at" json:"-"`
+	FillsPending   bool  `gorm:"column:fills_pending" json:"-"`
 	ProfileAt      int64 `gorm:"column:profile_at" json:"-"`
 	ProfileVersion int   `gorm:"column:profile_version" json:"-"`
 	LastTradeTime  int64 `gorm:"column:last_trade_time" json:"last_trade_time"`
@@ -155,6 +158,27 @@ func (s *CopyTradeStore) CountFollows() (int64, error) {
 // SaveFollow inserts or replaces a follow.
 func (s *CopyTradeStore) SaveFollow(f *CopyTradeFollow) error { return s.db.Save(f).Error }
 
+// UpdateFollowProfile never creates a follow or overwrites synchronization
+// state. A late response must not revive an unfollowed/re-followed incarnation.
+func (s *CopyTradeStore) UpdateFollowProfile(f *CopyTradeFollow) error {
+	result := s.db.Model(&CopyTradeFollow{}).Where("portfolio_id = ? AND created_at = ?", f.PortfolioID, f.CreatedAt).
+		Updates(map[string]any{
+			"nickname": f.Nickname, "avatar_url": f.AvatarURL, "status": f.Status, "position_show": f.PositionShow,
+			"aum": f.AUM, "margin_balance": f.MarginBalance, "start_time": f.StartTime,
+			"copy_count": f.CopyCount, "max_copy_count": f.MaxCopyCount,
+			"roi": f.ROI, "pnl": f.PnL, "mdd": f.MDD, "win_rate": f.WinRate,
+			"profile_at": f.ProfileAt, "profile_version": f.ProfileVersion, "last_trade_time": f.LastTradeTime,
+			"private": f.Private, "public_id": f.PublicID,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
 func (s *CopyTradeStore) DeleteFollow(id string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Delete(&CopyTradeFill{}, "portfolio_id = ?", id).Error; err != nil {
@@ -172,8 +196,9 @@ func (s *CopyTradeStore) Fills(id string, sinceMs int64) ([]CopyTradeFill, error
 }
 
 // ReplaceFills swaps the fills at or after fromMs for fills, and records
-// that fills up to untilMs are stored, in one transaction.
-func (s *CopyTradeStore) ReplaceFills(id string, fromMs int64, fills []CopyTradeFill, untilMs int64) error {
+// that fills up to untilMs are stored, in one transaction. syncedAt is supplied
+// only after a complete catch-up; partial pages preserve the last completion.
+func (s *CopyTradeStore) ReplaceFills(id string, fromMs int64, fills []CopyTradeFill, untilMs int64, syncedAt ...int64) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Delete(&CopyTradeFill{}, "portfolio_id = ? AND time >= ?", id, fromMs).Error; err != nil {
 			return err
@@ -183,7 +208,12 @@ func (s *CopyTradeStore) ReplaceFills(id string, fromMs int64, fills []CopyTrade
 				return err
 			}
 		}
-		return tx.Model(&CopyTradeFollow{}).Where("portfolio_id = ?", id).Update("fills_until", untilMs).Error
+		updates := map[string]any{"fills_until": untilMs, "fills_pending": true}
+		if len(syncedAt) > 0 && syncedAt[0] > 0 {
+			updates["fills_synced_at"] = syncedAt[0]
+			updates["fills_pending"] = false
+		}
+		return tx.Model(&CopyTradeFollow{}).Where("portfolio_id = ?", id).Updates(updates).Error
 	})
 }
 

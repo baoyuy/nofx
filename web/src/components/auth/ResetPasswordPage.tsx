@@ -4,7 +4,7 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { t } from '../../i18n/translations'
 import { Header } from '../common/Header'
 import { ArrowLeft, KeyRound, Copy, Check } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '../../lib/toast'
 
 const RESET_PASSWORD_COMMAND = 'nofx reset-password --email you@example.com'
 

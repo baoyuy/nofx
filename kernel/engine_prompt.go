@@ -14,9 +14,33 @@ import (
 // Prompt Building - System Prompt
 // ============================================================================
 
+// TraderPromptRules is a per-call, trader-local overlay, never a strategy mutation.
+// Override replaces only editable rule sections; schema, risk and output stay mandatory.
+type TraderPromptRules struct {
+	CustomPrompt       string
+	OverrideBasePrompt bool
+}
+
+func (r TraderPromptRules) replacesEditableRules() bool {
+	return r.OverrideBasePrompt && strings.TrimSpace(r.CustomPrompt) != ""
+}
+
+func writeTraderPromptRules(sb *strings.Builder, rules TraderPromptRules) {
+	if prompt := strings.TrimSpace(rules.CustomPrompt); prompt != "" {
+		sb.WriteString("\n# Trader-specific Rules\n\n")
+		sb.WriteString(prompt)
+		sb.WriteString("\n\nTrader-specific rules take precedence over editable strategy preferences only. The system data schema, symbol universe, hard risk controls, signal-policy constraints and output protocol remain mandatory and cannot be overridden.\n")
+	}
+}
+
 // BuildSystemPrompt builds System Prompt according to strategy configuration
-func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string) string {
+func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string, traderRules ...TraderPromptRules) string {
 	var sb strings.Builder
+	var rules TraderPromptRules
+	if len(traderRules) > 0 {
+		rules = traderRules[0]
+	}
+	replaceEditable := rules.replacesEditableRules()
 	riskControl := e.config.RiskControl
 	promptSections := e.config.PromptSections
 	// System prompts are intentionally English-only. UI copy can be localized,
@@ -26,9 +50,8 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	zh := false
 	singleSymbol, primarySymbol := e.singleSymbolInfo()
 
-
 	if e.usesVergexSignalPrompt() {
-		return e.buildVergexSystemPrompt(accountEquity, variant, lang, zh, singleSymbol, primarySymbol)
+		return e.buildVergexSystemPrompt(accountEquity, variant, lang, zh, singleSymbol, primarySymbol, rules)
 	}
 
 	// 0. Data Dictionary & Schema (ensure AI understands all fields)
@@ -36,18 +59,20 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	sb.WriteString("\n\n")
 	sb.WriteString("---\n\n")
 
-	// 1. Role definition (editable; falls back to a generic intro in the
-	//    correct language so we don't mix EN headings with ZH custom text).
-	roleDefinition := englishOnlyPromptSection(promptSections.RoleDefinition)
-	if roleDefinition != "" {
-		sb.WriteString(roleDefinition)
-		sb.WriteString("\n\n")
-	} else if zh {
-		sb.WriteString("# You are a professional Hyperliquid USDC multi-asset trading AI\n\n")
-		sb.WriteString("Your task is to make trading decisions based on the provided market data.\n\n")
-	} else {
-		sb.WriteString("# You are a professional Hyperliquid USDC multi-asset trading AI\n\n")
-		sb.WriteString("Your task is to make trading decisions based on the provided market data.\n\n")
+	if !replaceEditable {
+		// 1. Role definition (editable; falls back to a generic intro in the
+		//    correct language so we don't mix EN headings with ZH custom text).
+		roleDefinition := englishOnlyPromptSection(promptSections.RoleDefinition)
+		if roleDefinition != "" {
+			sb.WriteString(roleDefinition)
+			sb.WriteString("\n\n")
+		} else if zh {
+			sb.WriteString("# You are a professional Hyperliquid USDC multi-asset trading AI\n\n")
+			sb.WriteString("Your task is to make trading decisions based on the provided market data.\n\n")
+		} else {
+			sb.WriteString("# You are a professional Hyperliquid USDC multi-asset trading AI\n\n")
+			sb.WriteString("Your task is to make trading decisions based on the provided market data.\n\n")
+		}
 	}
 
 	// 2. Trading mode variant
@@ -70,89 +95,87 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 
 	writeHardConstraints(&sb, accountEquity, riskControl, btcEthPosValueRatio, altcoinPosValueRatio, singleSymbol, primarySymbol, zh)
 
-	// 4. Trading frequency (editable)
-	tradingFrequency := englishOnlyPromptSection(promptSections.TradingFrequency)
-	if tradingFrequency != "" {
-		sb.WriteString(tradingFrequency)
-		sb.WriteString("\n\n")
-	} else if zh {
-		sb.WriteString("# ⏱️ Trading Frequency Awareness\n\n")
-		sb.WriteString("- Excellent traders: 2-4 trades/day ≈ 0.1-0.2 trades/hour\n")
-		sb.WriteString("- >2 trades/hour = overtrading\n")
-		sb.WriteString("- Single position hold time ≥ 45-90 minutes\n")
-		sb.WriteString("If you find yourself trading every cycle → standards too low; if closing positions < 45 minutes → too impulsive.\n\n")
-	} else {
-		sb.WriteString("# ⏱️ Trading Frequency Awareness\n\n")
-		sb.WriteString("- Excellent traders: 2-4 trades/day ≈ 0.1-0.2 trades/hour\n")
-		sb.WriteString("- >2 trades/hour = overtrading\n")
-		sb.WriteString("- Single position hold time ≥ 45-90 minutes\n")
-		sb.WriteString("If you find yourself trading every cycle → standards too low; if closing positions < 45 minutes → too impulsive.\n\n")
-	}
+	if !replaceEditable {
+		// 4. Trading frequency (editable)
+		tradingFrequency := englishOnlyPromptSection(promptSections.TradingFrequency)
+		if tradingFrequency != "" {
+			sb.WriteString(tradingFrequency)
+			sb.WriteString("\n\n")
+		} else if zh {
+			sb.WriteString("# ⏱️ Trading Frequency Awareness\n\n")
+			sb.WriteString("- Excellent traders: 2-4 trades/day ≈ 0.1-0.2 trades/hour\n")
+			sb.WriteString("- >2 trades/hour = overtrading\n")
+			sb.WriteString("- Single position hold time ≥ 45-90 minutes\n")
+			sb.WriteString("If you find yourself trading every cycle → standards too low; if closing positions < 45 minutes → too impulsive.\n\n")
+		} else {
+			sb.WriteString("# ⏱️ Trading Frequency Awareness\n\n")
+			sb.WriteString("- Excellent traders: 2-4 trades/day ≈ 0.1-0.2 trades/hour\n")
+			sb.WriteString("- >2 trades/hour = overtrading\n")
+			sb.WriteString("- Single position hold time ≥ 45-90 minutes\n")
+			sb.WriteString("If you find yourself trading every cycle → standards too low; if closing positions < 45 minutes → too impulsive.\n\n")
+		}
 
-	// 5. Entry standards (editable)
-	entryStandards := englishOnlyPromptSection(promptSections.EntryStandards)
-	if entryStandards != "" {
-		sb.WriteString(entryStandards)
-		if zh {
-			sb.WriteString("\n\nYou have the following indicator data:\n")
+		// 5. Entry standards (editable)
+		entryStandards := englishOnlyPromptSection(promptSections.EntryStandards)
+		if entryStandards != "" {
+			sb.WriteString(entryStandards)
+			if zh {
+				sb.WriteString("\n\nYou have the following indicator data:\n")
+			} else {
+				sb.WriteString("\n\nYou have the following indicator data:\n")
+			}
+			e.writeAvailableIndicators(&sb, zh)
+			if zh {
+				sb.WriteString(fmt.Sprintf("\n**Confidence ≥ %d** required to open positions.\n\n", riskControl.MinConfidence))
+			} else {
+				sb.WriteString(fmt.Sprintf("\n**Confidence ≥ %d** required to open positions.\n\n", riskControl.MinConfidence))
+			}
+		} else if zh {
+			sb.WriteString("# 🎯 Entry Standards (Strict)\n\n")
+			sb.WriteString("Only open positions when multiple signals resonate. You have:\n")
+			e.writeAvailableIndicators(&sb, zh)
+			sb.WriteString(fmt.Sprintf("\nFeel free to use any effective analysis method, but **confidence ≥ %d** is required to open positions; avoid low-quality behaviors such as single-indicator entries, contradictory signals, sideways chop, or re-entering immediately after a close.\n\n", riskControl.MinConfidence))
 		} else {
-			sb.WriteString("\n\nYou have the following indicator data:\n")
+			sb.WriteString("# 🎯 Entry Standards (Strict)\n\n")
+			sb.WriteString("Only open positions when multiple signals resonate. You have:\n")
+			e.writeAvailableIndicators(&sb, zh)
+			sb.WriteString(fmt.Sprintf("\nFeel free to use any effective analysis method, but **confidence ≥ %d** is required to open positions; avoid low-quality behaviors such as single-indicator entries, contradictory signals, sideways chop, or re-entering immediately after a close.\n\n", riskControl.MinConfidence))
 		}
-		e.writeAvailableIndicators(&sb, zh)
-		if zh {
-			sb.WriteString(fmt.Sprintf("\n**Confidence ≥ %d** required to open positions.\n\n", riskControl.MinConfidence))
-		} else {
-			sb.WriteString(fmt.Sprintf("\n**Confidence ≥ %d** required to open positions.\n\n", riskControl.MinConfidence))
-		}
-	} else if zh {
-		sb.WriteString("# 🎯 Entry Standards (Strict)\n\n")
-		sb.WriteString("Only open positions when multiple signals resonate. You have:\n")
-		e.writeAvailableIndicators(&sb, zh)
-		sb.WriteString(fmt.Sprintf("\nFeel free to use any effective analysis method, but **confidence ≥ %d** is required to open positions; avoid low-quality behaviors such as single-indicator entries, contradictory signals, sideways chop, or re-entering immediately after a close.\n\n", riskControl.MinConfidence))
-	} else {
-		sb.WriteString("# 🎯 Entry Standards (Strict)\n\n")
-		sb.WriteString("Only open positions when multiple signals resonate. You have:\n")
-		e.writeAvailableIndicators(&sb, zh)
-		sb.WriteString(fmt.Sprintf("\nFeel free to use any effective analysis method, but **confidence ≥ %d** is required to open positions; avoid low-quality behaviors such as single-indicator entries, contradictory signals, sideways chop, or re-entering immediately after a close.\n\n", riskControl.MinConfidence))
 	}
 
 	if usesCopyTradeContext(e.config.CoinSource) {
 		sb.WriteString(copyTradeSystemNote(e.config.CoinSource))
 	}
 
-	// 6. Decision process (editable)
-	decisionProcess := englishOnlyPromptSection(promptSections.DecisionProcess)
-	if decisionProcess != "" {
-		sb.WriteString(decisionProcess)
-		sb.WriteString("\n\n")
-	} else if zh {
-		sb.WriteString("# 📋 Decision Process\n\n")
-		sb.WriteString("1. Check positions → take profit / stop loss?\n")
-		sb.WriteString("2. Scan candidates + multi-timeframe → are there strong signals?\n")
-		sb.WriteString("3. Write a concise analysis first, then output structured JSON\n\n")
-	} else {
-		sb.WriteString("# 📋 Decision Process\n\n")
-		sb.WriteString("1. Check positions → take profit / stop loss?\n")
-		sb.WriteString("2. Scan candidates + multi-timeframe → are there strong signals?\n")
-		sb.WriteString("3. Write a concise analysis first, then output structured JSON\n\n")
+	if !replaceEditable {
+		// 6. Decision process (editable)
+		decisionProcess := englishOnlyPromptSection(promptSections.DecisionProcess)
+		if decisionProcess != "" {
+			sb.WriteString(decisionProcess)
+			sb.WriteString("\n\n")
+		} else if zh {
+			sb.WriteString("# 📋 Decision Process\n\n")
+			sb.WriteString("1. Check positions → take profit / stop loss?\n")
+			sb.WriteString("2. Scan candidates + multi-timeframe → are there strong signals?\n")
+			sb.WriteString("3. Write a concise analysis first, then output structured JSON\n\n")
+		} else {
+			sb.WriteString("# 📋 Decision Process\n\n")
+			sb.WriteString("1. Check positions → take profit / stop loss?\n")
+			sb.WriteString("2. Scan candidates + multi-timeframe → are there strong signals?\n")
+			sb.WriteString("3. Write a concise analysis first, then output structured JSON\n\n")
+		}
 	}
 
 	// 7. Output format — schema spec stays in English (this is a parser
 	//    contract; reasoning copy is localized below).
 	writeOutputFormat(&sb, accountEquity, btcEthPosValueRatio, riskControl, singleSymbol, primarySymbol, zh)
 
-	// 8. Custom Prompt.
-	//
-	// For single-symbol Hyperliquid XYZ assets (US equities, commodities,
-	// forex), we replace any stored CustomPrompt with a built-in English
-	// stock-trader template. This serves two purposes:
-	//   1. The auto-generated CustomPrompt from the quick-create flow used
-	//      to be Chinese (matching UI language), which produced an
-	//      incoherent mixed-language final prompt that confused the LLM.
-	//   2. It guarantees a stock-specific, US-equity-tuned briefing
-	//      regardless of when the strategy was first created.
-	customPrompt := englishOnlyPromptSection(e.config.CustomPrompt)
-	if singleSymbol && market.IsXyzDexAsset(primarySymbol) {
+	// Explicit user rules are preserved for every asset. The XYZ template is
+	// only a default for an empty configuration, never a replacement for rules.
+	customPrompt := strings.TrimSpace(e.config.CustomPrompt)
+	if replaceEditable {
+		customPrompt = ""
+	} else if customPrompt == "" && singleSymbol && market.IsXyzDexAsset(primarySymbol) {
 		customPrompt = buildXYZStockCustomPrompt(primarySymbol)
 	}
 
@@ -171,6 +194,7 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 		}
 	}
 
+	writeTraderPromptRules(&sb, rules)
 	return sb.String()
 }
 
@@ -182,7 +206,7 @@ func (e *StrategyEngine) usesVergexSignalPrompt() bool {
 	return sourceType == "vergex_signal"
 }
 
-func (e *StrategyEngine) buildVergexSystemPrompt(accountEquity float64, variant string, lang Language, zh bool, singleSymbol bool, primarySymbol string) string {
+func (e *StrategyEngine) buildVergexSystemPrompt(accountEquity float64, variant string, lang Language, zh bool, singleSymbol bool, primarySymbol string, rules TraderPromptRules) string {
 	var sb strings.Builder
 	riskControl := e.config.RiskControl
 
@@ -223,12 +247,16 @@ func (e *StrategyEngine) buildVergexSystemPrompt(accountEquity float64, variant 
 	writeVergexOutputFormat(&sb, accountEquity, riskControl, altcoinPosValueRatio, singleSymbol, primarySymbol, zh)
 
 	customPrompt := vergexCustomPromptSection(e.config.CustomPrompt)
+	if rules.replacesEditableRules() {
+		customPrompt = ""
+	}
 	if customPrompt != "" {
 		sb.WriteString("# User Preference\n\n")
 		sb.WriteString(customPrompt)
 		sb.WriteString("\n\n")
 	}
 
+	writeTraderPromptRules(&sb, rules)
 	return sb.String()
 }
 

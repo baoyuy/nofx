@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"nofx/internal/apischeduler"
 	"nofx/provider/coinank"
 	"nofx/provider/coinank/coinank_enum"
 	"strconv"
@@ -62,7 +63,7 @@ func get(ctx context.Context, path string, paramsMap map[string]string) (string,
 	if err != nil {
 		return "", err
 	}
-	resp, err := client.Do(request)
+	resp, err := apischeduler.Do(client, request)
 	if err != nil {
 		return "", err
 	}

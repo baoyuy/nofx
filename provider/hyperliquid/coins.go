@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"nofx/logger"
 	"sort"
 	"strconv"
@@ -106,7 +107,7 @@ func fetchPerpDexCoins(ctx context.Context, client *http.Client, dex string) ([]
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := client.Do(req)
+	resp, err := apischeduler.Do(client, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch coin data: %w", err)
 	}

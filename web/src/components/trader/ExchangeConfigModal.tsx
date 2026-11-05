@@ -27,7 +27,7 @@ import {
   Copy,
   ArrowRight,
 } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '../../lib/toast'
 import { Tooltip } from './Tooltip'
 import { getShortName } from './utils'
 
@@ -249,6 +249,23 @@ export function ExchangeConfigModal({
     ? selectedExchange?.exchange_type
     : selectedExchangeType
 
+  // Saved credentials are write-only. Renaming must not require re-entering
+  // them or sending masked placeholders back to the API.
+  const hasAPIKey = Boolean(apiKey.trim() || selectedExchange?.has_api_key)
+  const hasSecretKey = Boolean(
+    secretKey.trim() || selectedExchange?.has_secret_key
+  )
+  const hasPassphrase = Boolean(
+    passphrase.trim() || selectedExchange?.has_passphrase
+  )
+  const hasAsterKey = Boolean(
+    asterPrivateKey.trim() || selectedExchange?.has_aster_private_key
+  )
+  const hasLighterKey = Boolean(
+    lighterApiKeyPrivateKey.trim() ||
+    selectedExchange?.has_lighter_api_key_private_key
+  )
+
   const exchangeRegistrationLinks: Record<
     string,
     { url: string; hasReferral?: boolean }
@@ -400,7 +417,7 @@ export function ExchangeConfigModal({
         currentExchangeType === 'bybit' ||
         currentExchangeType === 'indodax'
       ) {
-        if (!apiKey.trim() || !secretKey.trim()) return
+        if (!hasAPIKey || !hasSecretKey) return
         await onSave(
           exchangeId,
           exchangeType,
@@ -415,7 +432,7 @@ export function ExchangeConfigModal({
         currentExchangeType === 'bitget' ||
         currentExchangeType === 'kucoin'
       ) {
-        if (!apiKey.trim() || !secretKey.trim() || !passphrase.trim()) return
+        if (!hasAPIKey || !hasSecretKey || !hasPassphrase) return
         await onSave(
           exchangeId,
           exchangeType,
@@ -426,15 +443,27 @@ export function ExchangeConfigModal({
           testnet
         )
       } else if (currentExchangeType === 'hyperliquid') {
-        toast.error(
-          language === 'zh'
-            ? '请使用钱包授权流程连接 Hyperliquid。'
-            : 'Use the wallet authorization flow to connect Hyperliquid.'
-        )
-        return
-      } else if (currentExchangeType === 'aster') {
-        if (!asterUser.trim() || !asterSigner.trim() || !asterPrivateKey.trim())
+        if (!exchangeId) {
+          toast.error(
+            language === 'zh'
+              ? '请使用钱包授权流程连接 Hyperliquid。'
+              : 'Use the wallet authorization flow to connect Hyperliquid.'
+          )
           return
+        }
+        // Existing accounts may be renamed without accepting manual keys or
+        // altering the wallet authorization flow.
+        await onSave(
+          exchangeId,
+          exchangeType,
+          trimmedAccountName,
+          '',
+          '',
+          '',
+          testnet
+        )
+      } else if (currentExchangeType === 'aster') {
+        if (!asterUser.trim() || !asterSigner.trim() || !hasAsterKey) return
         await onSave(
           exchangeId,
           exchangeType,
@@ -449,7 +478,7 @@ export function ExchangeConfigModal({
           asterPrivateKey.trim()
         )
       } else if (currentExchangeType === 'lighter') {
-        if (!lighterWalletAddr.trim() || !lighterApiKeyPrivateKey.trim()) return
+        if (!lighterWalletAddr.trim() || !hasLighterKey) return
         await onSave(
           exchangeId,
           exchangeType,
@@ -468,7 +497,7 @@ export function ExchangeConfigModal({
           lighterApiKeyIndex
         )
       } else {
-        if (!apiKey.trim() || !secretKey.trim()) return
+        if (!hasAPIKey || !hasSecretKey) return
         await onSave(
           exchangeId,
           exchangeType,
@@ -900,7 +929,7 @@ export function ExchangeConfigModal({
                         border: '1px solid rgba(25,36,52,0.14)',
                         color: '#192434',
                       }}
-                      required
+                      required={!selectedExchange?.has_api_key}
                     />
                   </div>
 
@@ -932,7 +961,7 @@ export function ExchangeConfigModal({
                         border: '1px solid rgba(25,36,52,0.14)',
                         color: '#192434',
                       }}
-                      required
+                      required={!selectedExchange?.has_secret_key}
                     />
                   </div>
 
@@ -964,7 +993,7 @@ export function ExchangeConfigModal({
                           border: '1px solid rgba(25,36,52,0.14)',
                           color: '#192434',
                         }}
-                        required
+                        required={!selectedExchange?.has_passphrase}
                       />
                     </div>
                   )}
@@ -1128,7 +1157,7 @@ export function ExchangeConfigModal({
                         border: '1px solid rgba(25,36,52,0.14)',
                         color: '#192434',
                       }}
-                      required
+                      required={!selectedExchange?.has_aster_private_key}
                     />
                   </div>
                 </>
@@ -1259,7 +1288,9 @@ export function ExchangeConfigModal({
                         border: '1px solid rgba(25,36,52,0.14)',
                         color: '#192434',
                       }}
-                      required
+                      required={
+                        !selectedExchange?.has_lighter_api_key_private_key
+                      }
                     />
                   </div>
                   <div className="space-y-2">
@@ -1313,7 +1344,8 @@ export function ExchangeConfigModal({
                       ? t('cancel', language)
                       : t('exchangeConfig.back', language)}
                 </button>
-                {currentExchangeType !== 'hyperliquid' && (
+                {(currentExchangeType !== 'hyperliquid' ||
+                  editingExchangeId) && (
                   <button
                     type="submit"
                     disabled={isSaving || !accountName.trim()}

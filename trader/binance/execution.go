@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"net/http"
 	"nofx/hook"
+	"nofx/internal/apischeduler"
 	"nofx/trader/execution"
 	"time"
 )
@@ -52,6 +53,7 @@ func NewExecutionTrader(key, secret, userID string) *FuturesTrader {
 	if result := hook.HookExec[hook.NewBinanceTraderResult](hook.NEW_BINANCE_TRADER, userID, c); result != nil && result.GetResult() != nil {
 		c = result.GetResult()
 	}
+	c.HTTPClient = apischeduler.Wrap(c.HTTPClient)
 	return &FuturesTrader{client: c, cacheDuration: 15 * time.Second}
 }
 

@@ -133,7 +133,9 @@ export interface FreeForm {
   description: string
   // "pool" trades a saved coin pool from the Coin pool page; "horn"
   // re-screens Binance for the Bollinger horn every cycle.
-  coinSource?: 'static' | 'pool' | 'horn' | 'copy'
+  coinSource?: 'static' | 'pool' | 'horn' | 'copy' | 'preserved'
+  // Sources this editor cannot configure are carried through without loss.
+  preservedCoinSource?: AIStrategyConfig['coin_source']
   // Settings of the "copy" source (coins followed lead traders hold).
   copyTrade?: CopyTradeSettings
   // Show followed lead traders' positions to the AI with any source.
@@ -256,6 +258,11 @@ export function formFromStrategy(strategy: Strategy): FreeForm {
   const horn = ai?.coin_source.source_type === 'bollinger_horn'
   const copy = ai?.coin_source.source_type === 'copy_trade'
   const src = ai?.coin_source
+  const preserveSource =
+    src &&
+    !['static', 'coin_pool', 'bollinger_horn', 'copy_trade'].includes(
+      src.source_type
+    )
   const timeframe = timeframeOptions.includes(
     ind?.klines.primary_timeframe || ''
   )
@@ -270,7 +277,16 @@ export function formFromStrategy(strategy: Strategy): FreeForm {
   return {
     name: strategy.name,
     description: strategy.description || '',
-    coinSource: copy ? 'copy' : horn ? 'horn' : pool ? 'pool' : 'static',
+    coinSource: preserveSource
+      ? 'preserved'
+      : copy
+        ? 'copy'
+        : horn
+          ? 'horn'
+          : pool
+            ? 'pool'
+            : 'static',
+    preservedCoinSource: preserveSource ? structuredClone(src) : undefined,
     copyTrade: {
       minConfidence: clampNumber(
         src?.copy_trade_min_confidence,
@@ -414,51 +430,56 @@ export function configFromForm(
     strategy_type: 'ai_trading',
     language,
     ai_config: {
-      coin_source: {
-        source_type: copy
-          ? 'copy_trade'
-          : horn
-            ? 'bollinger_horn'
-            : pool
-              ? 'coin_pool'
-              : 'static',
-        coin_pool_id: pool ? form.coinPoolID : '',
-        horn_interval: horn ? toHornInterval(form.hornInterval) : undefined,
-        // For a pool the backend refreshes this snapshot from the pool; the
-        // horn source picks its coins live every cycle.
-        ...(copy
-          ? {
-              copy_trade_min_confidence: copyTrade.minConfidence,
-              copy_trade_direction: copyTrade.direction,
-              copy_trade_limit: copyTrade.limit,
-              copy_trade_min_traders: copyTrade.minTraders,
-            }
-          : {}),
-        copy_trade_context: copy || Boolean(form.copyTradeContext),
-        copy_trade_follow:
-          copy || form.copyTradeContext
-            ? form.copyTradeFollow || (copy ? 'follow' : 'free')
-            : undefined,
-        // Only the context mode gates on it; the copy source uses
-        // copy_trade_min_confidence.
-        copy_trade_context_min_confidence:
-          !copy && form.copyTradeContext
-            ? (copyTrade.contextMinConfidence ??
-              DEFAULT_COPY_TRADE.contextMinConfidence)
-            : undefined,
-        static_coins:
-          horn || copy
-            ? []
-            : pool
-              ? (form.poolCoins || []).slice(0, LIMITS.maxCoins)
-              : parseCoins(form.coinsInput),
-        excluded_coins: ai?.coin_source.excluded_coins || [],
-        use_ai500: false,
-        use_oi_top: false,
-        use_oi_low: false,
-        use_hyper_all: false,
-        use_hyper_main: false,
-      },
+      coin_source:
+        form.coinSource === 'preserved'
+          ? structuredClone(form.preservedCoinSource || ai!.coin_source)
+          : {
+              source_type: copy
+                ? 'copy_trade'
+                : horn
+                  ? 'bollinger_horn'
+                  : pool
+                    ? 'coin_pool'
+                    : 'static',
+              coin_pool_id: pool ? form.coinPoolID : '',
+              horn_interval: horn
+                ? toHornInterval(form.hornInterval)
+                : undefined,
+              // For a pool the backend refreshes this snapshot from the pool; the
+              // horn source picks its coins live every cycle.
+              ...(copy
+                ? {
+                    copy_trade_min_confidence: copyTrade.minConfidence,
+                    copy_trade_direction: copyTrade.direction,
+                    copy_trade_limit: copyTrade.limit,
+                    copy_trade_min_traders: copyTrade.minTraders,
+                  }
+                : {}),
+              copy_trade_context: copy || Boolean(form.copyTradeContext),
+              copy_trade_follow:
+                copy || form.copyTradeContext
+                  ? form.copyTradeFollow || (copy ? 'follow' : 'free')
+                  : undefined,
+              // Only the context mode gates on it; the copy source uses
+              // copy_trade_min_confidence.
+              copy_trade_context_min_confidence:
+                !copy && form.copyTradeContext
+                  ? (copyTrade.contextMinConfidence ??
+                    DEFAULT_COPY_TRADE.contextMinConfidence)
+                  : undefined,
+              static_coins:
+                horn || copy
+                  ? []
+                  : pool
+                    ? (form.poolCoins || []).slice(0, LIMITS.maxCoins)
+                    : parseCoins(form.coinsInput),
+              excluded_coins: ai?.coin_source.excluded_coins || [],
+              use_ai500: false,
+              use_oi_top: false,
+              use_oi_low: false,
+              use_hyper_all: false,
+              use_hyper_main: false,
+            },
       indicators: {
         ...(ai?.indicators || {}),
         klines: {

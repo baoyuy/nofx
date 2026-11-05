@@ -290,10 +290,11 @@ func (s *ExchangeStore) Create(userID, exchangeType, accountName string, enabled
 	return id, nil
 }
 
-// Update updates exchange configuration by UUID
+// Update updates exchange configuration by UUID. The optional account name is
+// saved atomically with the config; older callers omit it to preserve the name.
 func (s *ExchangeStore) Update(userID, id string, enabled bool, apiKey, secretKey, passphrase string, testnet bool,
 	hyperliquidWalletAddr string, hyperliquidUnifiedAcct bool, hyperliquidBuilderApproved bool,
-	asterUser, asterSigner, asterPrivateKey, lighterWalletAddr, lighterPrivateKey, lighterApiKeyPrivateKey string, lighterApiKeyIndex int) error {
+	asterUser, asterSigner, asterPrivateKey, lighterWalletAddr, lighterPrivateKey, lighterApiKeyPrivateKey string, lighterApiKeyIndex int, accountName ...*string) error {
 
 	logger.Debugf("🔧 ExchangeStore.Update: userID=%s, id=%s", userID, id)
 
@@ -308,6 +309,13 @@ func (s *ExchangeStore) Update(userID, id string, enabled bool, apiKey, secretKe
 		"lighter_wallet_addr":          lighterWalletAddr,
 		"lighter_api_key_index":        lighterApiKeyIndex,
 		"updated_at":                   time.Now().UTC(),
+	}
+	if len(accountName) > 0 && accountName[0] != nil {
+		name := strings.TrimSpace(*accountName[0])
+		if name == "" {
+			return fmt.Errorf("account name must not be empty")
+		}
+		updates["account_name"] = name
 	}
 
 	// Only update encrypted fields if not empty
@@ -342,6 +350,10 @@ func (s *ExchangeStore) Update(userID, id string, enabled bool, apiKey, secretKe
 
 // UpdateAccountName updates the account name for an exchange
 func (s *ExchangeStore) UpdateAccountName(userID, id, accountName string) error {
+	accountName = strings.TrimSpace(accountName)
+	if accountName == "" {
+		return fmt.Errorf("account name must not be empty")
+	}
 	result := s.db.Model(&Exchange{}).
 		Where("id = ? AND user_id = ?", id, userID).
 		Updates(map[string]interface{}{

@@ -1,4 +1,6 @@
+import { NoticeText } from '../components/NoticeText'
 import { useEffect, useMemo, useState } from 'react'
+import { startVisiblePolling } from '../lib/visiblePolling'
 import { useLanguage } from '../contexts/LanguageContext'
 import { api } from '../lib/api'
 import type { MarketAnalyzeResult, MarketTicker } from '../lib/api/market'
@@ -120,15 +122,12 @@ export function MarketPage() {
         // header keeps the last value
       }
     }
-    void loadCandles()
-    void loadTicker()
-    const visible = () => document.visibilityState === 'visible'
-    const t1 = window.setInterval(() => visible() && void loadCandles(), 5000)
-    const t2 = window.setInterval(() => visible() && void loadTicker(), 3000)
+    const stopCandles = startVisiblePolling(loadCandles, 5000)
+    const stopTicker = startVisiblePolling(loadTicker, 3000)
     return () => {
       cancelled = true
-      window.clearInterval(t1)
-      window.clearInterval(t2)
+      stopCandles()
+      stopTicker()
     }
   }, [symbol, interval, key])
 
@@ -286,7 +285,7 @@ export function MarketPage() {
                 style={{ color: BN.down }}
               >
                 {tr(language, '行情加载失败：', 'Failed to load market data: ')}
-                {loadError}
+                <NoticeText text={loadError} language={language} />
                 <br />
                 {tr(
                   language,

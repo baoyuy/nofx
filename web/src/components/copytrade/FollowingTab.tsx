@@ -4,6 +4,7 @@ import { api } from '../../lib/api'
 import type { TraderSnapshot } from '../../lib/api/copyTrade'
 import { confirmToast, notify } from '../../lib/notify'
 import { tr, ui } from '../market/marketUi'
+import { NoticeText } from '../NoticeText'
 import { HealthTag, ScoreBadge } from './ConfidenceUi'
 import {
   actionClass,
@@ -136,7 +137,7 @@ function TraderCard({
         ) : null}
         {t.status && t.status !== 'ACTIVE' ? (
           <span className="rounded bg-nofx-danger/10 px-1.5 text-[11px] text-nofx-danger">
-            {t.status}
+            {t.status === 'CLOSED' ? tr(language, '已结束带单', 'Closed') : tr(language, '带单状态异常', t.status)}
           </span>
         ) : null}
         <span className={`ml-auto ${ui.muted}`}>
@@ -159,7 +160,7 @@ function TraderCard({
       </header>
       {snap.error ? (
         <p role="alert" className="mb-2 text-xs text-nofx-danger">
-          {snap.error}
+          <NoticeText text={snap.error} />
         </p>
       ) : null}
       {t.private ? (

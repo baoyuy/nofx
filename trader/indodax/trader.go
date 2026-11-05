@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"nofx/internal/apischeduler"
 	"nofx/logger"
 	"strconv"
 	"strings"
@@ -125,7 +126,7 @@ func (t *IndodaxTrader) doPublicRequest(path string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := t.httpClient.Do(req)
+	resp, err := apischeduler.Do(t.httpClient, req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
@@ -162,7 +163,7 @@ func (t *IndodaxTrader) doPrivateRequest(params url.Values) ([]byte, error) {
 	req.Header.Set("Key", t.apiKey)
 	req.Header.Set("Sign", signature)
 
-	resp, err := t.httpClient.Do(req)
+	resp, err := apischeduler.Do(t.httpClient, req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}

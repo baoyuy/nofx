@@ -1,3 +1,4 @@
+import { NoticeText } from '../NoticeText'
 import React, { useState, useEffect } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
@@ -199,7 +200,7 @@ export function SetupPage() {
               {/* Error */}
               {error && (
                 <p className="text-xs text-nofx-danger bg-nofx-danger/10 border border-nofx-danger/20 rounded-lg px-3 py-2">
-                  {error}
+                  <NoticeText text={error} />
                 </p>
               )}
 

@@ -24,6 +24,12 @@ export interface CopyTradeStatus {
   hot: number
   failing: number
   oldest_update?: string
+  /** Data readiness only; the strategy must separately enable copy-trade context. */
+  ai_ready?: number
+  ai_total?: number
+  positions_fresh?: number
+  fills_fresh?: number
+  profiles_fresh?: number
 }
 
 export interface Leader {
@@ -93,8 +99,15 @@ export interface TraderPosition {
   pct_of_margin: boolean
   /** a mark price was available */
   priced: boolean
-  /** losing 50%+ of margin (5%+ of price when leverage is unknown) */
+  /** Current displayed loss only; historical entry does not set this flag. */
   trapped: boolean
+  trapped_threshold_pct?: number
+  /** Reference movement from the first observed fill, separate from current PnL. */
+  historical_entry_warning?: boolean
+  first_entry_return_pct?: number
+  first_entry_pct_of_margin?: boolean
+  first_entry_threshold_pct?: number
+  first_entry?: number
   /** inferred position whose loss reached the trader's balance */
   liquidated: boolean
   /** opened or added to within 24 hours */
@@ -122,6 +135,13 @@ export interface TraderSnapshot {
   positions_source: 'public' | 'inferred'
   updated_at: string
   error?: string
+  positions_updated_at?: string
+  fills_updated_at?: string
+  profile_updated_at?: string
+  history_complete?: boolean
+  positions_error?: string
+  fills_error?: string
+  profile_error?: string
   hot: boolean
   score: TraderScore
   /** actions in the last 24 hours */

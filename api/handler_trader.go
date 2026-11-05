@@ -10,6 +10,7 @@ import (
 
 	"nofx/logger"
 	"nofx/store"
+	"nofx/trader"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -46,18 +47,35 @@ type UpdateTraderRequest struct {
 	Name                string  `json:"name" binding:"required"`
 	AIModelID           string  `json:"ai_model_id" binding:"required"`
 	ExchangeID          string  `json:"exchange_id" binding:"required"`
-	StrategyID          string  `json:"strategy_id"` // Strategy ID (new version)
+	StrategyID          *string `json:"strategy_id"` // nil preserves; explicit empty string detaches
 	InitialBalance      float64 `json:"initial_balance"`
 	ScanIntervalMinutes int     `json:"scan_interval_minutes"`
 	IsCrossMargin       *bool   `json:"is_cross_margin"`
 	ShowInCompetition   *bool   `json:"show_in_competition"`
 	// The following fields are kept for backward compatibility, new version uses strategy config
-	BTCETHLeverage       int    `json:"btc_eth_leverage"`
-	AltcoinLeverage      int    `json:"altcoin_leverage"`
-	TradingSymbols       string `json:"trading_symbols"`
-	CustomPrompt         string `json:"custom_prompt"`
-	OverrideBasePrompt   bool   `json:"override_base_prompt"`
-	SystemPromptTemplate string `json:"system_prompt_template"`
+	BTCETHLeverage       int     `json:"btc_eth_leverage"`
+	AltcoinLeverage      int     `json:"altcoin_leverage"`
+	TradingSymbols       *string `json:"trading_symbols"`
+	CustomPrompt         *string `json:"custom_prompt"`
+	OverrideBasePrompt   *bool   `json:"override_base_prompt"`
+	SystemPromptTemplate string  `json:"system_prompt_template"`
+}
+
+// applyOptionalFields preserves omitted legacy settings, including explicit
+// false/empty values that cannot be represented by a zero-value DTO.
+func (req UpdateTraderRequest) applyOptionalFields(trader *store.Trader) {
+	if req.StrategyID != nil {
+		trader.StrategyID = *req.StrategyID
+	}
+	if req.TradingSymbols != nil {
+		trader.TradingSymbols = *req.TradingSymbols
+	}
+	if req.CustomPrompt != nil {
+		trader.CustomPrompt = *req.CustomPrompt
+	}
+	if req.OverrideBasePrompt != nil {
+		trader.OverrideBasePrompt = *req.OverrideBasePrompt
+	}
 }
 
 func formatTraderCreationError(reason, nextStep string) string {
@@ -399,6 +417,11 @@ func (s *Server) handleCreateTrader(c *gin.Context) {
 		}
 	}
 
+	if err := s.validateTraderPromptForStrategy(userID, req.StrategyID, req.CustomPrompt, req.OverrideBasePrompt); err != nil {
+		SafeBadRequest(c, err.Error())
+		return
+	}
+
 	// Generate trader ID (use short UUID prefix for readability)
 	exchangeIDShort := req.ExchangeID
 	if len(exchangeIDShort) > 8 {
@@ -517,9 +540,16 @@ func (s *Server) handleCreateTrader(c *gin.Context) {
 		IsRunning:            false,
 	}
 
+	unlockStrategy := trader.LockStrategyLifecycle()
+	if err := s.validateTraderPromptForStrategy(userID, req.StrategyID, req.CustomPrompt, req.OverrideBasePrompt); err != nil {
+		unlockStrategy()
+		SafeBadRequest(c, err.Error())
+		return
+	}
 	// Save to database
 	logger.Infof("🔧 DEBUG: Preparing to call CreateTrader")
 	err = s.store.Trader().Create(traderRecord)
+	unlockStrategy()
 	if err != nil {
 		logger.Infof("❌ Failed to create trader: %v", err)
 		publicMsg := SanitizeError(err, formatTraderCreationError("The bot configuration was not saved successfully", "Please check the name, model, strategy, and exchange configuration, then try again"))
@@ -577,6 +607,9 @@ func (s *Server) handleUpdateTrader(c *gin.Context) {
 		SafeBadRequest(c, "Invalid request parameters")
 		return
 	}
+
+	unlockStrategy := trader.LockStrategyLifecycle()
+	defer unlockStrategy()
 
 	// Check if trader exists and belongs to current user
 	traders, err := s.store.Trader().List(userID)
@@ -640,10 +673,23 @@ func (s *Server) handleUpdateTrader(c *gin.Context) {
 		systemPromptTemplate = existingTrader.SystemPromptTemplate // Keep original value
 	}
 
-	// Handle strategy ID (if not provided, keep original value)
-	strategyID := req.StrategyID
-	if strategyID == "" {
-		strategyID = existingTrader.StrategyID
+	// Merge before the full-record store update. Omitted fields must not reset
+	// legacy prompt/symbol settings; an explicit empty strategy detaches it.
+	merged := *existingTrader
+	req.applyOptionalFields(&merged)
+	strategyID := merged.StrategyID
+	if req.StrategyID != nil && strategyID != "" {
+		if _, err := s.store.Strategy().Get(userID, strategyID); err != nil {
+			SafeBadRequest(c, "Strategy does not exist or is not accessible")
+			return
+		}
+	}
+
+	if strategyID != "" {
+		if err := s.validateTraderPromptForStrategy(userID, strategyID, merged.CustomPrompt, merged.OverrideBasePrompt); err != nil {
+			SafeBadRequest(c, err.Error())
+			return
+		}
 	}
 
 	exchangeChanged := req.ExchangeID != "" && req.ExchangeID != existingTrader.ExchangeID
@@ -668,9 +714,11 @@ func (s *Server) handleUpdateTrader(c *gin.Context) {
 		InitialBalance:       initialBalance,
 		BTCETHLeverage:       btcEthLeverage,
 		AltcoinLeverage:      altcoinLeverage,
-		TradingSymbols:       req.TradingSymbols,
-		CustomPrompt:         req.CustomPrompt,
-		OverrideBasePrompt:   req.OverrideBasePrompt,
+		TradingSymbols:       merged.TradingSymbols,
+		CustomPrompt:         merged.CustomPrompt,
+		OverrideBasePrompt:   merged.OverrideBasePrompt,
+		UseAI500:             existingTrader.UseAI500,
+		UseOITop:             existingTrader.UseOITop,
 		SystemPromptTemplate: systemPromptTemplate,
 		IsCrossMargin:        isCrossMargin,
 		ShowInCompetition:    showInCompetition,
@@ -681,11 +729,12 @@ func (s *Server) handleUpdateTrader(c *gin.Context) {
 	// Check if trader was running before update (we'll restart it after)
 	wasRunning := false
 	if existingMemTrader, memErr := s.traderManager.GetTrader(traderID); memErr == nil {
-		status := existingMemTrader.GetStatus()
-		if running, ok := status["is_running"].(bool); ok && running {
-			wasRunning = true
-			logger.Infof("🔄 Trader %s was running, will restart with new config after update", traderID)
-		}
+		wasRunning = existingMemTrader.IsRunning()
+	}
+
+	if existingTrader.StrategyID != "" && strategyID == "" && (existingTrader.IsRunning || wasRunning) {
+		c.JSON(http.StatusConflict, gin.H{"error": "Stop the trader before detaching its strategy"})
+		return
 	}
 
 	// Update database
@@ -705,6 +754,7 @@ func (s *Server) handleUpdateTrader(c *gin.Context) {
 		}
 	}
 
+	unlockStrategy()
 	// Remove old trader from memory first (this also stops if running)
 	s.traderManager.RemoveTrader(traderID)
 

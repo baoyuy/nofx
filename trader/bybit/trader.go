@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"nofx/logger"
 	"strconv"
 	"strings"
@@ -62,6 +63,7 @@ func NewBybitTrader(apiKey, secretKey string) *BybitTrader {
 				refererID: src,
 			},
 		}
+		client.HTTPClient = apischeduler.Wrap(client.HTTPClient)
 	}
 
 	trader := &BybitTrader{
@@ -100,7 +102,7 @@ func (t *BybitTrader) getQtyStep(symbol string) float64 {
 
 	// Call public API directly to get contract information
 	url := fmt.Sprintf("https://api.bybit.com/v5/market/instruments-info?category=linear&symbol=%s", symbol)
-	resp, err := http.Get(url)
+	resp, err := apischeduler.Get(http.DefaultClient, url)
 	if err != nil {
 		logger.Infof("⚠️ [Bybit] Failed to get precision info for %s: %v", symbol, err)
 		return 1 // Default to integer

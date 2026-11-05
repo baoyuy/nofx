@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"nofx/internal/apischeduler"
 	"nofx/logger"
 )
 
@@ -112,7 +113,7 @@ func (c *Client) SetProxy(proxyURL string) error {
 		label = MaskProxy(proxyURL)
 	}
 	c.mu.Lock()
-	c.http = &http.Client{Timeout: 20 * time.Second, Transport: transport}
+	c.http = apischeduler.Wrap(&http.Client{Timeout: 20 * time.Second, Transport: transport})
 	c.proxyLabel = label
 	c.mu.Unlock()
 	return nil

@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"nofx/internal/apischeduler"
 	"nofx/planning/core"
 	"nofx/planning/instrument"
 )
@@ -46,7 +47,7 @@ func (c *Client) request(ctx context.Context, method, u string, body any, out an
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Cache-Control", "no-cache")
-	resp, err := c.HTTP.Do(req)
+	resp, err := apischeduler.Do(c.HTTP, req)
 	if err != nil {
 		return err
 	}

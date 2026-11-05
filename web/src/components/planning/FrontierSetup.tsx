@@ -1,3 +1,4 @@
+import { NoticeText } from '../NoticeText'
 import {
   apiKeyVenues,
   defaultMarket,
@@ -430,7 +431,7 @@ export function FrontierSetup({
             </header>
             {error && (
               <p role="alert" className="frontier-setup-error">
-                {error}
+                <NoticeText text={error} language={language} />
               </p>
             )}
             {open === 'ai' ? (
@@ -699,6 +700,7 @@ export function FrontierSetup({
                 exchanges: {
                   [id]: {
                     enabled: true,
+                    account_name: name,
                     api_key: key,
                     secret_key: secret || '',
                     passphrase: passphrase || '',

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"nofx/logger"
 	"strings"
 	"time"
@@ -72,7 +73,7 @@ func (t *HyperliquidTrader) fetchXyzMeta() error {
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := apischeduler.Do(client, req)
 	if err != nil {
 		return fmt.Errorf("failed to execute request: %w", err)
 	}

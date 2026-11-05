@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"nofx/internal/apischeduler"
 	"nofx/logger"
 	"strconv"
 	"strings"
@@ -197,7 +198,7 @@ func (t *BitgetTrader) doRequestContext(ctx context.Context, method, path string
 	// Signed credentials must never be forwarded to a redirect destination.
 	client := *t.httpClient
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	resp, err := client.Do(req)
+	resp, err := apischeduler.Do(&client, req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}

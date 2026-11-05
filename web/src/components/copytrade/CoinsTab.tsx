@@ -1,11 +1,11 @@
+import { NoticeText } from '../NoticeText'
 import { useEffect, useMemo, useState } from 'react'
+import useSWR from 'swr'
+import { LOCAL_SNAPSHOT_OPTIONS } from '../../lib/liveSnapshot'
 import { api } from '../../lib/api'
 import type {
-  FeedItem,
-  Holder,
   SideSummary,
   SymbolSummary,
-  TraderBrief,
 } from '../../lib/api/copyTrade'
 import type { MarketKline } from '../../lib/api/market'
 import { BinanceChart, BN, type PriceMarker } from '../market/BinanceChart'
@@ -104,19 +104,22 @@ function Bar({ s }: { s: SymbolSummary }) {
 function CoinDetail({
   language,
   symbol,
-  version,
 }: {
   language: string
   symbol: string
-  version: number
 }) {
   const [interval, setChartInterval] = useState('1h')
   const [candles, setCandles] = useState<MarketKline[]>([])
   const [chartError, setChartError] = useState('')
-  const [holders, setHolders] = useState<Holder[]>([])
-  const [summary, setSummary] = useState<SymbolSummary | null>(null)
-  const [events, setEvents] = useState<FeedItem[]>([])
-  const [traders, setTraders] = useState<Record<string, TraderBrief>>({})
+  const { data: detail } = useSWR(
+    ['copytrade/symbol', symbol],
+    () => api.getCopyTradeSymbol(symbol),
+    LOCAL_SNAPSHOT_OPTIONS
+  )
+  const holders = detail?.holders || []
+  const summary = detail?.summary ?? null
+  const events = detail?.events || []
+  const traders = detail?.traders || {}
   const [showAvg, setShowAvg] = useState(false)
   const [openKey, setOpenKey] = useState('')
 
@@ -150,23 +153,6 @@ function CoinDetail({
     }
   }, [symbol, interval])
 
-  useEffect(() => {
-    let cancelled = false
-    api
-      .getCopyTradeSymbol(symbol)
-      .then((r) => {
-        if (!cancelled) {
-          setHolders(r.holders || [])
-          setSummary(r.summary)
-          setEvents(r.events || [])
-          setTraders(r.traders || {})
-        }
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [symbol, version])
 
   const last = candles[candles.length - 1]?.close || 0
   // The newest candle's time stands for now (pure, and current enough).
@@ -336,7 +322,7 @@ function CoinDetail({
             role="alert"
             className="py-10 text-center text-sm text-nofx-danger"
           >
-            {chartError}
+            <NoticeText text={chartError} language={language} />
           </p>
         ) : (
           <BinanceChart
@@ -514,8 +500,8 @@ function CoinDetail({
           )}
           {tr(
             language,
-            '「被套」：亏掉保证金 50% 以上（推算仓位看不到杠杆，按价格反向 5% 以上算）。没到被套的浮亏也会按亏损多少降低置信度。「新开」：24 小时内开仓或加仓。「可能已强平」：推算仓位的亏损已超过他的账户余额。',
-            ' "Trapped": lost 50%+ of margin (5%+ adverse price move when leverage is unknown). Smaller losses still lower confidence in proportion. "New": opened or added within 24h. "Likely liquidated": the inferred loss exceeds the trader’s balance.'
+            '「被套」只看本表当前浮亏：保证金亏损达到 50%，或没有保证金数据时价格反向达到 5%；不使用历史首笔价格。「历史入场偏离」单独提示首笔成交记录的参考偏离，不代表当前实际浮亏，也不计入被套人数或额外降低置信度。悬停或聚焦标签可查看数值、口径和阈值。未到被套的浮亏仍按当前亏损降低置信度。「新开」：24 小时内开仓或加仓。「可能已强平」：推算亏损已超过账户余额。',
+            ' "Trapped" uses only the current return shown here: a loss of 50% of margin, or a 5% adverse price move when margin is unavailable. Historical entry is excluded. "Historical entry deviation" is a separate reference from the first recorded fill, not current PnL; it adds no trapped count or separate confidence penalty. Hover or focus a tag for values, basis and thresholds. Smaller current losses still reduce confidence. "New": opened or added within 24h. "Likely liquidated": inferred loss exceeds the account balance.'
           )}
         </p>
       </section>
@@ -525,32 +511,25 @@ function CoinDetail({
 
 export function CoinsTab({
   language,
-  version,
   selected,
   onSelect,
 }: {
   language: string
-  version: number
   selected: string
   onSelect: (symbol: string) => void
 }) {
-  const [symbols, setSymbols] = useState<SymbolSummary[]>([])
+  const { data } = useSWR(
+    'copytrade/symbols',
+    () => api.getCopyTradeSymbols(),
+    LOCAL_SNAPSHOT_OPTIONS
+  )
+  const symbols = data?.symbols || []
   const [sort, setSort] = useState<CoinSort>('confidence')
   const [bias, setBias] = useState<CoinBias>('all')
   const shown = useMemo(
     () => sortCoins(symbols, sort, bias),
     [symbols, sort, bias]
   )
-  useEffect(() => {
-    let cancelled = false
-    api
-      .getCopyTradeSymbols()
-      .then((r) => !cancelled && setSymbols(r.symbols || []))
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [version])
   const current = selected || shown[0]?.symbol || ''
 
   return (
@@ -675,7 +654,7 @@ export function CoinsTab({
       </div>
       <div className="min-w-0">
         {current ? (
-          <CoinDetail language={language} symbol={current} version={version} />
+          <CoinDetail language={language} symbol={current} />
         ) : (
           <p className={`${ui.panel} py-10 text-center ${ui.muted}`}>
             {tr(

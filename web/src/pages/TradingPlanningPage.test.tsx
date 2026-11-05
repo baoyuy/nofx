@@ -1,5 +1,5 @@
 import {
-  render,
+  render as renderWithProviders,
   screen,
   fireEvent,
   waitFor,
@@ -9,6 +9,18 @@ import {
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { TradingPlanningPage } from './TradingPlanningPage'
+import type { ReactElement } from 'react'
+import { SWRConfig } from 'swr'
+import { LanguageProvider } from '../contexts/LanguageContext'
+function render(ui: ReactElement) {
+  return renderWithProviders(ui, {
+    wrapper: ({ children }) => (
+      <SWRConfig value={{ provider: () => new Map() }}>
+        <LanguageProvider>{children}</LanguageProvider>
+      </SWRConfig>
+    ),
+  })
+}
 const mocks = vi.hoisted(() => ({
   api: vi.fn(),
   stream: vi.fn(),
@@ -102,6 +114,7 @@ const plan = (id: string) => ({
 })
 beforeEach(() => {
   localStorage.clear()
+  localStorage.setItem('language', 'en')
   localStorage.setItem(
     'frontier-batch-v1//ex/binance/BTCUSDT',
     JSON.stringify({
@@ -443,7 +456,7 @@ it('moves older AI500 short drafts to history without offering review', async ()
   await screen.findByRole('button', { name: /BTC 85/ })
   expect(screen.getByRole('button', { name: /Test plan one/ })).toBeDisabled()
   expect(
-    screen.getByText('Outside AI500 long-only policy · generate a new plan')
+    screen.getByText('Outside trend board long-only policy · generate a new plan')
   ).toBeInTheDocument()
   expect(screen.getByText('Plan history · 1')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Review Market' })).toBeNull()

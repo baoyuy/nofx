@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import type { Leader } from '../../lib/api/copyTrade'
+import { NoticeText } from '../NoticeText'
 import { notify } from '../../lib/notify'
 import { tr, ui } from '../market/marketUi'
 import { pct, usd } from './format'
@@ -596,7 +597,7 @@ export function DiscoverTab({
         </p>
         {error ? (
           <p role="alert" className="py-3 text-center text-sm text-nofx-danger">
-            {error}
+            <NoticeText text={error} />
           </p>
         ) : null}
         <div className="overflow-x-auto">

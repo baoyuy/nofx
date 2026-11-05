@@ -9,11 +9,16 @@ import {
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { FrontierSetup, feeWalletState } from './FrontierSetup'
-const mocks = vi.hoisted(() => ({ api: vi.fn(), create: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  api: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+}))
 vi.mock('../../lib/planning', () => ({ planningAPI: mocks.api }))
 vi.mock('../../lib/api', () => ({
   api: {
     createExchangeEncrypted: mocks.create,
+    updateExchangeConfigsEncrypted: mocks.update,
     getExchangeConfigs: async () => [],
     getSupportedModels: async () => [{ id: 'claw402', provider: 'claw402' }],
   },
@@ -33,14 +38,16 @@ vi.mock('../trader/ExchangeConfigModal', () => ({
   ExchangeConfigModal: ({
     initialExchangeType,
     onSave,
+    editingExchangeId,
   }: {
     initialExchangeType: string
+    editingExchangeId: string | null
     onSave: (...args: unknown[]) => Promise<void>
   }) => (
     <button
       onClick={() =>
         void onSave(
-          null,
+          editingExchangeId,
           initialExchangeType,
           'Account two',
           'test-key',
@@ -300,3 +307,42 @@ it.each(['okx', 'bitget'])(
     )
   }
 )
+
+it('forwards a renamed existing account through Frontier encrypted updates', async () => {
+  mocks.api.mockResolvedValue(missing)
+  render(
+    <FrontierSetup
+      models={[]}
+      modelID=""
+      accounts={[
+        {
+          id: 'existing',
+          name: 'Old account',
+          exchange_type: 'okx',
+          enabled: true,
+        },
+      ]}
+      accountID="existing"
+      venue="okx"
+      loaded
+      open="exchange"
+      onOpen={open}
+      onRefresh={refresh}
+      onWalletState={state}
+    />
+  )
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Update OKX connection', exact: true })
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Save mock account' }))
+  await waitFor(() =>
+    expect(mocks.update).toHaveBeenCalledWith({
+      exchanges: {
+        existing: expect.objectContaining({
+          account_name: 'Account two',
+          passphrase: 'test-passphrase',
+        }),
+      },
+    })
+  )
+})

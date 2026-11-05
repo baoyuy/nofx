@@ -22,6 +22,18 @@ import { RiskRadar } from './RiskRadar'
 import { EdgeProfile } from './EdgeProfile'
 import { useDemoEngine } from '../../lib/demo/useDemoEngine'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { TerminalTime } from './TerminalTime'
+
+// Public market snapshots are shared across traders; focus must not trigger
+// expensive scans. Keep the existing refresh budgets and hidden-page pause.
+const SNAPSHOT_READ_OPTIONS = {
+  revalidateOnFocus: false,
+  revalidateOnReconnect: false,
+  refreshWhenHidden: false,
+  refreshWhenOffline: false,
+  shouldRetryOnError: false,
+  dedupingInterval: 30000,
+}
 
 // fixed height for the three row-1 panels so the row stays balanced at any width
 const ROW1_H = 500
@@ -90,13 +102,6 @@ function fmtHold(entry?: number, exit?: number): string {
   return `${d}d${h % 24}h`
 }
 
-function useTick(ms = 1000) {
-  const [, set] = useState(0)
-  useEffect(() => {
-    const id = setInterval(() => set((n) => n + 1), ms)
-    return () => clearInterval(id)
-  }, [ms])
-}
 
 export function TerminalDashboard({
   selectedTrader,
@@ -111,8 +116,6 @@ export function TerminalDashboard({
   const { language } = useLanguage()
   const isZh = language === 'zh'
   const traderId = selectedTrader?.trader_id || selectedTraderId
-  useTick(1000)
-  const clock = new Date().toLocaleTimeString('en-GB', { hour12: false })
   const [closing, setClosing] = useState<string | null>(null)
 
   async function closePositionRow(symbol: string, side: 'LONG' | 'SHORT') {
@@ -175,24 +178,23 @@ export function TerminalDashboard({
   const { data: realFullStats } = useSWR(
     traderId ? ['full-stats', traderId] : null,
     () => api.getFullStats(traderId!, true),
-    { refreshInterval: 30000, shouldRetryOnError: false }
+    { ...SNAPSHOT_READ_OPTIONS, refreshInterval: 30000 }
   )
   const { data: realHistory } = useSWR(
     traderId ? ['pos-history', traderId] : null,
     () => api.getPositionHistory(traderId!, 50, true),
-    { refreshInterval: 60000, shouldRetryOnError: false }
+    { ...SNAPSHOT_READ_OPTIONS, refreshInterval: 60000 }
   )
   const { data: realConfig } = useSWR(
     traderId ? ['trader-config', traderId] : null,
     () => api.getTraderConfig(traderId!, true),
-    { refreshInterval: 120000, shouldRetryOnError: false }
+    { ...SNAPSHOT_READ_OPTIONS, refreshInterval: 120000 }
   )
   const { data: realFlow } = useSWR(
-    traderId ? ['flow-markets', traderId] : null,
+    ['flow-markets', '1h', 30],
     () => api.getFlowMarkets('1h', 30, true),
-    // free Binance data, cached server-side for a minute; the topology beam
-    // animation is client-side and stays fast regardless
-    { refreshInterval: 120000, shouldRetryOnError: false }
+    // Public snapshot: start alongside trader discovery, not after account data.
+    { ...SNAPSHOT_READ_OPTIONS, refreshInterval: 120000 }
   )
   // The signal matrix (and through it the cost/liquidation map and the
   // topology's signal column) follows the AI: it scores only this cycle's
@@ -208,9 +210,9 @@ export function TerminalDashboard({
       .sort()
   }, [propPositions, propDecisions])
   const { data: realSignalRank } = useSWR(
-    traderId && aiSymbols.length ? ['signal-rank', traderId, aiSymbols.join(',')] : null,
+    traderId && aiSymbols.length ? ['signal-rank', aiSymbols.join(',')] : null,
     () => api.getDirectionChangeLeaderboard(30, true, aiSymbols),
-    { refreshInterval: 120000, shouldRetryOnError: false }
+    { ...SNAPSHOT_READ_OPTIONS, refreshInterval: 120000 }
   )
 
   // Demo / showcase mode for product walkthroughs. Toggle with Shift+D (or the
@@ -310,15 +312,6 @@ export function TerminalDashboard({
     if (!latest?.timestamp) return null
     return new Date(latest.timestamp).getTime() + scanMin * 60_000
   }, [latest?.timestamp, scanMin])
-  let countdown = '—'
-  if (nextCycleMs) {
-    const ms = nextCycleMs - Date.now()
-    if (ms <= 0) countdown = isZh ? '已到期' : 'due now'
-    else {
-      const s = Math.floor(ms / 1000)
-      countdown = `${Math.floor(s / 60)}m ${s % 60}s`
-    }
-  }
 
   const recentTrades = (history?.positions ?? []).slice(0, 8)
   const symbolStats = useMemo(
@@ -385,7 +378,7 @@ export function TerminalDashboard({
                     : '○ stopped'}
             </span>
             <span className="tm-sc tm-navslot-extra" style={{ color: 'var(--tm-muted)' }}>{isZh ? '周期' : 'cycle'}</span><span className="tm-mono tm-navslot-extra" style={{ color: 'var(--tm-ink)' }}>{status?.cycle_number ?? status?.call_count ?? '—'}</span>
-            <span className="tm-px tm-navslot-extra" style={{ fontSize: 12, color: 'var(--tm-ink)' }}>{clock}</span>
+            <span className="tm-px tm-navslot-extra" style={{ fontSize: 12, color: 'var(--tm-ink)' }}><TerminalTime /></span>
           </span>,
           navSlot,
         )}
@@ -455,7 +448,7 @@ export function TerminalDashboard({
           <span><span className="tm-sc">{isZh ? '扫描 ' : 'scan '}</span>{scanMin}m</span>
           <span><span className="tm-sc">{isZh ? '标的池 ' : 'universe '}</span>{candidateCoins.length}</span>
           <span><span className="tm-sc">{isZh ? '持仓 ' : 'positions '}</span>{positions?.length ?? 0}</span>
-          <span style={{ marginLeft: 'auto' }}><span className="tm-sc">{isZh ? '下一周期 ' : 'next cycle '}</span>{countdown}</span>
+          <span style={{ marginLeft: 'auto' }}><span className="tm-sc">{isZh ? '下一周期 ' : 'next cycle '}</span><TerminalTime nextCycleMs={nextCycleMs} isZh={isZh} /></span>
         </div>
         <div className="tm-rule" />
 

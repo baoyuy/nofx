@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '../lib/toast'
 import {
   User,
   Cpu,

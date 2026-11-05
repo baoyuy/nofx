@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"strings"
 	"time"
 
@@ -46,7 +47,7 @@ func checkAgentAuthorization(ctx context.Context, client *http.Client, baseURL, 
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.Do(req)
+	resp, err := apischeduler.Do(client, req)
 	if err != nil {
 		return fmt.Errorf("cannot verify Hyperliquid trading authorization; no orders will be sent: %w", err)
 	}
@@ -84,7 +85,7 @@ func (t *HyperliquidTrader) leverageExchange(coin string) (*hyperliquid.Exchange
 	defer cancel()
 	// v0.36's constructor Meta(ctx) does not inherit PerpDexName. Fetch the
 	// builder universe explicitly, otherwise core coins receive xyz asset IDs.
-	info := hyperliquid.NewInfo(ctx, t.apiBaseURL(), true, &hyperliquid.Meta{}, &hyperliquid.SpotMeta{}, nil)
+	info := hyperliquid.NewInfo(ctx, t.apiBaseURL(), true, &hyperliquid.Meta{}, &hyperliquid.SpotMeta{}, nil, hyperliquid.InfoOptClientOptions(hyperliquid.ClientOptHTTPClient(checkedActionHTTPClient())))
 	meta, err := info.Meta(ctx, "xyz")
 	if err != nil {
 		return nil, fmt.Errorf("cannot load xyz market metadata: %w", err)

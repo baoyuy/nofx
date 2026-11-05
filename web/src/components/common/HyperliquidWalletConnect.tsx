@@ -1,3 +1,4 @@
+import { NoticeText } from '../NoticeText'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check,
@@ -11,7 +12,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '../../lib/toast'
 import { api } from '../../lib/api'
 import type {
   HyperliquidAccountSummary,
@@ -1337,7 +1338,7 @@ export function HyperliquidWalletConnect({
 
             {error && (
               <div className="rounded-lg border border-nofx-danger/30 bg-nofx-danger/10 p-3 text-xs text-nofx-danger">
-                {error}
+                <NoticeText text={error} language={language} />
               </div>
             )}
 

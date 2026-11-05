@@ -1,3 +1,4 @@
+import { NoticeText } from '../NoticeText'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Copy, Download, Eye, EyeOff, KeyRound } from 'lucide-react'
 import { getAuthHeaders } from '../../lib/api/helpers'
@@ -236,7 +237,7 @@ export function AIWalletBackup({
           {busy ? tx.loading : tx.showKey}
         </button>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && <p role="alert"><NoticeText text={error} language={language} /></p>}
     </section>
   )
 }

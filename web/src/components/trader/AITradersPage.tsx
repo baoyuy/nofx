@@ -29,7 +29,7 @@ import {
 } from 'lucide-react'
 import './ConfigPage.css'
 import { confirmToast } from '../../lib/notify'
-import { toast } from 'sonner'
+import { toast } from '../../lib/toast'
 
 interface AITradersPageProps {
   onTraderSelect?: (traderId: string) => void
@@ -321,7 +321,7 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
       await mutateTraders()
     } catch (error) {
       console.error('Failed to update trader:', error)
-      toast.error(t('updateTraderFailed', language))
+      toast.error(error instanceof Error ? error.message : t('updateTraderFailed', language))
     }
   }
 
@@ -618,12 +618,13 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
           exchanges: {
             [exchangeId]: {
               enabled: true,
+              account_name: accountName,
               api_key: apiKey || '',
               secret_key: secretKey || '',
               passphrase: passphrase || '',
               testnet: testnet || false,
               hyperliquid_wallet_addr: hyperliquidWalletAddr || '',
-              hyperliquid_unified_account: exchangeType === 'hyperliquid',
+              hyperliquid_unified_account: existingExchange.hyperliquidUnifiedAccount,
               aster_user: asterUser || '',
               aster_signer: asterSigner || '',
               aster_private_key: asterPrivateKey || '',

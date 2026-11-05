@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"nofx/logger"
 	"nofx/trader/execution"
 	"nofx/trader/types"
@@ -357,7 +358,7 @@ func (t *HyperliquidTrader) getXYZDexBalance() (accountValue float64, unrealized
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := apischeduler.Do(client, req)
 	if err != nil {
 		return 0, 0, nil, fmt.Errorf("failed to execute request: %w", err)
 	}
@@ -448,7 +449,7 @@ func (t *HyperliquidTrader) getXyzMarketPrice(coin string) (float64, error) {
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := apischeduler.Do(client, req)
 	if err != nil {
 		return 0, fmt.Errorf("failed to execute request: %w", err)
 	}

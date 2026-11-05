@@ -126,30 +126,54 @@ func TestHighFrequencyTradersCountLessAndCanBeHidden(t *testing.T) {
 	}
 }
 
-// Averaging down hides how deep a position is: the loss is measured from the
-// average entry, so an add at a better price makes a routed position look
-// healthy. The first entry is the evidence that it is not.
-func TestAveragingDownKeepsTheLossVisible(t *testing.T) {
+// Historical entry deviation is reference information, not current loss.
+func TestHistoricalEntryDoesNotSetTrappedOrPenalizeConfidence(t *testing.T) {
 	now := time.Now()
-	// Long 1 opened at 100, averaged to 96 at 20x, mark 94: -41.7% of margin
-	// from the average, -120% from the first entry.
 	p := Position{Symbol: "BTCUSDT", Side: "long", Qty: 1, EntryPrice: 96, EntryValue: 96, FirstEntry: 100,
 		Leverage: 20, Margin: 4.8, MarkPrice: 94, UnrealizedPnL: -2, Source: "public",
 		LastAddAt: now.Add(-time.Hour).UnixMilli()}
 	got := assessHealth([]Position{p}, nil, 1000, now)[0]
-	if got.Trapped != true || got.ReturnPct != -41.66666666666667 {
-		t.Fatalf("deep position measured from the first entry: %+v", got)
+	if got.Trapped || !got.HistoricalEntryWarning || got.ReturnPct != -41.66666666666667 ||
+		got.FirstEntryReturnPct != -120 || !got.FirstEntryPctOfMargin || got.FirstEntryThresholdPct != 50 {
+		t.Fatalf("current loss and historical reference must stay separate: %+v", got)
 	}
-	// Without the deeper first entry the same position is merely losing.
 	p.FirstEntry = p.EntryPrice
 	plain := assessHealth([]Position{p}, nil, 1000, now)[0]
-	if plain.Trapped {
-		t.Fatalf("nothing deeper than the average: %+v", plain)
+	if plain.Trapped || plain.HistoricalEntryWarning || healthFactor(got) != healthFactor(plain) {
+		t.Fatalf("historical entry must not change confidence weight: %+v vs %+v", got, plain)
 	}
-	// Adding to a trapped position is doubling down, not a fresh view.
-	if healthFactor(got) >= healthFactor(plain) {
-		t.Fatalf("a fresh add to a trapped position must not boost it: %.3f vs %.3f",
-			healthFactor(got), healthFactor(plain))
+	sums := Symbols([]Snapshot{{Follow: store.CopyTradeFollow{PortfolioID: "a"},
+		Score: TraderScore{Score: 60}, Positions: []Position{got}}})
+	if sums[0].Long.Trapped != 0 {
+		t.Fatal("historical warning incorrectly counted as trapped")
+	}
+}
+
+func TestTrappedUsesDisplayedCurrentReturnBasis(t *testing.T) {
+	now := time.Now()
+	for _, tt := range []struct {
+		name                string
+		p                   Position
+		marks               map[string]float64
+		trapped, historical bool
+		threshold           float64
+	}{
+		{"short minus 9.4 with worse history", Position{Side: "short", EntryPrice: 100, FirstEntry: 95, MarkPrice: 100.47, Margin: 5, Leverage: 20, UnrealizedPnL: -0.47, Source: "public"}, nil, false, true, 50},
+		{"short minus 30", Position{Side: "short", EntryPrice: 100, FirstEntry: 100, MarkPrice: 103, Margin: 10, Leverage: 10, UnrealizedPnL: -3, Source: "public"}, nil, false, false, 50},
+		{"margin exactly 50", Position{Side: "long", EntryPrice: 100, MarkPrice: 95, Margin: 10, UnrealizedPnL: -5, Source: "public"}, nil, true, false, 50},
+		{"margin below 50", Position{Side: "long", EntryPrice: 100, MarkPrice: 95, Margin: 10, UnrealizedPnL: -4.9, Source: "public"}, nil, false, false, 50},
+		{"price exactly 5", Position{Symbol: "BTCUSDT", Side: "long", EntryPrice: 100, Qty: 1, Source: "inferred"}, map[string]float64{"BTCUSDT": 95}, true, false, 5},
+		{"price below 5 with worse history", Position{Symbol: "BTCUSDT", Side: "long", EntryPrice: 96, FirstEntry: 100, Qty: 1, Source: "inferred"}, map[string]float64{"BTCUSDT": 94}, false, true, 5},
+		{"no historical entry difference", Position{Side: "short", EntryPrice: 100, FirstEntry: 100, MarkPrice: 106, Margin: 10, Leverage: 10, UnrealizedPnL: -6, Source: "public"}, nil, true, false, 50},
+		{"better historical entry", Position{Side: "short", EntryPrice: 100, FirstEntry: 110, MarkPrice: 106, Margin: 10, Leverage: 10, UnrealizedPnL: -6, Source: "public"}, nil, true, false, 50},
+		{"no mark", Position{Side: "long", EntryPrice: 100, FirstEntry: 110, Source: "public"}, nil, false, false, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p := assessHealth([]Position{tt.p}, tt.marks, 1000, now)[0]
+			if p.Trapped != tt.trapped || p.HistoricalEntryWarning != tt.historical || p.TrappedThresholdPct != tt.threshold {
+				t.Fatalf("inconsistent current loss classification: %+v", p)
+			}
+		})
 	}
 }
 

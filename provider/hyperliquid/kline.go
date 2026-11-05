@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"strings"
 	"time"
 )
@@ -110,7 +111,7 @@ func (c *Client) GetCandles(ctx context.Context, coin string, interval string, l
 	req.Header.Set("Content-Type", "application/json")
 
 	// Execute request
-	resp, err := c.client.Do(req)
+	resp, err := apischeduler.Do(c.client, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
@@ -163,7 +164,7 @@ func (c *Client) GetAllMidsWithDex(ctx context.Context, dex string) (map[string]
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.client.Do(req)
+	resp, err := apischeduler.Do(c.client, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
@@ -200,7 +201,7 @@ func (c *Client) GetMeta(ctx context.Context) (*Meta, error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.client.Do(req)
+	resp, err := apischeduler.Do(c.client, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
@@ -463,13 +464,13 @@ func IsStockPerp(symbol string) bool {
 // IsXYZAsset checks if a symbol is on the xyz dex (stocks, forex, commodities).
 //
 // Detection is suffix-driven first, hardcoded-list second:
-//   1. `xyz:` prefix or `-USDC` suffix are unambiguous Hyperliquid signals —
-//      the only place those tokens originate is the Hyperliquid USDC board.
-//      This unblocks newly-listed stock perpetuals (QNT, ARM, ...) without
-//      requiring a code change every time Hyperliquid adds a ticker.
-//   2. Bare bases (e.g. "QNT" with no qualifying suffix) still fall back to
-//      the hardcoded StockPerpsSymbols / XYZOtherSymbols / display alias lists
-//      so callers passing pre-normalized base symbols continue to work.
+//  1. `xyz:` prefix or `-USDC` suffix are unambiguous Hyperliquid signals —
+//     the only place those tokens originate is the Hyperliquid USDC board.
+//     This unblocks newly-listed stock perpetuals (QNT, ARM, ...) without
+//     requiring a code change every time Hyperliquid adds a ticker.
+//  2. Bare bases (e.g. "QNT" with no qualifying suffix) still fall back to
+//     the hardcoded StockPerpsSymbols / XYZOtherSymbols / display alias lists
+//     so callers passing pre-normalized base symbols continue to work.
 func IsXYZAsset(symbol string) bool {
 	trimmed := strings.ToUpper(strings.TrimSpace(symbol))
 	if strings.HasPrefix(strings.ToLower(trimmed), "xyz:") || strings.HasSuffix(trimmed, "-USDC") {
@@ -524,12 +525,12 @@ func NormalizeCoinBase(symbol string) string {
 // Stock perps need xyz:SYMBOL format, crypto uses plain symbol.
 //
 // Decision order:
-//   1. `xyz:` prefix OR `-USDC` suffix on the original input ⇒ xyz asset
-//      (these tokens are Hyperliquid-specific, so the answer is unambiguous
-//      regardless of whether the base symbol appears in our hardcoded lists).
-//   2. After stripping suffixes, if the bare base matches a known xyz asset
-//      (stock perps, forex, commodities, display aliases) ⇒ also xyz.
-//   3. Otherwise crypto.
+//  1. `xyz:` prefix OR `-USDC` suffix on the original input ⇒ xyz asset
+//     (these tokens are Hyperliquid-specific, so the answer is unambiguous
+//     regardless of whether the base symbol appears in our hardcoded lists).
+//  2. After stripping suffixes, if the bare base matches a known xyz asset
+//     (stock perps, forex, commodities, display aliases) ⇒ also xyz.
+//  3. Otherwise crypto.
 func FormatCoinForAPI(symbol string) string {
 	trimmed := strings.TrimSpace(symbol)
 	upper := strings.ToUpper(trimmed)

@@ -1,5 +1,7 @@
+import { NoticeText } from '../components/NoticeText'
 import { frontierAccounts, defaultMarket } from '../lib/frontierAccounts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { startVisiblePolling } from '../lib/visiblePolling'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { getAuthHeaders, handleJSONResponse } from '../lib/api/helpers'
@@ -357,15 +359,23 @@ export function TradingPlanningPage() {
         setConfigsLoaded(true)
       })
       .catch((e) => setError(String(e.message)))
-    reload().catch((e) => setError(e.message))
+    let initialPoll = true
+    const stopPolling = startVisiblePolling(async () => {
+      try {
+        await reload()
+      } catch (e) {
+        if (initialPoll && active.current) setError((e as Error).message)
+      } finally {
+        initialPoll = false
+      }
+    }, 4000)
     refreshHistory().catch(() => {})
     planningAPI<{ text: string }>('preferences')
       .then((p) => setPreferences(p.text))
       .catch(() => {})
-    const timer = window.setInterval(() => reload().catch(() => {}), 4000)
     return () => {
       active.current = false
-      clearInterval(timer)
+      stopPolling()
       abort.current?.abort()
       chart.current?.dispose()
       chart.current = null
@@ -1212,7 +1222,7 @@ export function TradingPlanningPage() {
       )}
       {orderNotice && !blockingRun && !error && (
         <p className="frontier-order-notice" role="status">
-          {orderNotice}
+          <NoticeText text={orderNotice} language={language} />
         </p>
       )}
       {error &&
@@ -1826,7 +1836,7 @@ export function TradingPlanningPage() {
                       : 'Live trading'}{' '}
                   · {accounts.find((a) => a.id === data.accounts[selected])?.name}
                 </p>
-                {run?.error && <p className="stop-text">{run.error}</p>}
+                {run?.error && <p className="stop-text"><NoticeText text={run.error} language={language} /></p>}
                 {current.state === 'draft' ? (
                   <button
                     className="planning-primary"
@@ -1951,7 +1961,7 @@ export function TradingPlanningPage() {
                 <b>
                   {r.plan.idea.name} · {planStates[r.state] || r.state}
                 </b>
-                {r.error && <p className="stop-text">{r.error}</p>}
+                {r.error && <p className="stop-text"><NoticeText text={r.error} language={language} /></p>}
                 <table>
                   <thead>
                     <tr>

@@ -42,7 +42,7 @@ func GetFullDecision(ctx *Context, mcpClient mcp.AIClient) (*FullDecision, error
 }
 
 // GetFullDecisionWithStrategy uses StrategyEngine to get AI decision (unified prompt generation)
-func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *StrategyEngine, variant string) (*FullDecision, error) {
+func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *StrategyEngine, variant string, traderRules ...TraderPromptRules) (*FullDecision, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
@@ -51,12 +51,27 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 		engine = NewStrategyEngine(&defaultConfig)
 	}
 
-	// Clamp strategy limits to prevent token overflow
-	engineConfig := engine.GetConfig()
+	// Clamp a private config snapshot, never the caller's shared strategy.
+	configJSON, err := json.Marshal(engine.GetConfig())
+	if err != nil {
+		return nil, fmt.Errorf("copy strategy config: %w", err)
+	}
+	var engineConfig store.StrategyConfig
+	if err := json.Unmarshal(configJSON, &engineConfig); err != nil {
+		return nil, fmt.Errorf("copy strategy config: %w", err)
+	}
 	engineConfig.ClampLimits()
+	localEngine := *engine
+	localEngine.config = &engineConfig
+	engine = &localEngine
 
 	// Token estimation check — block if exceeding the specific model's context limit
 	estimate := engineConfig.EstimateTokens()
+	if len(traderRules) > 0 {
+		// Conservative allowance for arbitrary-language trader rules, including
+		// the same 15% headroom used by the strategy estimator.
+		estimate.Total += (len(traderRules[0].CustomPrompt) + 1) / 2 * 115 / 100
+	}
 
 	// Determine context limit for the specific model being used
 	contextLimit := 131072 // safe default (strictest common limit)
@@ -109,7 +124,7 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 
 	// 2. Build System Prompt using strategy engine
 	riskConfig := engine.GetRiskControlConfig()
-	systemPrompt := engine.BuildSystemPrompt(ctx.Account.TotalEquity, variant)
+	systemPrompt := engine.BuildSystemPrompt(ctx.Account.TotalEquity, variant, traderRules...)
 
 	// 3. Build User Prompt using strategy engine
 	userPrompt := engine.BuildUserPrompt(ctx)

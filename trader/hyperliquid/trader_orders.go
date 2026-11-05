@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"nofx/logger"
 	"nofx/trader/execution"
 	"nofx/trader/types"
@@ -428,7 +429,7 @@ func (t *HyperliquidTrader) getDirectOpenOrders(isXyz bool) ([]directOpenOrder, 
 		return nil, fmt.Errorf("failed to create open-orders request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	resp, err := apischeduler.Do(&http.Client{Timeout: 30 * time.Second}, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query open orders: %w", err)
 	}
@@ -596,7 +597,7 @@ func (t *HyperliquidTrader) cancelXyzOrders(coin string) error {
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := apischeduler.Do(client, req)
 	if err != nil {
 		return fmt.Errorf("failed to execute request: %w", err)
 	}
@@ -699,7 +700,7 @@ func (t *HyperliquidTrader) cancelXyzOrder(coin string, oid int64) error {
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := apischeduler.Do(client, req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
@@ -842,7 +843,7 @@ func (t *HyperliquidTrader) placeXyzOrder(coin string, isBuy bool, size float64,
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := apischeduler.Do(client, req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
@@ -1008,7 +1009,7 @@ func (t *HyperliquidTrader) placeXyzTriggerOrder(coin string, isBuy bool, size f
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := apischeduler.Do(client, req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}

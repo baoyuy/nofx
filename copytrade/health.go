@@ -18,9 +18,14 @@ type Health struct {
 	ReturnPct   float64 `json:"return_pct"`
 	PctOfMargin bool    `json:"pct_of_margin"`
 	Priced      bool    `json:"priced"`
-	// Trapped: the loss passed trappedMarginPct of margin (or trappedMovePct
-	// of price when leverage is unknown: the same loss at assumedLeverage).
-	Trapped bool `json:"trapped"`
+	// Trapped uses exactly ReturnPct's displayed basis, never a past entry.
+	Trapped             bool    `json:"trapped"`
+	TrappedThresholdPct float64 `json:"trapped_threshold_pct"`
+	// Historical entry deviation is informational, not current PnL or Trapped.
+	HistoricalEntryWarning bool    `json:"historical_entry_warning"`
+	FirstEntryReturnPct    float64 `json:"first_entry_return_pct"`
+	FirstEntryPctOfMargin  bool    `json:"first_entry_pct_of_margin"`
+	FirstEntryThresholdPct float64 `json:"first_entry_threshold_pct"`
 	// Liquidated: inferred position whose loss, with the trader's other
 	// inferred losses, reached the trader's whole balance. Excluded from
 	// counts and confidence.
@@ -39,7 +44,7 @@ const (
 	assumedLeverage = 10.0
 	freshWindow     = 24 * time.Hour
 	freshBoost      = 1.3
-	markInterval    = time.Minute
+	markInterval    = 10 * time.Second
 )
 
 // MarksFunc returns mark prices by symbol.
@@ -58,8 +63,7 @@ func (h Health) marginLossPct() float64 {
 
 // healthFactor scales a position's vote: a losing position counts less
 // (0.55 at 50% of margin lost, 0.1 at 100%), a liquidated one not at all,
-// and a fresh open or add counts more. An add that deepens a loss is
-// doubling down, not a fresh view, so it gets no boost.
+// and a fresh open or add counts more unless the current position is trapped.
 func healthFactor(p Position) float64 {
 	if p.Liquidated {
 		return 0
@@ -71,32 +75,28 @@ func healthFactor(p Position) float64 {
 	return f
 }
 
-// firstEntryMarginLoss is the loss as % of margin measured from the entry
-// furthest against the position, so averaging down does not hide how deep it
-// actually is. Zero when it is not losing or nothing is priced.
-func (p Position) firstEntryMarginLoss() float64 {
+// assessHistoricalEntry records adverse movement from the first observed fill
+// only when that entry is worse than the current average. Applying today's
+// leverage is a reference estimate, not the actual PnL/margin of that old fill.
+func (p *Position) assessHistoricalEntry() {
 	if p.FirstEntry <= 0 || p.MarkPrice <= 0 || p.EntryPrice <= 0 {
-		return 0
+		return
 	}
 	dir := 1.0
 	if p.Side == "short" {
 		dir = -1
 	}
-	worst := p.EntryPrice
-	switch {
-	case dir > 0 && p.FirstEntry > worst:
-		worst = p.FirstEntry
-	case dir < 0 && p.FirstEntry < worst:
-		worst = p.FirstEntry
+	if dir*(p.FirstEntry-p.EntryPrice) <= 0 {
+		return // no adverse historical entry beyond the current average
 	}
-	move := -dir * (p.MarkPrice - worst) / worst * 100 // positive = losing
-	if move <= 0 {
-		return 0
-	}
+	p.FirstEntryReturnPct = dir * (p.MarkPrice - p.FirstEntry) / p.FirstEntry * 100
+	p.FirstEntryThresholdPct = trappedMovePct
 	if p.Leverage > 0 {
-		return move * p.Leverage
+		p.FirstEntryReturnPct *= p.Leverage
+		p.FirstEntryPctOfMargin = true
+		p.FirstEntryThresholdPct = trappedMarginPct
 	}
-	return move * assumedLeverage
+	p.HistoricalEntryWarning = p.FirstEntryReturnPct <= -p.FirstEntryThresholdPct
 }
 
 // assessHealth prices positions at marks and flags trapped, fresh and likely
@@ -127,16 +127,12 @@ func assessHealth(positions []Position, marks map[string]float64, balance float6
 			}
 		}
 		if p.Priced {
+			p.TrappedThresholdPct = trappedMovePct
 			if p.PctOfMargin {
-				p.Trapped = p.ReturnPct <= -trappedMarginPct
-			} else {
-				p.Trapped = p.ReturnPct <= -trappedMovePct
+				p.TrappedThresholdPct = trappedMarginPct
 			}
-			// A trader who averaged down sits on a bigger loss than the
-			// average entry shows: check the loss from the first entry too.
-			if !p.Trapped && p.firstEntryMarginLoss() >= trappedMarginPct {
-				p.Trapped = true
-			}
+			p.Trapped = p.ReturnPct <= -p.TrappedThresholdPct
+			p.assessHistoricalEntry()
 		}
 		last := p.LastAddAt
 		if last == 0 {
@@ -160,8 +156,8 @@ func assessHealth(positions []Position, marks map[string]float64, balance float6
 	return out
 }
 
-// markLoop keeps mark prices for the held coins, once a minute while any
-// followed trader holds something.
+// markLoop keeps mark prices for held coins every ten seconds. This uses the
+// separate futures market API, not the copy-trading web request budget.
 func (m *Monitor) markLoop(ctx context.Context) {
 	if m.Marks == nil {
 		return

@@ -1,8 +1,10 @@
 package telegram
 
 import (
+	"net/http"
 	"nofx/api"
 	"nofx/config"
+	"nofx/internal/apischeduler"
 	"nofx/logger"
 	"nofx/mcp"
 	_ "nofx/mcp/payment"
@@ -52,7 +54,7 @@ func resolveToken(cfg *config.Config, st *store.Store) string {
 
 // runBot runs the bot until the updates channel closes (clean stop → true) or a fatal error (false).
 func runBot(token string, cfg *config.Config, st *store.Store) bool {
-	bot, err := tgbotapi.NewBotAPI(token)
+	bot, err := tgbotapi.NewBotAPIWithClient(token, tgbotapi.APIEndpoint, apischeduler.Wrap(http.DefaultClient))
 	if err != nil {
 		logger.Errorf("Telegram bot failed to start: %v", err)
 		return false

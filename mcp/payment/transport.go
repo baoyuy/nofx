@@ -3,6 +3,7 @@ package payment
 import (
 	"crypto/tls"
 	"net/http"
+	"nofx/internal/apischeduler"
 )
 
 // singleUsePaidClient retains the caller's TLS verification, proxy, dialer and
@@ -15,6 +16,8 @@ func singleUsePaidClient(client *http.Client) *http.Client {
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
+	transport = apischeduler.BaseTransport(transport)
+	paid.Transport = transport
 	if original, ok := transport.(*http.Transport); ok {
 		fresh := original.Clone()
 		fresh.DisableKeepAlives = true

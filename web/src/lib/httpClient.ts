@@ -10,7 +10,8 @@
  */
 
 import axios, { AxiosInstance, AxiosError, AxiosResponse } from 'axios'
-import { toast } from 'sonner'
+import { toast } from './toast'
+import { localizeNotice } from '../i18n/notices'
 
 /**
  * Business response format - only business errors reach the caller
@@ -137,7 +138,7 @@ export class HttpClient {
             : 'Unable to reach the server',
         })
       }
-      throw new Error(message)
+      throw new Error(localizeNotice(message))
     }
 
     const status = error.response?.status ?? 0
@@ -145,7 +146,7 @@ export class HttpClient {
     // Handle 401 Unauthorized
     if (status === 401) {
       if (HttpClient.isHandling401) {
-        throw new Error('Session expired')
+        throw new Error(localizeNotice('Session expired'))
       }
 
       HttpClient.isHandling401 = true
@@ -171,7 +172,7 @@ export class HttpClient {
         return new Promise(() => {})
       }
 
-      throw new Error('Session expired')
+      throw new Error(localizeNotice('Session expired'))
     }
 
     // Handle 403 Forbidden - system error
@@ -182,7 +183,7 @@ export class HttpClient {
           description: 'You do not have permission to access this resource',
         })
       }
-      throw new Error('Permission denied')
+      throw new Error(localizeNotice('Permission denied'))
     }
 
     // Handle 404 Not Found - system error
@@ -193,7 +194,7 @@ export class HttpClient {
           description: 'The requested endpoint does not exist (404)',
         })
       }
-      throw new Error('API not found')
+      throw new Error(localizeNotice('API not found'))
     }
 
     // Handle 500+ Server Error - system error
@@ -207,7 +208,7 @@ export class HttpClient {
           description: 'Please try again later or contact support',
         })
       }
-      throw new Error('Server error')
+      throw new Error(localizeNotice('Server error'))
     }
 
     // 4xx errors (except 401/403/404) are business logic errors

@@ -1,10 +1,13 @@
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render as renderWithProviders, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { SWRConfig } from 'swr'
+import { SWRConfig, useSWRConfig } from 'swr'
 import { KlineChart } from './KlineChart'
 import { LiquidationMap } from './LiquidationMap'
 import { ExecutionLog } from './ExecutionLog'
 import type { DecisionRecord } from '../../types'
+import type { ReactElement } from 'react'
+import { LanguageProvider } from '../../contexts/LanguageContext'
+function render(ui: ReactElement) { return renderWithProviders(ui, { wrapper: LanguageProvider }) }
 
 const mocks = vi.hoisted(() => ({ klines: vi.fn(), heatmap: vi.fn() }))
 vi.mock('../../lib/api', () => ({ api: { getKlines: mocks.klines, getMarketHeatmap: mocks.heatmap } }))
@@ -19,7 +22,7 @@ class Socket {
   close = vi.fn()
   constructor() { Socket.all.push(this) }
 }
-beforeEach(() => { vi.clearAllMocks(); Socket.all = []; vi.stubGlobal('WebSocket', Socket) })
+beforeEach(() => { localStorage.setItem('language', 'en'); vi.clearAllMocks(); Socket.all = []; vi.stubGlobal('WebSocket', Socket) })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 const bar = { openTime: 60_000, closeTime: 120_000, open:120, high:121, low:119, close:120, volume:10 }
 
@@ -71,4 +74,21 @@ it('keeps historical decision faults visible but formats their protocol error', 
   expect(screen.getAllByText(/Payment result is unconfirmed/)).toHaveLength(2)
   expect(document.body.textContent).not.toContain('\\x00')
   expect(record.error_message).toBe(protocolError)
+})
+
+it('keeps same-market candles visible on refresh failure without showing them as live', async () => {
+  mocks.klines.mockResolvedValue([bar])
+  let refresh!: () => Promise<unknown>
+  function RefreshControl() {
+    const { mutate } = useSWRConfig()
+    refresh = () => mutate(['kline', 'SOL', '1m'])
+    return <KlineChart symbol="SOL" />
+  }
+  render(<SWRConfig value={{ provider: () => new Map() }}><RefreshControl /></SWRConfig>)
+  await waitFor(() => expect(screen.getByTestId('candles')).toHaveTextContent('120'))
+  mocks.klines.mockRejectedValue(new Error('temporary outage'))
+  await act(async () => { await refresh() })
+  expect(screen.getByTestId('candles')).toHaveTextContent('120')
+  expect(screen.getByRole('status')).toHaveTextContent('Refresh failed')
+  expect(screen.queryByText('● live')).not.toBeInTheDocument()
 })

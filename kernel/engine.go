@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"nofx/logger"
 	"nofx/market"
 	"nofx/provider/hyperliquid"
@@ -1039,7 +1040,7 @@ func (e *StrategyEngine) fetchSingleExternalSource(source store.ExternalDataSour
 		req.Header.Set(k, v)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := apischeduler.Do(client, req)
 	if err != nil {
 		return nil, err
 	}

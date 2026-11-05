@@ -1,3 +1,4 @@
+import { NoticeText } from '../NoticeText'
 import { memo, useEffect, useRef, useState } from 'react'
 import { planningAPI } from '../../lib/planning'
 import { formatRequestError } from '../../lib/requestErrors'
@@ -558,7 +559,7 @@ export const PlanningDataPanel = memo(function PlanningDataPanel({
           )}
           {error && (
             <p role="alert" className="stop-text">
-              {error}
+              <NoticeText text={error} language={language} />
             </p>
           )}
           {result && (

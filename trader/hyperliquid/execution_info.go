@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"time"
 )
 
@@ -21,7 +22,7 @@ func (t *HyperliquidTrader) directAccountInfo(ctx context.Context, v any) ([]byt
 	}
 	r.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 20 * time.Second}
-	resp, e := client.Do(r)
+	resp, e := apischeduler.Do(client, r)
 	if e != nil {
 		return nil, errors.New("Hyperliquid account request unavailable")
 	}

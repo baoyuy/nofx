@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -18,14 +17,12 @@ const (
 	// minutes at the request spacing.
 	MaxFollows = 100
 
-	// The first sync of a trader goes back as far as fills are kept, so
-	// positions opened before following are seen whole more often. It may
-	// take up to maxBackfillPages requests (~100 s at the spacing), once.
+	// History is fetched one page at a time back to the retained range;
+	// per-page yielding replaces the old hard page cap that skipped fills.
 	backfillWindow   = retention
 	retention        = 30 * 24 * time.Hour
-	maxPagesPerSync  = 10
-	maxBackfillPages = 25
-	hotInterval      = time.Minute
+	hotInterval      = 30 * time.Second
+	positionInterval = 20 * time.Second
 	coldInterval     = 15 * time.Minute
 	errorInterval    = 5 * time.Minute
 	profileInterval  = 6 * time.Hour
@@ -49,11 +46,18 @@ type Snapshot struct {
 	Events []Event `json:"events"`
 	// PositionsSource: "public" when Binance shows the positions, else
 	// "inferred" from fills since monitoring started.
-	PositionsSource string      `json:"positions_source"`
-	UpdatedAt       time.Time   `json:"updated_at"`
-	Error           string      `json:"error,omitempty"`
-	Hot             bool        `json:"hot"`
-	Score           TraderScore `json:"score"`
+	PositionsSource    string      `json:"positions_source"`
+	UpdatedAt          time.Time   `json:"updated_at"`
+	PositionsUpdatedAt time.Time   `json:"positions_updated_at"`
+	FillsUpdatedAt     time.Time   `json:"fills_updated_at"`
+	ProfileUpdatedAt   time.Time   `json:"profile_updated_at"`
+	HistoryComplete    bool        `json:"history_complete"`
+	PositionsError     string      `json:"positions_error,omitempty"`
+	FillsError         string      `json:"fills_error,omitempty"`
+	ProfileError       string      `json:"profile_error,omitempty"`
+	Error              string      `json:"error,omitempty"`
+	Hot                bool        `json:"hot"`
+	Score              TraderScore `json:"score"`
 	// Style is how they trade: holding time and whether they average down.
 	Style Style `json:"style"`
 	// OrdersPerDay counts actions (merged orders) in the last 24 hours;
@@ -62,7 +66,13 @@ type Snapshot struct {
 	OrdersPerDay int  `json:"orders_per_day"`
 	HighFreq     bool `json:"high_freq"`
 
-	nextDue time.Time
+	// Independent deadlines keep history backfills from blocking live work.
+	nextDue     time.Time // pause / initial stagger
+	positionDue time.Time
+	fillsDue    time.Time
+	profileDue  time.Time
+	live        []LivePosition
+	filling     *fillSync
 }
 
 // Monitor polls followed traders in the background.
@@ -97,11 +107,10 @@ func NewMonitor(st *store.CopyTradeStore) *Monitor {
 		wake: make(chan struct{}, 1), boards: map[string]cachedBoard{}}
 }
 
-// Run loads stored follows, then refreshes the most overdue trader one at a
-// time until ctx ends.
+// Polling performs one small task at a time, sharing the serial request gate.
 // Load rebuilds every followed trader from stored fills, so readers have
-// data before the first poll. A snapshot counts as updated when its fills
-// were last synced; public positions return with the first poll.
+// data before the first poll. Restore only the durable full-sync timestamp,
+// never the follow row's update time (which also changes for partial writes).
 func (m *Monitor) Load() {
 	m.loadOnce.Do(func() {
 		follows, err := m.store.ListFollows()
@@ -112,8 +121,16 @@ func (m *Monitor) Load() {
 		for i, f := range follows {
 			snap := &Snapshot{Follow: f, nextDue: now.Add(time.Duration(i) * 2 * time.Second)}
 			m.rebuild(snap, nil)
-			if f.FillsUntil > 0 {
-				snap.UpdatedAt = f.UpdatedAt
+			if f.FillsSyncedAt > 0 {
+				snap.FillsUpdatedAt = time.UnixMilli(f.FillsSyncedAt)
+				snap.HistoryComplete = !f.FillsPending
+				if !f.PositionShow && !f.FillsPending {
+					snap.PositionsUpdatedAt = snap.FillsUpdatedAt
+				}
+				snap.UpdatedAt = snap.FillsUpdatedAt
+			}
+			if f.ProfileAt > 0 {
+				snap.ProfileUpdatedAt = time.UnixMilli(f.ProfileAt)
 			}
 			m.mu.Lock()
 			m.snaps[f.PortfolioID] = snap
@@ -162,8 +179,9 @@ func (m *Monitor) nextDue() (string, time.Time) {
 	var id string
 	var due time.Time
 	for k, s := range m.snaps {
-		if id == "" || s.nextDue.Before(due) {
-			id, due = k, s.nextDue
+		_, at := s.task()
+		if id == "" || at.Before(due) || (at.Equal(due) && k < id) {
+			id, due = k, at
 		}
 	}
 	return id, due
@@ -173,55 +191,6 @@ func (m *Monitor) poke() {
 	select {
 	case m.wake <- struct{}{}:
 	default:
-	}
-}
-
-// refresh syncs one trader: profile every few hours, new fills, and public
-// positions when shown.
-func (m *Monitor) refresh(ctx context.Context, id string) {
-	m.mu.RLock()
-	snap, ok := m.snaps[id]
-	m.mu.RUnlock()
-	if !ok {
-		return
-	}
-	f := snap.Follow
-	err := m.syncProfile(ctx, &f)
-	// Private portfolios return no trades: only the profile is kept fresh.
-	if err == nil && !f.Private {
-		err = m.syncFills(ctx, &f)
-	}
-	var live []LivePosition
-	if err == nil && f.PositionShow && !f.Private {
-		live, err = m.Client.Positions(ctx, id)
-	}
-	retry := time.Now().Add(errorInterval)
-	if errors.Is(err, ErrPaused) {
-		// Status waits for the request gate, so read it before taking m.mu.
-		retry = time.Now().Add(time.Minute)
-		if until := m.Client.Status().PausedUntil; until.After(retry) {
-			retry = until
-		}
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	cur, ok := m.snaps[id]
-	if !ok {
-		return // unfollowed meanwhile
-	}
-	cur.Follow = f
-	if err != nil {
-		cur.Error = err.Error()
-		cur.nextDue = retry
-		return
-	}
-	cur.Error = ""
-	m.rebuild(cur, live)
-	cur.UpdatedAt = time.Now()
-	cur.nextDue = time.Now().Add(coldInterval)
-	if cur.Hot {
-		cur.nextDue = time.Now().Add(hotInterval)
 	}
 }
 
@@ -240,7 +209,7 @@ func (m *Monitor) syncProfile(ctx context.Context, f *store.CopyTradeFollow) err
 	}
 	f.ROI, f.PnL, f.MDD, f.WinRate = float64(perf.ROI), float64(perf.PnL), float64(perf.MDD), float64(perf.WinRate)
 	f.ProfileAt, f.ProfileVersion = time.Now().UnixMilli(), profileVersion
-	return m.store.SaveFollow(f)
+	return m.store.UpdateFollowProfile(f)
 }
 
 func applyDetail(f *store.CopyTradeFollow, d Detail) {
@@ -254,62 +223,6 @@ func applyDetail(f *store.CopyTradeFollow, d Detail) {
 	if d.LastTradeTime > 0 {
 		f.LastTradeTime = d.LastTradeTime
 	}
-}
-
-// syncFills fetches fills newer than the stored ones (or the last 30 days on
-// the first run). Pages are newest first and fills have no ID, so it stores
-// the fetched window as a whole: every fill at or after the oldest fully
-// fetched time replaces what was stored there.
-func (m *Monitor) syncFills(ctx context.Context, f *store.CopyTradeFollow) error {
-	stop, maxPages := f.FillsUntil, maxPagesPerSync
-	if stop == 0 {
-		stop, maxPages = time.Now().Add(-backfillWindow).UnixMilli(), maxBackfillPages
-	}
-	var rows []Trade
-	reachedEnd := false
-	for page := 1; page <= maxPages; page++ {
-		p, err := m.Client.Trades(ctx, f.PortfolioID, page, TradePageSize)
-		if err != nil {
-			return err
-		}
-		rows = append(rows, p.List...)
-		if len(p.List) < TradePageSize {
-			reachedEnd = true
-			break
-		}
-		if p.List[len(p.List)-1].Time < stop {
-			break
-		}
-	}
-	from, until := stop, stop
-	if len(rows) > 0 {
-		until = max(until, rows[0].Time)
-		oldest := rows[len(rows)-1].Time
-		if !reachedEnd && oldest >= stop {
-			// The page cap hit before the stored range: keep only fully
-			// fetched times and note the gap.
-			from = oldest + 1
-			logger.Warnf("copy-trade: %s traded more than %d fills since the last check; older ones skipped",
-				f.PortfolioID, maxPages*TradePageSize)
-		}
-	}
-	fills := make([]store.CopyTradeFill, 0, len(rows))
-	for i, t := range rows {
-		if t.Time < from {
-			continue
-		}
-		fills = append(fills, store.CopyTradeFill{PortfolioID: f.PortfolioID, Time: t.Time, Seq: i,
-			Symbol: strings.ToUpper(t.Symbol), Side: strings.ToUpper(t.Side), PositionSide: strings.ToUpper(t.PositionSide),
-			Qty: float64(t.Qty), Price: float64(t.Price), Fee: float64(t.Fee), RealizedPnL: float64(t.RealizedPnL)})
-	}
-	if len(rows) > 0 {
-		f.LastTradeTime = max(f.LastTradeTime, rows[0].Time)
-	}
-	if err := m.store.ReplaceFills(f.PortfolioID, from, fills, until); err != nil {
-		return err
-	}
-	f.FillsUntil = until
-	return nil
 }
 
 // rebuild recomputes positions and events from stored fills. Caller holds

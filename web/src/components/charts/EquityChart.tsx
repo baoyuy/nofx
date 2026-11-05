@@ -1,3 +1,4 @@
+import { NoticeText } from '../NoticeText'
 import { useState } from 'react'
 import {
   LineChart,
@@ -93,7 +94,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
               {t('loadingError', language)}
             </div>
             <div className="text-sm" style={{ color: '#707e92' }}>
-              {error.message}
+              <NoticeText text={error.message} />
             </div>
           </div>
         </div>

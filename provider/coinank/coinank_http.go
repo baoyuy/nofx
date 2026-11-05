@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"nofx/internal/apischeduler"
 	"time"
 )
 
@@ -54,7 +55,7 @@ func (c *CoinankClient) Get(ctx context.Context, path string, paramsMap map[stri
 		return "", err
 	}
 	request.Header.Add("apikey", c.Apikey)
-	resp, err := client.Do(request)
+	resp, err := apischeduler.Do(client, request)
 	if err != nil {
 		return "", err
 	}
@@ -79,7 +80,7 @@ func (c *CoinankClient) Post(ctx context.Context, path string, data any) (string
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Add("apikey", c.Apikey)
-	resp, err := client.Do(request)
+	resp, err := apischeduler.Do(client, request)
 	if err != nil {
 		return "", err
 	}

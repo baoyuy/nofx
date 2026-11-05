@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"time"
 )
 
@@ -46,7 +47,7 @@ func GetKlinesRange(symbol string, timeframe string, start, end time.Time) ([]Kl
 		q.Set("endTime", fmt.Sprintf("%d", endMs))
 		req.URL.RawQuery = q.Encode()
 
-		resp, err := client.Do(req)
+		resp, err := apischeduler.Do(client, req)
 		if err != nil {
 			return nil, err
 		}

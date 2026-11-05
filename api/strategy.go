@@ -12,6 +12,7 @@ import (
 	_ "nofx/mcp/payment"
 	_ "nofx/mcp/provider"
 	"nofx/store"
+	"nofx/trader"
 	"strings"
 	"time"
 
@@ -282,6 +283,8 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 		return
 	}
 
+	unlockStrategy := trader.LockStrategyLifecycle()
+	defer unlockStrategy()
 	// Check if it's a system default strategy
 	existing, err := s.store.Strategy().Get(userID, strategyID)
 	if err != nil {
@@ -313,6 +316,7 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 		mergedConfig = store.StrategyConfig{}
 	}
 
+	previousConfig := mergedConfig
 	// Apply incoming config on top while preserving nested fields that were not sent.
 	if len(req.Config) > 0 && string(req.Config) != "null" {
 		var patch map[string]any
@@ -330,6 +334,10 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 	mergedConfig.ClampLimits()
 	if err := s.checkStrategyCoinPool(userID, &mergedConfig); err != nil {
 		SafeBadRequest(c, err.Error())
+		return
+	}
+	if err := s.validateLiveStrategyUpdate(userID, strategyID, previousConfig, mergedConfig); err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -359,11 +367,6 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 		ConfigVisible: req.ConfigVisible,
 	}
 
-	if err := s.store.Strategy().Update(strategy); err != nil {
-		SafeInternalError(c, "Failed to update strategy", err)
-		return
-	}
-
 	// Token overflow check — block save if all models exceed context limits
 	if mergedConfig.StrategyType == "" || mergedConfig.StrategyType == "ai_trading" {
 		estimate := mergedConfig.EstimateTokens()
@@ -382,6 +385,12 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 			return
 		}
 	}
+	// No persistence (including metadata/public flags) occurs before every
+	// rejecting validation above has passed.
+	if err := s.store.Strategy().Update(strategy); err != nil {
+		SafeInternalError(c, "Failed to update strategy", err)
+		return
+	}
 
 	// Validate merged configuration and collect warnings
 	warnings := validateStrategyConfig(&mergedConfig)
@@ -393,6 +402,38 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// validateLiveStrategyUpdate deliberately does not stop/restart traders or
+// cancel orders. A live grid must be stopped explicitly before any update.
+func (s *Server) validateLiveStrategyUpdate(userID, strategyID string, previous, next store.StrategyConfig) error {
+	traders, err := s.store.Trader().List(userID)
+	if err != nil {
+		return fmt.Errorf("cannot verify associated traders; strategy was not changed: %w", err)
+	}
+	for _, cfg := range traders {
+		if cfg.StrategyID != strategyID {
+			continue
+		}
+		if err := trader.ValidateTraderPrompt(next.StrategyType, cfg.CustomPrompt, cfg.OverrideBasePrompt); err != nil {
+			return fmt.Errorf("trader %s: %w", cfg.Name, err)
+		}
+		running := cfg.IsRunning
+		wasGrid := previous.StrategyType == "grid_trading"
+		nowGrid := next.StrategyType == "grid_trading"
+		if s.traderManager != nil {
+			if runtime, err := s.traderManager.GetTrader(cfg.ID); err == nil {
+				running = running || runtime.IsRunning()
+				if current := runtime.GetStrategyConfig(); current != nil {
+					wasGrid = wasGrid || current.StrategyType == "grid_trading"
+				}
+			}
+		}
+		if running && (wasGrid || wasGrid != nowGrid) {
+			return fmt.Errorf("stop trader %s before modifying its grid strategy or switching AI/grid strategy type; no changes were saved", cfg.Name)
+		}
+	}
+	return nil
 }
 
 // handleDeleteStrategy Delete strategy

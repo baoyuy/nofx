@@ -1,3 +1,4 @@
+import { NoticeText } from '../NoticeText'
 import { apiKeyVenues, venueName } from '../../lib/frontierAccounts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api'
@@ -478,7 +479,7 @@ export function FrontierAccount({
       )}
       {error && (
         <p role="alert" className="frontier-notice">
-          {zh ? '持仓不可用：' : 'Positions unavailable: '} {error}
+          {zh ? '持仓不可用：' : 'Positions unavailable: '} <NoticeText text={error} language={language} />
           {snapshot
             ? zh
               ? ' 下方上次接收的值可能已过期。'

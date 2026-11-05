@@ -35,8 +35,9 @@ type DirectionItem struct {
 	OIRank           int               `json:"oiRank"`
 	FactorAsOf       int64             `json:"factorAsOf"`
 
-	oiValue float64
-	volume  float64
+	oiValue   float64
+	volume    float64
+	fetchedAt int64
 }
 
 type DirectionBoard struct {
@@ -142,7 +143,7 @@ func Score(f map[string]string) (bias string, score float64, bull, bear, neut in
 // Direction builds the bull/bear board for the most traded perpetuals,
 // strongest signals first.
 func (c *Client) Direction(ctx context.Context) (DirectionBoard, error) {
-	v, err := c.cachedDo("direction", func(ctx context.Context) (any, error) {
+	v, err := c.cachedDo(ctx, "direction", func(ctx context.Context) (any, error) {
 		tickers, err := c.topByVolume(ctx, universe)
 		if err != nil {
 			return nil, err
@@ -181,7 +182,7 @@ func (c *Client) DirectionFor(ctx context.Context, symbols []string) DirectionBo
 	items := make([]DirectionItem, len(tickers))
 	ok := make([]bool, len(tickers))
 	forEach(tickers, func(i int, t Ticker) error {
-		v, err := c.cachedDo("direction1:"+t.Symbol, func(ctx context.Context) (any, error) {
+		v, err := c.cachedDo(ctx, "direction1:"+t.Symbol, func(ctx context.Context) (any, error) {
 			list, failed := c.scoreTickers(ctx, []Ticker{t})
 			if failed > 0 || len(list) == 0 {
 				return nil, errors.New("candles unavailable")
@@ -229,7 +230,8 @@ func (c *Client) scoreTickers(ctx context.Context, tickers []Ticker) ([]Directio
 			Symbol: base, Bias: bias, DirectionScore: score,
 			BullishCount: bull, BearishCount: bear, NeutralCount: neut, FactorDirections: f,
 			MarkPrice: candles[len(candles)-1].Close, FactorAsOf: candles[len(candles)-1].OpenTime,
-			oiValue: oiValue, volume: t.QuoteVolume,
+			fetchedAt: time.Now().UnixMilli(),
+			oiValue:   oiValue, volume: t.QuoteVolume,
 		}
 		ok[i] = true
 		return nil
@@ -265,6 +267,12 @@ func rankDirection(list []DirectionItem, band int) DirectionBoard {
 	if list == nil {
 		list = []DirectionItem{}
 	}
+	asOf := time.Now().UnixMilli()
+	for _, item := range list {
+		if item.fetchedAt > 0 && item.fetchedAt < asOf {
+			asOf = item.fetchedAt
+		}
+	}
 	return DirectionBoard{Band: band, UniverseSize: len(list), RankBy: "directionScore", Source: "binance",
-		AsOf: time.Now().UnixMilli(), Items: list}
+		AsOf: asOf, Items: list}
 }

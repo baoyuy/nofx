@@ -1,8 +1,9 @@
+import { NoticeText } from '../NoticeText'
 import { BrandLogo } from '../common/BrandLogo'
 import React, { useState, useEffect } from 'react'
 import { Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '../../lib/toast'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { t } from '../../i18n/translations'
@@ -240,7 +241,7 @@ export function LoginPage() {
               {error && (
                 <div className="flex items-start gap-2 rounded-lg border border-nofx-danger/25 bg-nofx-danger/8 px-3 py-2.5 text-xs text-nofx-danger">
                   <span className="text-nofx-danger font-bold mt-px">!</span>
-                  <span className="leading-relaxed">{error}</span>
+                  <span className="leading-relaxed"><NoticeText text={error} /></span>
                 </div>
               )}
 

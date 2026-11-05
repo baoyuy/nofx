@@ -1,4 +1,6 @@
+import { NoticeText } from '../NoticeText'
 import { useEffect, useState } from 'react'
+import useSWR from 'swr'
 import { planningAPI } from '../../lib/planning'
 import { formatRequestError } from '../../lib/requestErrors'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -39,40 +41,33 @@ export function PlanningTrendBoard({
 }) {
   const language = useSafeLanguage()
   const zh = language === 'zh'
-  const [board, setBoard] = useState<Board | null>(null)
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
-  const [revision, setRevision] = useState(0)
-  useEffect(() => {
-    if (venue !== 'binance') return
-    let current = true
-    setLoading(true)
-    setError('')
-    planningAPI<Board>('ai500')
-      .then((v) => {
-        if (
-          !Array.isArray(v.coins) ||
-          v.coins.some(
-            (c) => typeof c.pair !== 'string' || !Number.isFinite(c.score)
-          )
+  // A scan can fan out to many Binance candle reads. Reuse it across mounts,
+  // independently of language/callback changes; never poll this at live cadence.
+  const { data: board, error: requestError, isValidating: loading, mutate } = useSWR(
+    venue === 'binance' ? 'planning/trend-board' : null,
+    async () => {
+      const value = await planningAPI<Board>('ai500')
+      if (
+        !Array.isArray(value.coins) ||
+        value.coins.some(
+          (c) => typeof c.pair !== 'string' || !Number.isFinite(c.score)
         )
-          throw new Error('Invalid trend board response')
-        if (current) {
-          setBoard(v)
-          onMarkets?.(v.coins.map((coin) => coin.pair))
-        }
-      })
-      .catch((e) => {
-        if (current) setError(formatRequestError(e, zh ? 'zh' : 'en'))
-      })
-      .finally(() => {
-        if (current) setLoading(false)
-      })
-    return () => {
-      current = false
+      ) throw new Error('Invalid trend board response')
+      return value
+    },
+    {
+      refreshInterval: 300000,
+      dedupingInterval: 300000,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      shouldRetryOnError: false,
     }
-  }, [venue, revision, onMarkets, zh])
+  )
+  const error = requestError ? formatRequestError(requestError, zh ? 'zh' : 'en') : ''
+  useEffect(() => {
+    if (venue === 'binance' && board) onMarkets?.(board.coins.map((coin) => coin.pair))
+  }, [venue, board, onMarkets])
   if (venue !== 'binance') return null
   const coins =
     board?.coins.filter((v) =>
@@ -103,7 +98,7 @@ export function PlanningTrendBoard({
         />
         <button
           disabled={loading || disabled}
-          onClick={() => setRevision((v) => v + 1)}
+          onClick={() => void mutate()}
         >
           {zh ? '刷新列表' : 'Refresh list'}
         </button>
@@ -113,8 +108,8 @@ export function PlanningTrendBoard({
           {zh ? '正在扫描趋势榜…' : 'Scanning the trend board…'}
         </p>
       )}
-      {error && <p role="alert">{error}</p>}
-      {!loading && !error && board && (
+      {error && <p role="alert"><NoticeText text={error} language={language} /></p>}
+      {board && (
         <>
           <div className="planning-ai500-symbols">
             {coins.map((v) => (

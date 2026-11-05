@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"nofx/logger"
 	"regexp"
 	"strings"
@@ -173,7 +174,7 @@ func (t *apiCallTool) execute(req *apiRequest) string {
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+t.token)
 
-	resp, err := t.client.Do(httpReq)
+	resp, err := apischeduler.Do(t.client, httpReq)
 	if err != nil {
 		return fmt.Sprintf("API call failed: %v", err)
 	}

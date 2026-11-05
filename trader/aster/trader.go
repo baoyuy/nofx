@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"nofx/hook"
+	"nofx/internal/apischeduler"
 	"sort"
 	"strconv"
 	"strings"
@@ -67,6 +68,7 @@ func NewAsterTrader(user, signer, privateKeyHex string) (*AsterTrader, error) {
 	if res != nil && res.Error() == nil {
 		client = res.GetResult()
 	}
+	client = apischeduler.Wrap(client)
 
 	return &AsterTrader{
 		ctx:             context.Background(),

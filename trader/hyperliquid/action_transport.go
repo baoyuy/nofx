@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"time"
 )
 
@@ -42,5 +43,5 @@ func (t checkedActionTransport) RoundTrip(req *http.Request) (*http.Response, er
 }
 
 func checkedActionHTTPClient() *http.Client {
-	return &http.Client{Timeout: 15 * time.Second, Transport: checkedActionTransport{base: http.DefaultTransport}}
+	return apischeduler.Wrap(&http.Client{Timeout: 15 * time.Second, Transport: checkedActionTransport{base: http.DefaultTransport}})
 }

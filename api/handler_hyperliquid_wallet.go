@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"regexp"
 	"strconv"
 	"strings"
@@ -183,7 +184,7 @@ func postHyperliquidInfo(c *gin.Context, requestBody map[string]any, out any) er
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 20 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := apischeduler.Do(client, req)
 	if err != nil {
 		return fmt.Errorf("reach Hyperliquid: %w", err)
 	}
@@ -223,7 +224,7 @@ func (s *Server) handleHyperliquidAgent(c *gin.Context) {
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 20 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := apischeduler.Do(client, req)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to reach Hyperliquid", "detail": err.Error()})
 		return
@@ -305,7 +306,7 @@ func (s *Server) handleHyperliquidSubmitExchange(c *gin.Context) {
 	}
 	hlReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := client.Do(hlReq)
+	resp, err := apischeduler.Do(client, hlReq)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to reach Hyperliquid", "detail": err.Error()})
 		return

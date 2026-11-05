@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"nofx/config"
+	"nofx/internal/apischeduler"
 	"time"
 )
 
@@ -104,7 +105,7 @@ func (c *Client) GetBars(ctx context.Context, symbol string, timeframe string, l
 	req.Header.Set("APCA-API-SECRET-KEY", c.secretKey)
 
 	// Execute request
-	resp, err := c.client.Do(req)
+	resp, err := apischeduler.Do(c.client, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}

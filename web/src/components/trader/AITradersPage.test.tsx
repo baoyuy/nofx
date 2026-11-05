@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   states: vi.fn(),
   update: vi.fn(),
   createExchange: vi.fn(),
+  updateExchange: vi.fn(),
 }))
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({ user: mocks.user, token: 'fixture' }),
@@ -34,6 +35,7 @@ vi.mock('../../lib/api', () => ({
     updateModelConfigs: mocks.update,
     createTrader: mocks.update,
     createExchangeEncrypted: mocks.createExchange,
+    updateExchangeConfigsEncrypted: mocks.updateExchange,
   },
 }))
 vi.mock('./TradersList', () => ({
@@ -50,15 +52,17 @@ vi.mock('./ExchangeConfigModal', () => ({
   ExchangeConfigModal: ({
     onClose,
     onSave,
+    editingExchangeId,
   }: {
     onClose: () => void
     onSave: (...args: unknown[]) => Promise<void>
+    editingExchangeId: string | null
   }) => (
     <div role="dialog" aria-label="Trading account">
       <button
         onClick={() =>
           void onSave(
-            null,
+            editingExchangeId,
             'binance',
             'New account',
             'fixture-key',
@@ -223,4 +227,21 @@ it('waits for saved connections before allowing a new AI wallet or account setup
   expect(
     screen.getByRole('button', { name: 'Add account', exact: true })
   ).toBeDisabled()
+})
+it('forwards the edited account name in the encrypted update payload', async () => {
+  open()
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Edit My account' })
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Save account' }))
+  await waitFor(() =>
+    expect(mocks.updateExchange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exchanges: {
+          exchange: expect.objectContaining({ account_name: 'New account' }),
+        },
+      })
+    )
+  )
+  expect(mocks.createExchange).not.toHaveBeenCalled()
 })

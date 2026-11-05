@@ -132,7 +132,7 @@ func TestMonitorBackfillsThenAddsOnlyNewFills(t *testing.T) {
 	if _, err := m.Follow(ctx, "42"); err == nil {
 		t.Fatal("following twice must fail")
 	}
-	m.refresh(ctx, "42")
+	refreshRound(t, m, "42")
 	s, _ := m.Snapshot("42")
 	if s.Error != "" || s.Follow.ROI != 12.5 || s.PositionsSource != "public" || len(s.Positions) != 1 {
 		t.Fatalf("snapshot = %+v", s)
@@ -147,7 +147,7 @@ func TestMonitorBackfillsThenAddsOnlyNewFills(t *testing.T) {
 
 	// A second refresh stores only the new fill and does not duplicate.
 	fake.add(now.Add(-time.Minute), "SELL", "LONG", 1.5, 110, 13)
-	m.refresh(ctx, "42")
+	refreshRound(t, m, "42")
 	fills, _ := m.store.Fills("42", 0)
 	if len(fills) != 3 {
 		t.Fatalf("stored fills = %d, want 3", len(fills))
@@ -250,7 +250,7 @@ func TestLoadServesStoredDataBeforeTheFirstPoll(t *testing.T) {
 	if _, err := m.Follow(ctx, "42"); err != nil {
 		t.Fatal(err)
 	}
-	m.refresh(ctx, "42")
+	refreshRound(t, m, "42")
 	// A restart: a new monitor over the same store, not polled yet.
 	again := NewMonitor(m.store)
 	again.Load()

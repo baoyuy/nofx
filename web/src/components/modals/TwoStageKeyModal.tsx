@@ -1,7 +1,8 @@
+import { NoticeText } from '../NoticeText'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { t, type Language } from '../../i18n/translations'
-import { toast } from 'sonner'
+import { toast } from '../../lib/toast'
 import { WebCryptoEnvironmentCheck } from '../common/WebCryptoEnvironmentCheck'
 
 const DEFAULT_LENGTH = 64
@@ -236,7 +237,7 @@ export function TwoStageKeyModal({
                 />
               </div>
 
-              {error && <div className="text-nofx-danger text-sm">{error}</div>}
+              {error && <div className="text-nofx-danger text-sm"><NoticeText text={error} /></div>}
 
               <div className="flex gap-3">
                 <button
@@ -310,7 +311,7 @@ export function TwoStageKeyModal({
                 />
               </div>
 
-              {error && <div className="text-nofx-danger text-sm">{error}</div>}
+              {error && <div className="text-nofx-danger text-sm"><NoticeText text={error} /></div>}
 
               <div className="flex gap-3">
                 <button

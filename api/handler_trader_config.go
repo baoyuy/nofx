@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"nofx/logger"
+	"nofx/trader"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,6 +14,10 @@ func (s *Server) handleUpdateTraderPrompt(c *gin.Context) {
 	traderID := c.Param("id")
 	userID := c.GetString("user_id")
 
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	var req struct {
 		CustomPrompt       string `json:"custom_prompt"`
 		OverrideBasePrompt bool   `json:"override_base_prompt"`
@@ -22,20 +27,58 @@ func (s *Server) handleUpdateTraderPrompt(c *gin.Context) {
 		SafeBadRequest(c, "Invalid request parameters")
 		return
 	}
+	unlockStrategy := trader.LockStrategyLifecycle()
+	defer unlockStrategy()
 
+	// Authorize and validate capability before persisting anything. The grid
+	// decision path does not consume trader-level prompt overlays.
+	cfg, err := s.store.Trader().GetByID(traderID)
+	if err != nil || cfg.UserID != userID {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Trader not found"})
+		return
+	}
+	if cfg.StrategyID != "" {
+		strategy, err := s.store.Strategy().Get(userID, cfg.StrategyID)
+		if err != nil {
+			SafeBadRequest(c, "Trader strategy not found")
+			return
+		}
+		config, err := strategy.ParseConfig()
+		if err != nil {
+			SafeBadRequest(c, "Invalid trader strategy configuration")
+			return
+		}
+		if err := trader.ValidateTraderPrompt(config.StrategyType, req.CustomPrompt, req.OverrideBasePrompt); err != nil {
+			SafeBadRequest(c, err.Error())
+			return
+		}
+	}
+	var runtime *trader.AutoTrader
+	if s.traderManager != nil {
+		runtime, _ = s.traderManager.GetTrader(traderID)
+		if runtime != nil {
+			if config := runtime.GetStrategyConfig(); config != nil {
+				if err := trader.ValidateTraderPrompt(config.StrategyType, req.CustomPrompt, req.OverrideBasePrompt); err != nil {
+					SafeBadRequest(c, err.Error())
+					return
+				}
+			}
+		}
+	}
 	// Update database
-	err := s.store.Trader().UpdateCustomPrompt(userID, traderID, req.CustomPrompt, req.OverrideBasePrompt)
+	err = s.store.Trader().UpdateCustomPrompt(userID, traderID, req.CustomPrompt, req.OverrideBasePrompt)
 	if err != nil {
 		SafeInternalError(c, "Failed to update custom prompt", err)
 		return
 	}
 
 	// If trader is in memory, update its custom prompt and override settings
-	trader, err := s.traderManager.GetTrader(traderID)
-	if err == nil {
-		trader.SetCustomPrompt(req.CustomPrompt)
-		trader.SetOverrideBasePrompt(req.OverrideBasePrompt)
-		logger.Infof("✓ Updated trader %s custom prompt (override base=%v)", trader.GetName(), req.OverrideBasePrompt)
+	if runtime != nil {
+		if err := runtime.SetPromptSettings(req.CustomPrompt, req.OverrideBasePrompt); err != nil {
+			SafeBadRequest(c, err.Error())
+			return
+		}
+		logger.Infof("✓ Updated trader %s custom prompt (override base=%v)", runtime.GetName(), req.OverrideBasePrompt)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Custom prompt updated"})

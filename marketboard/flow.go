@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"time"
 )
 
 // flowWindows maps a window to the candles that cover it.
@@ -33,6 +34,7 @@ type FlowData struct {
 	By      string     `json:"by"`
 	Window  string     `json:"window"`
 	Source  string     `json:"source"`
+	AsOf    int64      `json:"asOf"`
 	Inflow  []FlowItem `json:"inflow"`
 	Outflow []FlowItem `json:"outflow"`
 }
@@ -49,7 +51,7 @@ func (c *Client) Flow(ctx context.Context, window string, limit int) (FlowRespon
 	if !ok {
 		window, w = "1h", flowWindows["1h"]
 	}
-	v, err := c.cachedDo("flow:"+window, func(ctx context.Context) (any, error) {
+	v, err := c.cachedDo(ctx, "flow:"+window, func(ctx context.Context) (any, error) {
 		tickers, err := c.topByVolume(ctx, universe)
 		if err != nil {
 			return nil, err
@@ -94,7 +96,7 @@ func (c *Client) Flow(ctx context.Context, window string, limit int) (FlowRespon
 		}
 		sort.SliceStable(in, func(a, b int) bool { return nets[in[a]] > nets[in[b]] })
 		sort.SliceStable(out, func(a, b int) bool { return nets[out[a]] < nets[out[b]] })
-		data := FlowData{By: "netFlow", Window: window, Source: "binance", Inflow: []FlowItem{}, Outflow: []FlowItem{}}
+		data := FlowData{By: "netFlow", Window: window, Source: "binance", AsOf: time.Now().UnixMilli(), Inflow: []FlowItem{}, Outflow: []FlowItem{}}
 		for _, i := range in {
 			data.Inflow = append(data.Inflow, items[i])
 		}

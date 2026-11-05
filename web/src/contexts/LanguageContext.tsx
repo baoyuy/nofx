@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, ReactNode } from 'react'
 import type { Language } from '../i18n/translations'
+import { getDisplayLanguage, setDisplayLanguage } from '../i18n/displayLanguage'
 
 interface LanguageContextType {
   language: Language
@@ -10,31 +11,12 @@ const LanguageContext = createContext<LanguageContextType | undefined>(
   undefined
 )
 
-const SUPPORTED: Language[] = ['en', 'zh', 'id']
-
-function initialLanguage(): Language {
-  try {
-    const stored = localStorage.getItem('language')
-    if (stored && SUPPORTED.includes(stored as Language)) {
-      return stored as Language
-    }
-  } catch {
-    // localStorage unavailable; fall through to default
-  }
-  // This fork defaults to Chinese; users can switch in the language menu.
-  return 'zh'
-}
-
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>(initialLanguage)
+  const [language, setLanguageState] = useState<Language>(getDisplayLanguage)
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang)
-    try {
-      localStorage.setItem('language', lang)
-    } catch {
-      // ignore persistence failures
-    }
+    setDisplayLanguage(lang)
   }
 
   return (

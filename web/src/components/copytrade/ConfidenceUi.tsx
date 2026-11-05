@@ -1,3 +1,4 @@
+import { NoticeText } from '../NoticeText'
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import type {
@@ -240,7 +241,7 @@ export function HitRatePanel({ language }: { language: string }) {
           ))}
         </select>
       </div>
-      {error ? <p className="text-xs text-nofx-danger">{error}</p> : null}
+      {error ? <p className="text-xs text-nofx-danger"><NoticeText text={error} /></p> : null}
       <table className="w-full text-xs">
         <thead className="text-left text-nofx-text-muted">
           <tr>
@@ -282,7 +283,7 @@ export function HitRatePanel({ language }: { language: string }) {
   )
 }
 
-/** Trapped / new / likely-liquidated tags of a held position. */
+/** Current-loss, historical-reference, new and likely-liquidated tags. */
 export function HealthTag({
   h,
   language,
@@ -290,8 +291,18 @@ export function HealthTag({
   h: TraderPosition
   language: string
 }) {
+  const pct = (value: number | undefined) =>
+    typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(1)}%` : '—'
+  const basis = tr(language, h.pct_of_margin ? '保证金' : '价格', h.pct_of_margin ? 'margin' : 'price')
+  const threshold = h.trapped_threshold_pct ?? (h.pct_of_margin ? 50 : 5)
+  const historyThreshold = h.first_entry_threshold_pct ?? (h.first_entry_pct_of_margin ? 50 : 5)
+  const historyBasis = tr(
+    language,
+    h.first_entry_pct_of_margin ? '按当前杠杆折算' : '价格',
+    h.first_entry_pct_of_margin ? 'scaled by current leverage' : 'price'
+  )
   const tag = (cls: string, text: string, title: string) => (
-    <span title={title} className={`mr-1 rounded px-1.5 text-[10px] ${cls}`}>
+    <span tabIndex={0} aria-label={`${text}: ${title}`} title={title} className={`mr-1 rounded px-1.5 text-[10px] ${cls}`}>
       {text}
     </span>
   )
@@ -314,8 +325,19 @@ export function HealthTag({
             tr(language, '被套', 'Trapped'),
             tr(
               language,
-              '亏损较深，可能只是在扛单，置信度里权重打折',
-              'Deep in loss, may just be holding on; weighted down in confidence'
+              `当前浮亏 ${pct(h.return_pct)}（${basis}），达到亏损 ${threshold}% 的被套阈值；只按当前平均开仓价口径判断，不使用历史首笔价格。`,
+              `Current return ${pct(h.return_pct)} (${basis}) meets the ${threshold}% loss threshold. Based only on the current average entry, not the first recorded entry.`
+            )
+          )
+        : null}
+      {h.historical_entry_warning && !h.liquidated
+        ? tag(
+            'bg-nofx-gold/10 text-nofx-gold',
+            tr(language, '历史入场偏离', 'Historical entry deviation'),
+            tr(
+              language,
+              `记录中的首笔入场价比当前均价更不利，从该价格到当前标记价的参考变动为 ${pct(h.first_entry_return_pct)}（${historyBasis}），达到 ${historyThreshold}% 的反向偏离阈值。这不是当前实际浮亏，不计入被套人数，也不单独降低置信度。历史记录可能不完整。`,
+              `The first recorded entry is less favorable than the current average. Reference movement to the current mark is ${pct(h.first_entry_return_pct)} (${historyBasis}), reaching the ${historyThreshold}% adverse threshold. This is not current PnL, does not count as trapped, and adds no separate confidence penalty. History may be incomplete.`
             )
           )
         : null}

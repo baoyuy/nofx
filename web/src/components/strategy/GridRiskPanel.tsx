@@ -1,3 +1,4 @@
+import { NoticeText } from '../NoticeText'
 import { useState, useEffect, useCallback } from 'react'
 import { Shield, TrendingUp, AlertTriangle, Activity, Box, ChevronDown, ChevronUp } from 'lucide-react'
 import type { GridRiskInfo } from '../../types'
@@ -108,7 +109,7 @@ export function GridRiskPanel({
   if (error) {
     return (
       <div className="p-3 text-center text-xs" style={{ color: '#D6433A' }}>
-        {ts(gridRisk.error, language)}: {error}
+        {ts(gridRisk.error, language)}: <NoticeText text={error} language={language} />
       </div>
     )
   }

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"nofx/config"
+	"nofx/internal/apischeduler"
 	"strconv"
 	"time"
 )
@@ -18,20 +19,20 @@ const (
 
 // Bar represents a single OHLCV bar from Twelve Data
 type Bar struct {
-	Datetime string  `json:"datetime"`
-	Open     string  `json:"open"`
-	High     string  `json:"high"`
-	Low      string  `json:"low"`
-	Close    string  `json:"close"`
-	Volume   string  `json:"volume,omitempty"`
+	Datetime string `json:"datetime"`
+	Open     string `json:"open"`
+	High     string `json:"high"`
+	Low      string `json:"low"`
+	Close    string `json:"close"`
+	Volume   string `json:"volume,omitempty"`
 }
 
 // TimeSeriesResponse represents the response from Twelve Data time_series API
 type TimeSeriesResponse struct {
-	Meta   Meta   `json:"meta"`
-	Values []Bar  `json:"values"`
-	Status string `json:"status"`
-	Code   int    `json:"code,omitempty"`
+	Meta    Meta   `json:"meta"`
+	Values  []Bar  `json:"values"`
+	Status  string `json:"status"`
+	Code    int    `json:"code,omitempty"`
 	Message string `json:"message,omitempty"`
 }
 
@@ -118,7 +119,7 @@ func (c *Client) GetTimeSeries(ctx context.Context, symbol string, interval stri
 	}
 
 	// Execute request
-	resp, err := c.client.Do(req)
+	resp, err := apischeduler.Do(c.client, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
@@ -165,7 +166,7 @@ func (c *Client) GetQuote(ctx context.Context, symbol string) (*QuoteResponse, e
 	}
 
 	// Execute request
-	resp, err := c.client.Do(req)
+	resp, err := apischeduler.Do(c.client, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}

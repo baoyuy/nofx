@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/internal/apischeduler"
 	"nofx/trader/types"
 	"strconv"
 	"time"
@@ -137,7 +138,7 @@ func (t *BybitTrader) getClosedPnLViaHTTP(startTime time.Time, limit int) ([]typ
 	req.Header.Set("Content-Type", "application/json")
 
 	// Use http.DefaultClient for the request
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := apischeduler.Do(http.DefaultClient, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call Bybit API: %w", err)
 	}

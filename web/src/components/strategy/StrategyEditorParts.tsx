@@ -1,3 +1,4 @@
+import { NoticeText } from '../NoticeText'
 import { useState, type ReactNode } from 'react'
 import { ChevronDown, Info, Loader2, Play, RotateCcw } from 'lucide-react'
 import { api } from '../../lib/api'
@@ -479,7 +480,7 @@ export function TestRun({
       ) : null}
       {error ? (
         <p role="alert" className="text-sm text-nofx-danger">
-          {error}
+          <NoticeText text={error} />
         </p>
       ) : null}
       {result ? (

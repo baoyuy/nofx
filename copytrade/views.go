@@ -100,7 +100,10 @@ type Holder struct {
 	Score       float64 `json:"score"`
 	HighFreq    bool    `json:"high_freq"`
 	// Style is how the holder trades: scalp, swing, long, martingale, ...
-	Style string `json:"style,omitempty"`
+	Style              string    `json:"style,omitempty"`
+	PositionsUpdatedAt time.Time `json:"positions_updated_at"`
+	FillsUpdatedAt     time.Time `json:"fills_updated_at"`
+	ProfileUpdatedAt   time.Time `json:"profile_updated_at"`
 }
 
 // openedValue is the size a position was opened with: adding to it later must
@@ -256,19 +259,20 @@ func Holders(snaps []Snapshot, symbol string) []Holder {
 			f := s.Follow
 			out = append(out, Holder{Position: p, PortfolioID: f.PortfolioID, Nickname: f.Nickname, AvatarURL: f.AvatarURL,
 				ROI30: f.ROI, PnL30: f.PnL, WinRate30: f.WinRate, Score: s.Score.Score, HighFreq: s.HighFreq,
-				Style: s.Style.Kind})
+				Style: s.Style.Kind, PositionsUpdatedAt: s.PositionsUpdatedAt,
+				FillsUpdatedAt: s.FillsUpdatedAt, ProfileUpdatedAt: s.ProfileUpdatedAt})
 		}
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].EntryValue > out[b].EntryValue })
 	return out
 }
 
-// Fresh keeps the snapshots refreshed within maxAge, without private
-// portfolios (they never have data).
+// Fresh keeps complete, independently refreshed AI snapshots. The UI may still
+// show partial snapshots, but their absence must not become an AI exit signal.
 func Fresh(snaps []Snapshot, maxAge time.Duration, now time.Time) []Snapshot {
 	out := make([]Snapshot, 0, len(snaps))
 	for _, s := range snaps {
-		if !s.Follow.Private && !s.UpdatedAt.IsZero() && now.Sub(s.UpdatedAt) <= maxAge {
+		if !s.Follow.Private && s.Error == "" && s.Quality(maxAge, now).Complete() {
 			out = append(out, s)
 		}
 	}

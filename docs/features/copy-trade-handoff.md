@@ -123,8 +123,8 @@ gofmt 会对齐结构体字段；新字段加在结构体中间时注意对齐�
 **第一批已修（数据可用性 + 回放与权重）**
 - 带单数据断了或只有部分账户新鲜时，不再写成"没人持有这个币"：`kernel.CopyTradeResolver` 现在返回 `CopyTradeView{Coins, Fresh, Total, Reason}`，`api.copyTradeView` 用 30 分钟新鲜度和「非私密关注数」算出覆盖率，`formatCopyTrade` 分「完全没数据 / 部分陈旧 / 完整」三种写法，`Context.CopyTradeCoverage` 带给提示词。数据不完整时不发离场提醒，也不给出候选币（`copyTradeCandidates`）。
 - 回填窗口之前开的仓：`Monitor.rebuild` 用「Binance 公开持仓量 > 回放累计量」判断该仓早于成交记录（`preOpenedBooks`），再用 `ReplayKnown` 把第一次见到的同向成交标成 `add`、`OpenedAt=0`、`Position.PreExisting=true`，不再当新开仓。
-- 被套按「均价与首次开仓价里更差的那个」判断（`Position.firstEntryMarginLoss`），摊平后不会再从"被套"里消失；同时给 `Position` 增加了 `FirstEntry`。
-- 加仓到已亏损仓位不再拿「新开 ×1.3」的加成（`healthFactor` 里 `p.Fresh && !p.Trapped`）。
+- 被套已统一为当前平均开仓价下的浮亏口径，与表中 `ReturnPct` 一致：保证金亏损达到 50%，或没有保证金时价格反向达到 5%。历史首笔价格不再设置 `Trapped`；`HistoricalEntryWarning` 单独提示更不利首笔记录的参考偏离，并给出数值、阈值和是否使用当前杠杆折算。它不是历史实际盈亏，也不增加被套人数或额外置信度惩罚。记录可能不完整。
+- `healthFactor` 仍按当前亏损连续降权，只有当前达到被套阈值时才取消「新开 ×1.3」加成（`p.Fresh && !p.Trapped`）；独立历史提示不参与该判定。
 - 离场提醒阈值改成「离场人数 ≥ 同方向人数的 1/3」（`exitAlertShare`），不再是 1 个人减仓就提醒。
 
 **第二批已修（门槛、说明、迁移、预览）**

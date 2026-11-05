@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/crypto/sha3"
 
+	"nofx/internal/apischeduler"
 	"nofx/internal/permit2"
 	"nofx/mcp"
 )
@@ -80,7 +81,7 @@ func doInitialX402Request(
 			return nil, fmt.Errorf("initial x402 discovery must not contain a payment authorization")
 		}
 
-		resp, err := httpClient.Do(req)
+		resp, err := apischeduler.Do(httpClient, req)
 		if err != nil {
 			lastErr = err
 			if attempt < X402MaxPaymentRetries {
@@ -368,7 +369,7 @@ func DoX402RequestStream(ctx context.Context, httpClient *http.Client,
 	// A reused Go transport can silently replay GET on EOF even without an
 	// application retry. Send paid requests over a fresh, non-reused connection.
 	paidClient := singleUsePaidClient(httpClient)
-	paidResp, err := paidClient.Do(req)
+	paidResp, err := apischeduler.Do(paidClient, req)
 	if err != nil {
 		return nil, &PaymentOutcomeUnknownError{Cause: err}
 	}

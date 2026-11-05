@@ -1,7 +1,8 @@
+import { NoticeText } from '../NoticeText'
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowDownUp, Loader2, QrCode, RefreshCw } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { toast } from 'sonner'
+import { toast } from '../../lib/toast'
 import { api } from '../../lib/api'
 import type { HyperliquidAccountSummary } from '../../lib/api/wallet'
 import type { Language } from '../../i18n/translations'
@@ -484,7 +485,7 @@ export function HyperliquidFundsPanel({
                 {busy ? t.bridgeSubmitting : t.bridgeSubmit}
               </button>
             </div>
-            {error && <p className="text-xs text-red-500">{error}</p>}
+            {error && <p className="text-xs text-red-500"><NoticeText text={error} language={language} /></p>}
             <p className="text-xs text-nofx-text-muted">
               {t.bridgeMin} · {t.bridgeGasHint}
             </p>
@@ -537,7 +538,7 @@ export function HyperliquidFundsPanel({
               </button>
             </div>
           </div>
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && <p className="text-xs text-red-500"><NoticeText text={error} language={language} /></p>}
           <button
             type="button"
             disabled={busy}

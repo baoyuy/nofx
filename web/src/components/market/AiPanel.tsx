@@ -1,3 +1,4 @@
+import { NoticeText } from '../NoticeText'
 import { useState } from 'react'
 import { Loader2, Sparkles } from 'lucide-react'
 import { api } from '../../lib/api'
@@ -132,7 +133,7 @@ export function AiPanel({
       )}
       {error ? (
         <p role="alert" className="mt-2 text-xs" style={{ color: BN.down }}>
-          {error}
+          <NoticeText text={error} />
         </p>
       ) : null}
 

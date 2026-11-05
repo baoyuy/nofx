@@ -1,7 +1,10 @@
+import { NoticeText } from '../NoticeText'
 import { useEffect, useState } from 'react'
+import useSWR from 'swr'
+import { LOCAL_SNAPSHOT_OPTIONS } from '../../lib/liveSnapshot'
 import { api } from '../../lib/api'
 import type {
-  FeedItem,
+  FeedQuery,
   TradeAction,
   TraderSnapshot,
 } from '../../lib/api/copyTrade'
@@ -19,13 +22,10 @@ import {
 export function FeedTab({
   language,
   snaps,
-  version,
   onSymbol,
 }: {
   language: string
   snaps: TraderSnapshot[]
-  /** changes on every poll, to refetch */
-  version: number
   onSymbol: (symbol: string) => void
 }) {
   const [trader, setTrader] = useState('')
@@ -34,12 +34,8 @@ export function FeedTab({
   const [minValue, setMinValue] = useState(0)
   const [hideHighFreq, setHideHighFreq] = useState(true)
   const highFreq = snaps.filter((s) => s.high_freq)
-  const [items, setItems] = useState<FeedItem[]>([])
-  const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const [error, setError] = useState('')
-  const pages = Math.max(1, Math.ceil(total / pageSize))
   // Changing a filter starts again from the newest page.
   const filter =
     <T,>(set: (v: T) => void) =>
@@ -48,38 +44,32 @@ export function FeedTab({
       setPage(1)
     }
 
+  const query: FeedQuery = {
+    portfolio_id: trader || undefined,
+    symbol: symbol.trim()
+      ? `${symbol.trim().toUpperCase().replace(/USDT$/, '')}USDT`
+      : undefined,
+    action,
+    min_value: minValue || undefined,
+    hide_high_freq: hideHighFreq ? '1' : undefined,
+    page,
+    page_size: pageSize,
+  }
+  const { data, error: requestError } = useSWR(
+    ['copytrade/feed', query],
+    () => api.getFeed(query),
+    LOCAL_SNAPSHOT_OPTIONS
+  )
+  const items = data?.items || []
+  const total = data?.total || 0
+  const error = requestError instanceof Error ? requestError.message : String(requestError || '')
+  const pages = Math.max(1, Math.ceil(total / pageSize))
   useEffect(() => {
-    let cancelled = false
-    api
-      .getFeed({
-        portfolio_id: trader || undefined,
-        symbol: symbol.trim()
-          ? `${symbol.trim().toUpperCase().replace(/USDT$/, '')}USDT`
-          : undefined,
-        action,
-        min_value: minValue || undefined,
-        hide_high_freq: hideHighFreq ? '1' : undefined,
-        page,
-        page_size: pageSize,
-      })
-      .then((r) => {
-        if (!cancelled) {
-          setItems(r.items || [])
-          setTotal(r.total || 0)
-          setError('')
-          // Keep the page in range when the list shrinks.
-          const last = Math.max(1, Math.ceil((r.total || 0) / pageSize))
-          if (page > last) setPage(last)
-        }
-      })
-      .catch(
-        (e) =>
-          !cancelled && setError(e instanceof Error ? e.message : String(e))
-      )
-    return () => {
-      cancelled = true
+    if (data) {
+      const last = Math.max(1, Math.ceil(data.total / pageSize))
+      if (page > last) setPage(last)
     }
-  }, [trader, symbol, action, minValue, hideHighFreq, page, pageSize, version])
+  }, [data, page, pageSize])
 
   const pager = (where: string) =>
     total > pageSize ? (
@@ -225,7 +215,7 @@ export function FeedTab({
       {pager('mb-3')}
       {error ? (
         <p role="alert" className="py-4 text-sm text-nofx-danger">
-          {error}
+          <NoticeText text={error} />
         </p>
       ) : null}
       {items.length ? (

@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import useSWR from 'swr'
+import { LOCAL_SNAPSHOT_OPTIONS } from '../lib/liveSnapshot'
 import { useNavigate } from 'react-router-dom'
 import { Settings } from 'lucide-react'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -11,9 +13,10 @@ import { FollowingTab } from '../components/copytrade/FollowingTab'
 import { FeedTab } from '../components/copytrade/FeedTab'
 import { CoinsTab } from '../components/copytrade/CoinsTab'
 import { ago } from '../components/copytrade/format'
+import { NoticeText } from '../components/NoticeText'
 
 type Tab = 'discover' | 'following' | 'feed' | 'coins'
-const POLL_MS = 30000
+const EMPTY_SNAPS: TraderSnapshot[] = []
 
 function StatusBar({
   language,
@@ -27,10 +30,11 @@ function StatusBar({
   const c = status.client
   const paused = c.paused && c.paused_until
   const formatErrors = c.format_errors || []
+  const dataPending = status.ai_ready !== undefined && status.ai_ready < (status.ai_total ?? 0)
   const dot =
     paused || formatErrors.length
       ? 'bg-nofx-danger'
-      : c.last_error
+      : c.last_error || dataPending
         ? 'bg-nofx-gold'
         : 'bg-nofx-success'
   return (
@@ -49,7 +53,9 @@ function StatusBar({
             ? tr(language, '币安数据格式异常', 'Binance data looks wrong')
             : c.last_error
               ? tr(language, '最近一次请求出错', 'Last request failed')
-              : tr(language, '正常', 'OK')}
+              : dataPending
+                ? tr(language, '部分数据待同步', 'Data sync incomplete')
+                : tr(language, '正常', 'OK')}
       </span>
       <span className={ui.muted}>
         {tr(
@@ -58,6 +64,18 @@ function StatusBar({
           `Following ${status.follows}/${status.max_follows} · ${status.hot} active`
         )}
       </span>
+      {status.ai_ready !== undefined && (
+        <span className={dataPending ? 'text-nofx-gold' : ui.muted} title={tr(
+          language,
+          '仅表示带单数据完整可用；策略开启带单上下文后才会发送给 AI，并不代表所有交易员已开启带单参考。',
+          'Data readiness only. A trader strategy must enable copy-trade context before these data are sent to AI.'
+        )}>
+          {tr(language,
+            `AI 数据就绪 ${status.ai_ready}/${status.ai_total ?? 0} · 持仓 ${status.positions_fresh ?? 0} · 成交 ${status.fills_fresh ?? 0} · 资料 ${status.profiles_fresh ?? 0}`,
+            `AI data ready ${status.ai_ready}/${status.ai_total ?? 0} · Positions ${status.positions_fresh ?? 0} · Fills ${status.fills_fresh ?? 0} · Profiles ${status.profiles_fresh ?? 0}`
+          )}
+        </span>
+      )}
       <span className={ui.muted}>
         {tr(
           language,
@@ -91,12 +109,12 @@ function StatusBar({
             '币安返回的数据缺少价格、时间等字段，可能改了接口格式。在修好之前，受影响的数据不会更新，页面上的数字可能是旧的：',
             'Binance answered without fields such as price or time; the format may have changed. Until fixed, the affected data stops updating and figures may be stale: '
           )}
-          {formatErrors.join('；')}
+          {formatErrors.map((error, i) => <span key={i}><NoticeText text={error} />{i < formatErrors.length - 1 ? '；' : ''}</span>)}
         </p>
       ) : null}
       {c.last_error && !paused && !formatErrors.length ? (
         <p role="alert" className="w-full text-xs text-nofx-danger">
-          {c.last_error}
+          <NoticeText text={c.last_error} />
         </p>
       ) : null}
     </div>
@@ -106,32 +124,20 @@ function StatusBar({
 export function CopyTradePage() {
   const { language } = useLanguage()
   const [tab, setTab] = useState<Tab>('following')
-  const [status, setStatus] = useState<CopyTradeStatus | null>(null)
-  const [snaps, setSnaps] = useState<TraderSnapshot[]>([])
-  const [version, setVersion] = useState(0)
+  // These endpoints read local monitor snapshots. Do not tie their completion
+  // together: a slow/failing status request must not hold positions or feed up.
+  const { data: status } = useSWR(
+    'copytrade/status',
+    api.getCopyTradeStatus,
+    LOCAL_SNAPSHOT_OPTIONS
+  )
+  const { data: follows, mutate: refreshFollows } = useSWR(
+    'copytrade/follows',
+    api.getFollows,
+    LOCAL_SNAPSHOT_OPTIONS
+  )
+  const snaps = follows?.follows || EMPTY_SNAPS
   const [coin, setCoin] = useState('')
-
-  const poll = useCallback(async () => {
-    try {
-      const [s, f] = await Promise.all([
-        api.getCopyTradeStatus(),
-        api.getFollows(),
-      ])
-      setStatus(s)
-      setSnaps(f.follows || [])
-      setVersion((v) => v + 1)
-    } catch {
-      // keep the last view; the status bar shows request problems
-    }
-  }, [])
-  useEffect(() => {
-    void poll()
-    const t = window.setInterval(
-      () => document.visibilityState === 'visible' && void poll(),
-      POLL_MS
-    )
-    return () => window.clearInterval(t)
-  }, [poll])
 
   const followed = useMemo(
     () => new Set(snaps.map((s) => s.trader.portfolio_id)),
@@ -161,12 +167,12 @@ export function CopyTradePage() {
         <p className={ui.muted}>
           {tr(
             language,
-            '关注币安合约带单员，查看他们的持仓、开平仓动作，以及每个币上的多空分布和开仓价。数据读取币安网页，有 1–3 分钟延迟，只供参考。',
-            'Follow Binance futures lead traders: their positions, actions, and per-coin long/short split and entries. Read from binance.com with a 1–3 minute delay; for reference only.'
+            '关注币安合约带单员，查看持仓、开平仓动作及各币多空分布。页面每 4 秒同步本地快照；源数据更新时间受币安、关注人数及限流影响，不保证秒级实时，仅供参考。',
+            'Follow Binance futures lead traders: positions, actions and per-coin long/short exposure. Local snapshots sync every 4 seconds; source freshness depends on Binance, follow count and rate limits. Not tick-real-time; for reference only.'
           )}
         </p>
       </header>
-      <StatusBar language={language} status={status} />
+      <StatusBar language={language} status={status ?? null} />
       <nav
         className="mb-4 flex flex-wrap gap-2"
         aria-label={tr(language, '带单监控', 'Copy-trade monitor')}
@@ -187,14 +193,14 @@ export function CopyTradePage() {
         <DiscoverTab
           language={language}
           followed={followed}
-          onFollowed={() => void poll()}
+          onFollowed={() => void refreshFollows()}
         />
       ) : null}
       {tab === 'following' ? (
         <FollowingTab
           language={language}
           snaps={snaps}
-          onChanged={() => void poll()}
+          onChanged={() => void refreshFollows()}
           onSymbol={openCoin}
         />
       ) : null}
@@ -202,14 +208,12 @@ export function CopyTradePage() {
         <FeedTab
           language={language}
           snaps={snaps}
-          version={version}
           onSymbol={openCoin}
         />
       ) : null}
       {tab === 'coins' ? (
         <CoinsTab
           language={language}
-          version={version}
           selected={coin}
           onSelect={setCoin}
         />

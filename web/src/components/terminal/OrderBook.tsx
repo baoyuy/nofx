@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { demoSeedPrice, demoTick } from '../../lib/demo/demoUniverse'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { startVisiblePolling } from '../../lib/visiblePolling'
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a)
 
@@ -81,8 +82,9 @@ export function OrderBook({ symbol, markPrice, demo = false }: OrderBookProps) {
     setSource('binance')
   }, [base])
 
-  // one-time: fetch the xyz dex coin universe so we can resolve symbols
+  // Only resolve the fallback universe if Binance cannot serve this market.
   useEffect(() => {
+    if (demo || source !== 'hl') return
     let alive = true
     fetch(HL_INFO, {
       method: 'POST',
@@ -102,7 +104,7 @@ export function OrderBook({ symbol, markPrice, demo = false }: OrderBookProps) {
     return () => {
       alive = false
     }
-  }, [])
+  }, [demo, source])
 
   const coin = useMemo(() => resolveCoin(base, xyzSet), [base, xyzSet])
 
@@ -148,7 +150,7 @@ export function OrderBook({ symbol, markPrice, demo = false }: OrderBookProps) {
   useEffect(() => {
     if (!base || demo || source !== 'binance') return
     let alive = true
-    let timer: ReturnType<typeof setTimeout> | null = null
+    const controller = new AbortController()
     let failures = 0
     setBook(null)
     setStatus('connecting')
@@ -161,10 +163,11 @@ export function OrderBook({ symbol, markPrice, demo = false }: OrderBookProps) {
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/market/depth?symbol=${encodeURIComponent(base)}USDT&limit=22`)
+        const res = await fetch(`/api/market/depth?symbol=${encodeURIComponent(base)}USDT&limit=22`, { signal: controller.signal })
         if (!alive) return
         if (res.status >= 400 && res.status < 500) {
           // not a Binance perp — hand over to the Hyperliquid stream
+          stopPolling()
           setSource('hl')
           return
         }
@@ -179,13 +182,13 @@ export function OrderBook({ symbol, markPrice, demo = false }: OrderBookProps) {
         failures++
         if (failures >= BINANCE_DOWN_AFTER) setStatus('down')
       }
-      if (alive) timer = setTimeout(poll, BINANCE_POLL_MS)
     }
 
-    poll()
+    const stopPolling = startVisiblePolling(poll, BINANCE_POLL_MS)
     return () => {
       alive = false
-      if (timer) clearTimeout(timer)
+      stopPolling()
+      controller.abort()
     }
   }, [base, demo, source])
 

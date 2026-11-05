@@ -1,3 +1,4 @@
+import { NoticeText } from '../NoticeText'
 import { useEffect, useRef, useState } from 'react'
 import {
   createChart,
@@ -510,7 +511,7 @@ export function ChartWithOrders({
         >
           <div className="text-center">
             <div className="text-2xl mb-2">⚠️</div>
-            <div style={{ color: '#D6433A' }}>{error}</div>
+            <div style={{ color: '#D6433A' }}><NoticeText text={error} /></div>
           </div>
         </div>
       )}
