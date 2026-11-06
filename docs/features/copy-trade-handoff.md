@@ -157,6 +157,14 @@ gofmt 会对齐结构体字段；新字段加在结构体中间时注意对齐�
 - 接口：`GET/PUT /api/copytrade/auto`、`DELETE /api/copytrade/auto/exclusions/:id`。前端 `AutoFollowPanel.tsx` 在「我的关注」顶部。
 - 持仓时间权重改为：<1h ×0.6、<4h ×0.8、<3 天 ×1、3–7 天 ×0.6、≥7 天或开在回填之前 ×0.3。年龄权重放进 `base`，不影响 `Confidence.Health`（只反映亏损）。依据：服务器数据里 7 天以上的持仓 85% 浮亏。
 
+**第六批（选币质量的五项门槛）**
+- 带单员个人准确率（`copytrade/accuracy.go`）：用 30 天成交里每次开仓/加仓（同币同方向 24 小时内重复的算一次）对比 24 小时后的 1 小时 K 线收盘价。每 6 小时重算一次（启动 10 分钟后第一次），每个币请求一次 fapi 1h K 线（约 746 根），间隔 2 秒。投票按 `accuracyFactor` 加权：满 10 次后按收缩后的准确率（向 50% 拉 10 个虚拟样本）在 ×0.5–×1.5 之间；满 30 次且收缩后低于 45% 时触发自动关注淘汰规则 `inaccurate`。结果在内存里（`Monitor.accuracy`），重启后 10 分钟内为空，投票按 ×1。
+- 新开仓共识：`SideSummary.Openers` = 偏向那一边 24 小时内新开/加仓、没被套、非高频、非摊平型的人数。`copy_trade_min_openers`（默认 0 关闭）：带单币源去掉不够的币，跟随/反向模式拒绝开仓。
+- 命中率门槛：`hitRates` 按方向拆分（`HitRate.Direction` = all/long/short）；`Monitor.RecentHitRates` 缓存 10 分钟给引擎。`copy_trade_min_hit_rate` + `copy_trade_min_samples`（默认 30）：跟随/反向开仓前查该币置信度区间 + 方向的 30 天 24 小时命中率，样本不够或低于门槛就拒绝；反向模式用 100 − 命中率。提示词每个币多一行「Track record」。
+- 行情过滤（`kernel/copy_trade_gates.go`）：`copy_trade_min_volume_millions` 按 K 线估算 24 小时成交额，低于门槛拒绝开仓（只要开了带单参考就生效）；`copy_trade_trend_filter` 跟随/反向时 4 小时 EMA20 低于 EMA50（差 0.2% 以上）不做多、高于不做空。持仓量过滤沿用原来的 `risk_control.min_oi_value_millions`。
+- 多空分开的命中率：带单页「历史命中率」面板可选「多空合计 / 只看偏多 / 只看偏空」。
+- 前端：策略页带单面板和「附带带单参考」下都有「信号质量门槛」；「我的关注」卡片显示个人准确率；「按币种」显示有效新开人数。
+
 **其他**
 - 私密账户批量换成公开账户，没有公开账户的取消关注；老关注重新回填到 30 天（把 `FillsUntil` 置 0 会触发回填，每个账户最多 25 页请求）。
 - 「代理设置」在设置页的「数据」标签里，不是带单页的 tab；要挪位置属于产品决定，没动。

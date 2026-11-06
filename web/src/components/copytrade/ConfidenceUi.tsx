@@ -175,6 +175,7 @@ const bandLabel = (language: string, band: HitRate['band']) =>
 /** History of how often confidence signals moved the called way. */
 export function HitRatePanel({ language }: { language: string }) {
   const [days, setDays] = useState(30)
+  const [direction, setDirection] = useState<'all' | 'long' | 'short'>('all')
   const [rows, setRows] = useState<HitRate[]>([])
   const [error, setError] = useState('')
   useEffect(() => {
@@ -196,7 +197,12 @@ export function HitRatePanel({ language }: { language: string }) {
     }
   }, [days])
   const cell = (band: HitRate['band'], horizon: HitRate['horizon']) => {
-    const r = rows.find((x) => x.band === band && x.horizon === horizon)
+    const r = rows.find(
+      (x) =>
+        x.band === band &&
+        x.horizon === horizon &&
+        (x.direction ?? 'all') === direction
+    )
     if (!r || !r.samples)
       return <span className="text-nofx-text-muted">--</span>
     const tone =
@@ -222,13 +228,26 @@ export function HitRatePanel({ language }: { language: string }) {
     )
   }
   const total =
-    rows.find((r) => r.band === 'all' && r.horizon === '4h')?.samples || 0
+    rows.find(
+      (r) =>
+        r.band === 'all' && r.horizon === '4h' && (r.direction ?? 'all') === 'all'
+    )?.samples || 0
   return (
     <section className={`${ui.panel} mt-3`}>
       <div className="mb-2 flex items-center justify-between">
         <h2 className={`${ui.title} mb-0 whitespace-nowrap`}>
           {tr(language, '历史命中率', 'Hit rate')}
         </h2>
+        <select
+          className={`${ui.inputInline} py-0.5 text-xs`}
+          value={direction}
+          onChange={(e) => setDirection(e.target.value as typeof direction)}
+          aria-label={tr(language, '方向', 'Side')}
+        >
+          <option value="all">{tr(language, '多空合计', 'Both sides')}</option>
+          <option value="long">{tr(language, '只看偏多', 'Long calls')}</option>
+          <option value="short">{tr(language, '只看偏空', 'Short calls')}</option>
+        </select>
         <select
           className={`${ui.inputInline} py-0.5 text-xs`}
           value={days}

@@ -39,6 +39,10 @@ function sideHealth(language: string, s: SideSummary): string {
   if (s.trapped)
     parts.push(tr(language, `${s.trapped} 人被套`, `${s.trapped} trapped`))
   if (s.fresh) parts.push(tr(language, `${s.fresh} 人新开`, `${s.fresh} new`))
+  if (s.openers)
+    parts.push(
+      tr(language, `${s.openers} 人有效新开`, `${s.openers} fresh calls`)
+    )
   return parts.length ? `（${parts.join('，')}）` : ''
 }
 

@@ -30,7 +30,9 @@ export function pickCopyTradeCoins(
         dir !== 'neutral' &&
         c.confidence.score >= s.minConfidence &&
         (s.direction === 'both' || dir === s.direction) &&
-        c.long.traders + c.short.traders >= s.minTraders
+        c.long.traders + c.short.traders >= s.minTraders &&
+        (!s.minOpeners ||
+          ((dir === 'short' ? c.short : c.long).openers ?? 0) >= s.minOpeners)
       )
     })
     .sort((a, b) => b.confidence.score - a.confidence.score)
@@ -233,6 +235,12 @@ export function CopyTradeSourcePanel({
           />
         </Field>
       </div>
+      <CopyTradeGates
+        language={language}
+        settings={s}
+        onChange={onChange}
+        follow={follow}
+      />
       <div className="flex flex-wrap items-center gap-2" aria-live="polite">
         <span className="text-xs text-nofx-text-muted">
           {text(language, '当前会交易：', 'Would trade now:')}
@@ -304,6 +312,131 @@ export function CopyTradeSourcePanel({
         ) : null}
       </div>
     </>
+  )
+}
+
+/** Program-enforced signal-quality gates; every one is off at 0. */
+export function CopyTradeGates({
+  language,
+  settings,
+  onChange,
+  follow,
+}: {
+  language: string
+  settings?: CopyTradeSettings
+  onChange: (s: CopyTradeSettings) => void
+  follow: CopyFollow
+}) {
+  const s = { ...DEFAULT_COPY_TRADE, ...(settings || {}) }
+  const set = (patch: Partial<CopyTradeSettings>) =>
+    onChange({ ...s, ...patch })
+  const directed = follow !== 'free'
+  return (
+    <div className="rounded-lg border border-[rgba(25,36,52,0.14)] px-3 py-2">
+      <div className="text-sm font-semibold text-nofx-text">
+        {text(language, '信号质量门槛', 'Signal quality gates')}
+      </div>
+      <p className="mb-2 text-xs text-nofx-text-muted">
+        {text(
+          language,
+          '由程序强制，填 0 表示关闭。「新开仓人数」「历史命中率」「顺 4 小时趋势」只在跟随或反向时生效；「成交额」总是生效。',
+          'Enforced by the program; 0 turns one off. Fresh calls, hit rate and the 4h trend apply under follow or fade; the volume floor always applies.'
+        )}
+      </p>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field
+          language={language}
+          label={text(
+            language,
+            '24 小时内新开仓的带单员至少',
+            'Fresh calls at least'
+          )}
+          hint={text(
+            language,
+            '偏向那一边、24 小时内新开或加仓、没被套、不是高频也不是摊平型的人数。只是一直拿着的老仓不算判断。',
+            'Traders on the leading side who opened or added in 24h, not trapped, high-frequency or averaging down. Old positions held on are not a call.'
+          )}
+        >
+          <NumberInput
+            value={s.minOpeners}
+            range={COPY_TRADE_LIMITS.minOpeners}
+            suffix={text(language, '人', '')}
+            onChange={(v) => set({ minOpeners: v })}
+          />
+        </Field>
+        <Field
+          language={language}
+          label={text(language, '历史命中率至少', 'Hit rate at least')}
+          hint={text(
+            language,
+            '同一置信度区间、同一方向的历史信号，24 小时后方向对的比例。反向模式看的是错的比例。样本不够时不开仓。',
+            'How often past signals of the same confidence band and side were right 24h later (fade: wrong). No open until there are enough samples.'
+          )}
+        >
+          <NumberInput
+            value={s.minHitRate}
+            range={COPY_TRADE_LIMITS.minHitRate}
+            suffix="%"
+            onChange={(v) => set({ minHitRate: v })}
+          />
+        </Field>
+        {s.minHitRate > 0 ? (
+          <Field
+            language={language}
+            label={text(language, '命中率至少基于', 'Over at least')}
+            hint={text(
+              language,
+              '少于这么多次历史信号时不开仓。',
+              'No open with fewer scored signals than this.'
+            )}
+          >
+            <NumberInput
+              value={s.minSamples}
+              range={COPY_TRADE_LIMITS.minSamples}
+              suffix={text(language, '次', 'signals')}
+              onChange={(v) => set({ minSamples: v })}
+            />
+          </Field>
+        ) : null}
+        <Field
+          language={language}
+          label={text(language, '24 小时成交额至少', '24h volume at least')}
+          hint={text(
+            language,
+            '成交额太小的币滑点大、容易被操纵，不开仓。',
+            'Thin coins slip and get pushed around; no open below this.'
+          )}
+        >
+          <NumberInput
+            value={s.minVolumeM}
+            range={COPY_TRADE_LIMITS.minVolumeM}
+            suffix={text(language, '百万 U', 'M USDT')}
+            onChange={(v) => set({ minVolumeM: v })}
+          />
+        </Field>
+      </div>
+      <label className="mt-2 flex items-center gap-2 text-sm text-nofx-text">
+        <input
+          type="checkbox"
+          checked={s.trendFilter}
+          onChange={(e) => set({ trendFilter: e.target.checked })}
+        />
+        {text(
+          language,
+          '不逆 4 小时趋势开仓（EMA20 在 EMA50 下方不做多，上方不做空）',
+          'No open against the 4h trend (no long while EMA20 < EMA50, no short while above)'
+        )}
+      </label>
+      {!directed && (s.minOpeners || s.minHitRate || s.trendFilter) ? (
+        <p className="mt-1 text-xs text-nofx-gold">
+          {text(
+            language,
+            '当前是「自由」模式，新开仓人数、命中率和趋势门槛不会生效。',
+            'In free mode the fresh-call, hit-rate and trend gates do not apply.'
+          )}
+        </p>
+      ) : null}
+    </div>
   )
 }
 

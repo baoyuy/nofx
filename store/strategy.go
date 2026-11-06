@@ -185,6 +185,9 @@ func (c *StrategyConfig) ClampLimits() {
 		c.RiskControl.MinStopATR = 5
 	}
 	c.RiskControl.ProfitProtection = NormalizeProfitProtection(c.RiskControl.ProfitProtection)
+	if c.CoinSource.SourceType == "copy_trade" || c.CoinSource.CopyTradeContext {
+		c.CoinSource.clampCopyTradeGates()
+	}
 	if c.CoinSource.CopyTradeContext && c.CoinSource.SourceType != "copy_trade" {
 		switch c.CoinSource.CopyTradeFollow {
 		case "follow", "fade", "free":
@@ -928,6 +931,25 @@ type CoinSourceConfig struct {
 	// source): follow/fade refuse coins the lead traders do not lean on
 	// clearly enough. Default 40.
 	CopyTradeContextMinConfidence float64 `json:"copy_trade_context_min_confidence,omitempty"`
+	// Signal-quality gates for copy-trade opens. 0 turns each off.
+	//
+	// CopyTradeMinOpeners: distinct lead traders who opened or added on the
+	// leading side within 24h (not trapped, not high-frequency, not
+	// averaging down). Coins with fewer are not copy-trade candidates, and
+	// follow/fade refuse opens on them. Holding alone is not a call.
+	CopyTradeMinOpeners int `json:"copy_trade_min_openers,omitempty"`
+	// CopyTradeMinHitRate (0-100 %) with CopyTradeMinSamples: follow/fade
+	// refuse opens until the measured 24h hit rate of signals in the coin's
+	// confidence band and direction reaches it (for fade: 100 − hit rate),
+	// over at least CopyTradeMinSamples signals (default 30).
+	CopyTradeMinHitRate float64 `json:"copy_trade_min_hit_rate,omitempty"`
+	CopyTradeMinSamples int     `json:"copy_trade_min_samples,omitempty"`
+	// CopyTradeMinVolumeM refuses copy-trade opens on coins whose 24h traded
+	// value is below this many million USDT.
+	CopyTradeMinVolumeM float64 `json:"copy_trade_min_volume_millions,omitempty"`
+	// CopyTradeTrendFilter refuses follow/fade opens against the 4h trend
+	// (EMA20 vs EMA50): no long in a downtrend, no short in an uptrend.
+	CopyTradeTrendFilter bool `json:"copy_trade_trend_filter,omitempty"`
 	// static coin list (used when source_type = "static")
 	StaticCoins []string `json:"static_coins,omitempty"`
 	// excluded coins list (filtered out from all sources)
@@ -1755,4 +1777,23 @@ func (c *CoinSourceConfig) NormalizeCopyTrade() {
 	if c.CopyTradeContextMinConfidence > 100 {
 		c.CopyTradeContextMinConfidence = 100
 	}
+	c.clampCopyTradeGates()
+}
+
+// Copy-trade gate bounds.
+const (
+	DefaultCopyTradeMinSamples = 30
+	MaxCopyTradeMinOpeners     = 10
+	MaxCopyTradeMinVolumeM     = 10000
+)
+
+// clampCopyTradeGates keeps the signal-quality gates in range; 0 stays off.
+func (c *CoinSourceConfig) clampCopyTradeGates() {
+	c.CopyTradeMinOpeners = min(max(c.CopyTradeMinOpeners, 0), MaxCopyTradeMinOpeners)
+	c.CopyTradeMinHitRate = min(max(c.CopyTradeMinHitRate, 0), 100)
+	if c.CopyTradeMinSamples <= 0 {
+		c.CopyTradeMinSamples = DefaultCopyTradeMinSamples
+	}
+	c.CopyTradeMinSamples = min(c.CopyTradeMinSamples, 1000)
+	c.CopyTradeMinVolumeM = min(max(c.CopyTradeMinVolumeM, 0), MaxCopyTradeMinVolumeM)
 }

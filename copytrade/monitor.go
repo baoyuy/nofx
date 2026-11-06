@@ -70,6 +70,9 @@ type Snapshot struct {
 	Review []string `json:"review,omitempty"`
 	// Probation: picked by auto-follow within the last 7 days; votes count half.
 	Probation bool `json:"probation,omitempty"`
+	// Accuracy: how often the trader's own opens and adds moved their way
+	// within 24h, over the stored 30 days. Scored every few hours.
+	Accuracy Accuracy `json:"accuracy"`
 
 	// Independent deadlines keep history backfills from blocking live work.
 	nextDue     time.Time // pause / initial stagger
@@ -78,6 +81,8 @@ type Snapshot struct {
 	profileDue  time.Time
 	live        []LivePosition
 	filling     *fillSync
+	// calls are the opens and adds of the stored fills, oldest first.
+	calls []call
 }
 
 // Monitor polls followed traders in the background.
@@ -102,6 +107,13 @@ type Monitor struct {
 	loadOnce sync.Once
 
 	auto autoManager
+
+	accMu    sync.RWMutex
+	accuracy map[string]Accuracy
+
+	hitMu    sync.Mutex
+	hitCache []HitRate
+	hitAt    time.Time
 }
 
 type cachedBoard struct {
@@ -151,6 +163,7 @@ func (m *Monitor) Run(ctx context.Context) {
 	go m.signalLoop(ctx)
 	go m.markLoop(ctx)
 	go m.autoLoop(ctx)
+	go m.accuracyLoop(ctx)
 	prune := time.NewTicker(time.Hour)
 	defer prune.Stop()
 	for {
@@ -259,6 +272,8 @@ func (m *Monitor) rebuild(s *Snapshot, live []LivePosition) {
 	if public {
 		positions, s.PositionsSource = LivePositions(live, positions), "public"
 	}
+	// All 30 days of calls, before the event list is cut for display.
+	s.calls = callsOf(events)
 	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
 		events[i], events[j] = events[j], events[i]
 	}
@@ -399,6 +414,7 @@ func (m *Monitor) view(s *Snapshot, marks map[string]float64, now time.Time) Sna
 	snap := *s
 	snap.Score = ScoreTrader(snap.Follow, now)
 	snap.Positions = assessHealth(s.Positions, marks, snap.Follow.MarginBalance, now)
+	snap.Accuracy = m.accuracyOf(s.Follow.PortfolioID)
 	snap.Review = DropReasons(snap, now)
 	snap.Probation = onProbation(snap.Follow, now)
 	return snap

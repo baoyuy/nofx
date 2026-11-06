@@ -40,6 +40,12 @@ export interface CopyTradeSettings {
   // Confidence an open needs under follow/fade when the data is only context
   // (copy_trade_context on another source).
   contextMinConfidence: number
+  // Signal-quality gates, 0/false = off (store.CoinSourceConfig).
+  minOpeners: number
+  minHitRate: number
+  minSamples: number
+  minVolumeM: number
+  trendFilter: boolean
 }
 // Same defaults and ranges as the backend (store.NormalizeCopyTrade).
 export const DEFAULT_COPY_TRADE: CopyTradeSettings = {
@@ -48,12 +54,21 @@ export const DEFAULT_COPY_TRADE: CopyTradeSettings = {
   limit: 5,
   minTraders: 2,
   contextMinConfidence: 40,
+  minOpeners: 0,
+  minHitRate: 0,
+  minSamples: 30,
+  minVolumeM: 0,
+  trendFilter: false,
 }
 export const COPY_TRADE_LIMITS = {
   minConfidence: { min: 10, max: 100 },
   limit: { min: 1, max: 10 },
   minTraders: { min: 1, max: 20 },
   contextMinConfidence: { min: 10, max: 100 },
+  minOpeners: { min: 0, max: 10 },
+  minHitRate: { min: 0, max: 100 },
+  minSamples: { min: 1, max: 1000 },
+  minVolumeM: { min: 0, max: 10000 },
 }
 const toHornInterval = (v?: string): HornInterval =>
   (hornIntervals as readonly string[]).includes(v || '')
@@ -338,6 +353,27 @@ export function formFromStrategy(strategy: Strategy): FreeForm {
         COPY_TRADE_LIMITS.contextMinConfidence,
         DEFAULT_COPY_TRADE.contextMinConfidence
       ),
+      minOpeners: clampNumber(
+        src?.copy_trade_min_openers,
+        COPY_TRADE_LIMITS.minOpeners,
+        DEFAULT_COPY_TRADE.minOpeners
+      ),
+      minHitRate: clampNumber(
+        src?.copy_trade_min_hit_rate,
+        COPY_TRADE_LIMITS.minHitRate,
+        DEFAULT_COPY_TRADE.minHitRate
+      ),
+      minSamples: clampNumber(
+        src?.copy_trade_min_samples,
+        COPY_TRADE_LIMITS.minSamples,
+        DEFAULT_COPY_TRADE.minSamples
+      ),
+      minVolumeM: clampNumber(
+        src?.copy_trade_min_volume_millions,
+        COPY_TRADE_LIMITS.minVolumeM,
+        DEFAULT_COPY_TRADE.minVolumeM
+      ),
+      trendFilter: Boolean(src?.copy_trade_trend_filter),
     },
     copyTradeContext: Boolean(src?.copy_trade_context),
     // Only a saved choice; unset takes the default of the source chosen
@@ -493,6 +529,18 @@ export function configFromForm(
                   ? (copyTrade.contextMinConfidence ??
                     DEFAULT_COPY_TRADE.contextMinConfidence)
                   : undefined,
+              ...(copy || form.copyTradeContext
+                ? {
+                    copy_trade_min_openers: copyTrade.minOpeners || undefined,
+                    copy_trade_min_hit_rate: copyTrade.minHitRate || undefined,
+                    copy_trade_min_samples: copyTrade.minHitRate
+                      ? copyTrade.minSamples
+                      : undefined,
+                    copy_trade_min_volume_millions:
+                      copyTrade.minVolumeM || undefined,
+                    copy_trade_trend_filter: copyTrade.trendFilter || undefined,
+                  }
+                : {}),
               static_coins:
                 horn || copy
                   ? []

@@ -72,6 +72,9 @@ type SideSummary struct {
 	// 24 hours. Both are among Traders.
 	Trapped int `json:"trapped"`
 	Fresh   int `json:"fresh"`
+	// Openers are fresh holders whose call counts: not trapped, not high
+	// frequency, not averaging down. Holding alone is not a call.
+	Openers int `json:"openers"`
 }
 
 // SymbolSummary is how followed traders hold one coin.
@@ -100,7 +103,9 @@ type Holder struct {
 	Score       float64 `json:"score"`
 	HighFreq    bool    `json:"high_freq"`
 	// Style is how the holder trades: scalp, swing, long, martingale, ...
-	Style              string    `json:"style,omitempty"`
+	Style string `json:"style,omitempty"`
+	// Accuracy of the holder's own calls (see Snapshot.Accuracy).
+	Accuracy           Accuracy  `json:"accuracy"`
 	PositionsUpdatedAt time.Time `json:"positions_updated_at"`
 	FillsUpdatedAt     time.Time `json:"fills_updated_at"`
 	ProfileUpdatedAt   time.Time `json:"profile_updated_at"`
@@ -152,12 +157,15 @@ func Symbols(snaps []Snapshot) []SymbolSummary {
 	martingale := map[string]bool{}
 	// New auto-follow picks, still being watched: their votes count half.
 	probation := map[string]bool{}
+	// Traders whose own calls proved right or wrong weigh more or less.
+	accuracy := map[string]float64{}
 	// One vote per trader and side.
 	votes := map[string]map[string]*vote{}
 	for _, s := range snaps {
 		balance[s.Follow.PortfolioID] = s.Follow.MarginBalance
 		martingale[s.Follow.PortfolioID] = s.Style.Martingale()
 		probation[s.Follow.PortfolioID] = onProbation(s.Follow, now)
+		accuracy[s.Follow.PortfolioID] = accuracyFactor(s.Accuracy)
 		counted := map[string]bool{}
 		gone := map[string]bool{}
 		hf := map[string]bool{}
@@ -204,6 +212,9 @@ func Symbols(snaps []Snapshot) []SymbolSummary {
 				}
 				if p.Fresh {
 					side.Fresh++
+					if !p.Trapped && !s.HighFreq && !s.Style.Martingale() {
+						side.Openers++
+					}
 				}
 			}
 			side.Value += p.EntryValue
@@ -237,6 +248,7 @@ func Symbols(snaps []Snapshot) []SymbolSummary {
 			if probation[v.trader] {
 				base *= probationWeight
 			}
+			base *= accuracy[v.trader]
 			// Age shapes how much the vote counts, not how healthy it is:
 			// Health must stay about losses only.
 			list = append(list, vote{trader: v.trader, side: v.side, score: v.score, base: base * hold,
@@ -273,7 +285,7 @@ func Holders(snaps []Snapshot, symbol string) []Holder {
 			f := s.Follow
 			out = append(out, Holder{Position: p, PortfolioID: f.PortfolioID, Nickname: f.Nickname, AvatarURL: f.AvatarURL,
 				ROI30: f.ROI, PnL30: f.PnL, WinRate30: f.WinRate, Score: s.Score.Score, HighFreq: s.HighFreq,
-				Style: s.Style.Kind, PositionsUpdatedAt: s.PositionsUpdatedAt,
+				Style: s.Style.Kind, Accuracy: s.Accuracy, PositionsUpdatedAt: s.PositionsUpdatedAt,
 				FillsUpdatedAt: s.FillsUpdatedAt, ProfileUpdatedAt: s.ProfileUpdatedAt})
 		}
 	}

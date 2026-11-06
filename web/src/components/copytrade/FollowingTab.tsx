@@ -104,6 +104,28 @@ function TraderCard({
           {tr(language, '胜率', 'Win')} {t.win_rate.toFixed(0)}%
         </span>
         <ScoreBadge score={snap.score} language={language} />
+        {snap.accuracy && snap.accuracy.calls >= 10 ? (
+          <span
+            className={`rounded bg-nofx-bg-deeper px-1.5 text-[11px] ${
+              snap.accuracy.rate >= 0.55
+                ? 'text-nofx-success'
+                : snap.accuracy.rate <= 0.45
+                  ? 'text-nofx-danger'
+                  : 'text-nofx-text-muted'
+            }`}
+            title={tr(
+              language,
+              `30 天里他自己的 ${snap.accuracy.calls} 次开仓/加仓（24 小时内重复的算一次），24 小时后方向对了 ${snap.accuracy.hits} 次，平均顺向 ${(snap.accuracy.avg_return * 100).toFixed(2)}%。准的人投票更重，满 30 次且明显低于 50% 会被自动关注淘汰。`,
+              `Of their own ${snap.accuracy.calls} opens/adds in 30 days (repeats within 24h count once), ${snap.accuracy.hits} moved their way 24h later, average ${(snap.accuracy.avg_return * 100).toFixed(2)}%. Accurate traders vote more; 30+ calls clearly under 50% get dropped by auto-follow.`
+            )}
+          >
+            {tr(
+              language,
+              `准确率 ${Math.round(snap.accuracy.rate * 100)}% / ${snap.accuracy.calls} 次`,
+              `Right ${Math.round(snap.accuracy.rate * 100)}% of ${snap.accuracy.calls}`
+            )}
+          </span>
+        ) : null}
         {styleLabel(language, snap.style?.kind) ? (
           <span
             className={`rounded bg-nofx-bg-deeper px-1.5 text-[11px] ${

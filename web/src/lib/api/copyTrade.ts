@@ -158,6 +158,7 @@ export interface TraderSnapshot {
   review?: string[]
   /** picked by auto-follow within 7 days; votes count half */
   probation?: boolean
+  accuracy?: TraderAccuracy
 }
 
 export interface AutoConfig {
@@ -230,6 +231,8 @@ export interface SideSummary {
   trapped: number
   /** holders who opened or added within 24 hours, among traders */
   fresh: number
+  /** fresh holders whose call counts: not trapped, not high-frequency, not averaging down */
+  openers?: number
 }
 
 /** A coin's direction among followed traders. */
@@ -270,9 +273,19 @@ export interface TraderStyle {
   loss_exit_share: number
 }
 
+/** How often a trader's own opens and adds moved their way within 24h. */
+export interface TraderAccuracy {
+  calls: number
+  hits: number
+  rate: number
+  avg_return: number
+}
+
 export interface HitRate {
   band: 'high' | 'mid' | 'low' | 'all'
   horizon: '4h' | '24h'
+  /** called side; 'all' sums both */
+  direction?: 'all' | 'long' | 'short'
   samples: number
   hits: number
   rate: number
@@ -295,6 +308,7 @@ export interface Holder extends TraderPosition, TraderBrief {
   high_freq: boolean
   /** scalp | swing | long | martingale | few_samples | unknown */
   style?: string
+  accuracy?: TraderAccuracy
 }
 export interface FeedQuery {
   portfolio_id?: string

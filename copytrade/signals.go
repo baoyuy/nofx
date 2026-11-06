@@ -158,16 +158,22 @@ func (m *Monitor) EvaluateSignals(ctx context.Context, now time.Time) error {
 	return nil
 }
 
-// HitRate is how often signals of one confidence band moved the called way.
+// HitRate is how often signals of one confidence band (and direction) moved
+// the called way.
 type HitRate struct {
-	Band    string  `json:"band"`    // high | mid | low | all
-	Horizon string  `json:"horizon"` // 4h | 24h
-	Samples int     `json:"samples"`
-	Hits    int     `json:"hits"`
-	Rate    float64 `json:"rate"` // hits / samples
+	Band    string `json:"band"`    // high | mid | low | all
+	Horizon string `json:"horizon"` // 4h | 24h
+	// Direction is the called side: long | short, or all.
+	Direction string  `json:"direction"`
+	Samples   int     `json:"samples"`
+	Hits      int     `json:"hits"`
+	Rate      float64 `json:"rate"` // hits / samples
 	// AvgReturn is the mean price change in the called direction.
 	AvgReturn float64 `json:"avg_return"`
 }
+
+// ConfidenceBand names the hit-rate band of a confidence score.
+func ConfidenceBand(score float64) string { return confidenceBand(score) }
 
 func confidenceBand(score float64) string {
 	switch {
@@ -190,6 +196,32 @@ func (m *Monitor) HitRates(sinceHour int64) ([]HitRate, error) {
 	return hitRates(sigs, sinceHour), nil
 }
 
+// hitRateCacheFor: the AI asks every cycle; the record changes hourly.
+const hitRateCacheFor = 10 * time.Minute
+
+// RecentHitRates is the 30-day 24h record per band and direction (rows of
+// one band and one side only), for the strategy engine, cached briefly.
+func (m *Monitor) RecentHitRates(now time.Time) []HitRate {
+	m.hitMu.Lock()
+	defer m.hitMu.Unlock()
+	if !m.hitAt.IsZero() && now.Sub(m.hitAt) < hitRateCacheFor {
+		return m.hitCache
+	}
+	rows, err := m.HitRates(now.Add(-30 * 24 * time.Hour).Unix())
+	if err != nil {
+		logger.Warnf("copy-trade: hit rates: %v", err)
+		return m.hitCache
+	}
+	var out []HitRate
+	for _, r := range rows {
+		if r.Horizon == "24h" && r.Band != "all" && r.Direction != "all" {
+			out = append(out, r)
+		}
+	}
+	m.hitCache, m.hitAt = out, now
+	return out
+}
+
 // hitRates counts each run of hourly signals once: a coin called the same way
 // hour after hour is one call, scored from its first hour. A run starts when
 // the coin had no signal the hour before or was called the other way.
@@ -209,15 +241,17 @@ func hitRates(sigs []store.CopyTradeSignal, sinceHour int64) []HitRate {
 			r = -r
 		}
 		for _, b := range []string{band, "all"} {
-			k := b + "|" + horizon
-			if sums[k] == nil {
-				sums[k] = &acc{}
-			}
-			a := sums[k]
-			a.n++
-			a.sum += r
-			if r > 0 {
-				a.hits++
+			for _, d := range []string{dir, "all"} {
+				k := b + "|" + horizon + "|" + d
+				if sums[k] == nil {
+					sums[k] = &acc{}
+				}
+				a := sums[k]
+				a.n++
+				a.sum += r
+				if r > 0 {
+					a.hits++
+				}
 			}
 		}
 	}
@@ -238,16 +272,18 @@ func hitRates(sigs []store.CopyTradeSignal, sinceHour int64) []HitRate {
 	var out []HitRate
 	for _, band := range []string{"high", "mid", "low", "all"} {
 		for _, h := range []string{"4h", "24h"} {
-			row := HitRate{Band: band, Horizon: h}
-			if a := sums[band+"|"+h]; a != nil && a.n > 0 {
-				row.Samples, row.Hits = a.n, a.hits
-				row.Rate = float64(a.hits) / float64(a.n)
-				row.AvgReturn = a.sum / float64(a.n)
+			for _, d := range []string{"all", "long", "short"} {
+				row := HitRate{Band: band, Horizon: h, Direction: d}
+				if a := sums[band+"|"+h+"|"+d]; a != nil && a.n > 0 {
+					row.Samples, row.Hits = a.n, a.hits
+					row.Rate = float64(a.hits) / float64(a.n)
+					row.AvgReturn = a.sum / float64(a.n)
+				}
+				if math.IsNaN(row.AvgReturn) {
+					row.AvgReturn = 0
+				}
+				out = append(out, row)
 			}
-			if math.IsNaN(row.AvgReturn) {
-				row.AvgReturn = 0
-			}
-			out = append(out, row)
 		}
 	}
 	return out

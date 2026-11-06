@@ -113,6 +113,9 @@ func TestSignalsRecordEvaluateAndHitRate(t *testing.T) {
 	}
 	found := false
 	for _, r := range rates {
+		if r.Direction != "all" {
+			continue
+		}
 		if r.Band == "all" && r.Horizon == "4h" {
 			found = true
 			// 99 → close of hour+3 (=103): long called right.
@@ -147,7 +150,7 @@ func TestHitRatesCountARunOfSignalsOnce(t *testing.T) {
 	rates := hitRates(sigs, 10*3600)
 	get := func(band string) HitRate {
 		for _, r := range rates {
-			if r.Band == band && r.Horizon == "4h" {
+			if r.Band == band && r.Horizon == "4h" && r.Direction == "all" {
 				return r
 			}
 		}
@@ -158,5 +161,14 @@ func TestHitRatesCountARunOfSignalsOnce(t *testing.T) {
 	}
 	if high, low := get("high"), get("low"); high.Samples != 1 || low.Samples != 0 {
 		t.Fatalf("a run takes the band of its first hour: high %+v low %+v", high, low)
+	}
+	// Split by the called side: one long run (right), two short runs (one right).
+	for _, r := range rates {
+		if r.Band == "all" && r.Horizon == "4h" && r.Direction == "long" && (r.Samples != 1 || r.Hits != 1) {
+			t.Fatalf("long runs: %+v", r)
+		}
+		if r.Band == "all" && r.Horizon == "4h" && r.Direction == "short" && (r.Samples != 2 || r.Hits != 1) {
+			t.Fatalf("short runs: %+v", r)
+		}
 	}
 }

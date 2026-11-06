@@ -21,6 +21,30 @@ type CopyTradeSide struct {
 	Trapped  int // deep in loss
 	Fresh    int // opened or added within 24h
 	HighFreq int // bots / grid traders, weighted down
+	// Openers: fresh holders whose call counts (not trapped, not high
+	// frequency, not averaging down).
+	Openers int
+}
+
+// CopyTradeHitRate is how often past signals of one confidence band and
+// direction moved the called way 24h later.
+type CopyTradeHitRate struct {
+	Band      string // high | mid | low
+	Direction string // long | short
+	Samples   int
+	Rate      float64 // 0-1
+}
+
+// copyTradeBand is the hit-rate band of a confidence (copytrade.ConfidenceBand).
+func copyTradeBand(confidence float64) string {
+	switch {
+	case confidence >= 70:
+		return "high"
+	case confidence >= 40:
+		return "mid"
+	default:
+		return "low"
+	}
 }
 
 // CopyTradeAction is one recent open, add, reduce or close.
@@ -62,6 +86,10 @@ type CopyTradeHolder struct {
 	// Style is how they trade: scalp, swing, long or martingale. Empty when
 	// there are too few trades to tell.
 	Style string
+	// Calls and Accuracy: how many of their own opens and adds were scored,
+	// and the share that moved their way within 24h (0-1).
+	Calls    int
+	Accuracy float64
 }
 
 // CopyTradeCoin is what followed lead traders do on one coin.
@@ -94,6 +122,22 @@ type CopyTradeView struct {
 	ProfilesFresh  int
 	// Reason explains missing data, e.g. "Binance is rate limiting requests".
 	Reason string
+	// HitRates are the measured 24h hit rates per band and direction.
+	HitRates []CopyTradeHitRate
+}
+
+// hitRate is the measured record of signals like a coin's current one.
+func (v *CopyTradeView) hitRate(confidence float64, direction string) (CopyTradeHitRate, bool) {
+	if v == nil {
+		return CopyTradeHitRate{}, false
+	}
+	band := copyTradeBand(confidence)
+	for _, r := range v.HitRates {
+		if r.Band == band && r.Direction == direction {
+			return r, true
+		}
+	}
+	return CopyTradeHitRate{Band: band, Direction: direction}, false
 }
 
 // complete tells whether every trader that can have data is fresh: only then
@@ -150,6 +194,10 @@ func copyTradeCandidates(source store.CoinSourceConfig) []CandidateCoin {
 		if c.Long.Traders+c.Short.Traders < source.CopyTradeMinTraders {
 			continue
 		}
+		// Holding is not a call: enough of them must have opened lately.
+		if source.CopyTradeMinOpeners > 0 && c.leading().Openers < source.CopyTradeMinOpeners {
+			continue
+		}
 		picked = append(picked, c)
 	}
 	sort.SliceStable(picked, func(a, b int) bool { return picked[a].Confidence > picked[b].Confidence })
@@ -160,9 +208,17 @@ func copyTradeCandidates(source store.CoinSourceConfig) []CandidateCoin {
 	for _, c := range picked {
 		out = append(out, CandidateCoin{Symbol: copyTradeKey(c.Symbol), Sources: []string{"copy_trade"}})
 	}
-	logger.Infof("👥 Copy-trade source: %d of %d followed coins pass (min confidence %.0f, %s, %d+ traders)",
-		len(out), len(coins), source.CopyTradeMinConfidence, source.CopyTradeDirection, source.CopyTradeMinTraders)
+	logger.Infof("👥 Copy-trade source: %d of %d followed coins pass (min confidence %.0f, %s, %d+ traders, %d+ fresh openers)",
+		len(out), len(coins), source.CopyTradeMinConfidence, source.CopyTradeDirection, source.CopyTradeMinTraders, source.CopyTradeMinOpeners)
 	return out
+}
+
+// leading is the side the traders lean to (long when neutral).
+func (c *CopyTradeCoin) leading() CopyTradeSide {
+	if c.Direction == "short" {
+		return c.Short
+	}
+	return c.Long
 }
 
 // usesCopyTradeContext tells whether the AI sees copy-trade summaries.
@@ -222,12 +278,29 @@ Some coins carry a "Followed lead traders" block: what Binance copy-trading lead
 - Lead traders hold for days. Judge their coins on the higher timeframes and give stops room for normal swings.
 - A line on a coin you hold saying the traders "closed or reduced recently", that no one holds it any more, or that they flipped means the side behind your position left. Treat it as an exit signal: tighten the stop or close unless your own read is clearly still valid.
 - Agreement with your own technical read can raise conviction; disagreement or mostly trapped holders should lower it. Never open a trade only because lead traders hold it.
+- "Fresh calls" counts traders who opened or added on that side in the last 24h and are not trapped, high-frequency or averaging down: a lean with no fresh calls is old positions, not a current view.
+- "Track record" is how often past signals of the same confidence band and direction moved the called way 24h later. Near or under 50% means no edge: weigh the lean little. "own calls right X% of N" on a holder is that trader's own 24h record.
 `)
 	switch follow {
 	case "follow":
 		sb.WriteString(fmt.Sprintf("- RULE (enforced by the program): open only in the lead traders' leaning direction on each coin, and only when their confidence is at least %.0f; opens against it, or on coins they do not lean on that clearly, are rejected. Closing is always allowed.\n", min))
 	case "fade":
 		sb.WriteString(fmt.Sprintf("- RULE (enforced by the program): open only AGAINST the lead traders' leaning direction on each coin, and only when their confidence is at least %.0f; opens with it, or on coins they do not lean on that clearly, are rejected. Closing is always allowed.\n", min))
+	}
+	if follow == "follow" || follow == "fade" {
+		source.NormalizeCopyTrade()
+		if n := source.CopyTradeMinOpeners; n > 0 {
+			sb.WriteString(fmt.Sprintf("- RULE (enforced): the leading side needs at least %d fresh calls.\n", n))
+		}
+		if r := source.CopyTradeMinHitRate; r > 0 {
+			sb.WriteString(fmt.Sprintf("- RULE (enforced): the track record of the coin's band and direction must be at least %.0f%% over %d+ signals (for fade: wrong at least that often).\n", r, source.CopyTradeMinSamples))
+		}
+		if source.CopyTradeTrendFilter {
+			sb.WriteString("- RULE (enforced): no long while the 4h EMA20 is below EMA50, no short while it is above.\n")
+		}
+	}
+	if v := source.CopyTradeMinVolumeM; v > 0 {
+		sb.WriteString(fmt.Sprintf("- RULE (enforced): no open on a coin that traded under %.0fM USDT in 24h.\n", v))
 	}
 	sb.WriteString("\n")
 	return sb.String()
@@ -266,6 +339,9 @@ func formatCopyTrade(c *CopyTradeCoin, cov *CopyTradeView, now time.Time, price 
 	if line := copyTradeVsAvg(c, price); line != "" {
 		sb.WriteString(line)
 	}
+	if line := copyTradeTrackRecord(c, cov); line != "" {
+		sb.WriteString(line)
+	}
 	if cov.complete() {
 		if line := copyTradeExitAlert(c, held); line != "" {
 			sb.WriteString(line)
@@ -283,6 +359,9 @@ func formatCopyTrade(c *CopyTradeCoin, cov *CopyTradeView, now time.Time, price 
 		}
 		if s.Fresh > 0 {
 			notes = append(notes, fmt.Sprintf("%d fresh", s.Fresh))
+		}
+		if s.Openers > 0 {
+			notes = append(notes, fmt.Sprintf("%d fresh calls", s.Openers))
 		}
 		if s.HighFreq > 0 {
 			notes = append(notes, fmt.Sprintf("%d high-frequency", s.HighFreq))
@@ -315,6 +394,9 @@ func formatCopyTrade(c *CopyTradeCoin, cov *CopyTradeView, now time.Time, price 
 				line += ", held " + formatCopyAgo(now.Sub(time.UnixMilli(h.OpenedAt)).Round(time.Minute))
 			} else {
 				line += ", held since before monitoring"
+			}
+			if h.Calls >= 10 {
+				line += fmt.Sprintf(", own calls right %.0f%% of %d", h.Accuracy*100, h.Calls)
 			}
 			var tags []string
 			if h.Trapped {
@@ -366,6 +448,23 @@ func formatCopyTrade(c *CopyTradeCoin, cov *CopyTradeView, now time.Time, price 
 		}
 	}
 	return sb.String()
+}
+
+// copyTradeTrackRecord is the measured 24h record of signals like this one.
+func copyTradeTrackRecord(c *CopyTradeCoin, cov *CopyTradeView) string {
+	if c.Direction != "long" && c.Direction != "short" {
+		return ""
+	}
+	hr, ok := cov.hitRate(c.Confidence, c.Direction)
+	if !ok || hr.Samples == 0 {
+		return fmt.Sprintf("- Track record: no scored %s-confidence %s signals yet\n", copyTradeBand(c.Confidence), c.Direction)
+	}
+	note := ""
+	if hr.Samples < 30 {
+		note = ", too few to rely on"
+	}
+	return fmt.Sprintf("- Track record: past %s-confidence %s signals moved the called way %.0f%% of %d times after 24h%s\n",
+		hr.Band, c.Direction, hr.Rate*100, hr.Samples, note)
 }
 
 func formatCopyPrice(p float64) string {
@@ -567,6 +666,14 @@ func (e *StrategyEngine) OpenBlockReason(d Decision, ctx *Context) string {
 		if (mode == "follow") != (lean == side) {
 			return fmt.Sprintf("copy-trade %s mode: lead traders lean %s on %s, open %s rejected", mode, lean, d.Symbol, side)
 		}
+		if reason := e.copyTradeSignalGate(c, ctx, mode, side, d.Symbol); reason != "" {
+			return reason
+		}
+	}
+	if usesCopyTradeContext(e.config.CoinSource) {
+		if reason := e.copyTradeVolumeGate(ctx, d.Symbol); reason != "" {
+			return reason
+		}
 	}
 	if min := e.config.RiskControl.MinStopATR; min > 0 && d.StopLoss > 0 {
 		atr, price := e.primaryATR(ctx, d.Symbol)
@@ -581,10 +688,7 @@ func (e *StrategyEngine) OpenBlockReason(d Decision, ctx *Context) string {
 
 // primaryATR is ATR14 and the price of symbol on the primary timeframe.
 func (e *StrategyEngine) primaryATR(ctx *Context, symbol string) (float64, float64) {
-	data := ctx.MarketDataMap[symbol]
-	if data == nil {
-		data = ctx.MarketDataMap[market.NormalizeFor(symbol, e.exchange)]
-	}
+	data := e.marketData(ctx, symbol)
 	if data == nil {
 		return 0, 0
 	}

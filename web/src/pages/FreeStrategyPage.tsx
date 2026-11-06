@@ -41,6 +41,7 @@ import { parseStrategyFile, strategyToJsonc } from '../lib/strategyFile'
 import { ProfitProtectionPanel } from '../components/strategy/ProfitProtectionPanel'
 import {
   CopyTradeContextToggle,
+  CopyTradeGates,
   CopyTradeSourcePanel,
 } from '../components/strategy/CopyTradeSource'
 import {
@@ -1039,6 +1040,16 @@ export function FreeStrategyPage() {
                       },
                     })
                   }
+                />
+              ) : null}
+              {!preservingSource &&
+              form.coinSource !== 'copy' &&
+              form.copyTradeContext ? (
+                <CopyTradeGates
+                  language={language}
+                  settings={form.copyTrade}
+                  onChange={(copyTrade) => patchForm({ copyTrade })}
+                  follow={form.copyTradeFollow || 'free'}
                 />
               ) : null}
             </Section>

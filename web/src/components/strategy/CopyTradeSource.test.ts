@@ -61,6 +61,17 @@ describe('copy-trade source', () => {
     ])
     expect(ids({ limit: 1 })).toEqual(['ETHUSDT'])
     expect(ids({ minConfidence: 60 })).toEqual(['ETHUSDT'])
+    // Fresh openers on the leading side: none in the sample coins.
+    expect(ids({ minOpeners: 1 })).toEqual([])
+    const withCalls = coins.map((c) =>
+      c.symbol === 'SNDKUSDT' ? { ...c, long: { ...c.long, openers: 2 } } : c
+    )
+    expect(
+      pickCopyTradeCoins(withCalls, {
+        ...DEFAULT_COPY_TRADE,
+        minOpeners: 2,
+      }).map((c) => c.symbol)
+    ).toEqual(['SNDKUSDT'])
   })
 
   it('round-trips through the strategy config', () => {
@@ -74,10 +85,16 @@ describe('copy-trade source', () => {
         ...base,
         coinSource: 'copy',
         copyTrade: {
+          ...DEFAULT_COPY_TRADE,
           minConfidence: 55,
           direction: 'short',
           limit: 3,
           minTraders: 4,
+          minOpeners: 2,
+          minHitRate: 55,
+          minSamples: 40,
+          minVolumeM: 20,
+          trendFilter: true,
         },
       },
       'zh',
@@ -91,6 +108,11 @@ describe('copy-trade source', () => {
       copy_trade_limit: 3,
       copy_trade_min_traders: 4,
       copy_trade_context: true,
+      copy_trade_min_openers: 2,
+      copy_trade_min_hit_rate: 55,
+      copy_trade_min_samples: 40,
+      copy_trade_min_volume_millions: 20,
+      copy_trade_trend_filter: true,
       static_coins: [],
     })
     const back = formFromStrategy({
@@ -104,7 +126,22 @@ describe('copy-trade source', () => {
       limit: 3,
       minTraders: 4,
       contextMinConfidence: 40,
+      minOpeners: 2,
+      minHitRate: 55,
+      minSamples: 40,
+      minVolumeM: 20,
+      trendFilter: true,
     })
+    // Gates at 0 are left out of the saved config (off).
+    const off = configFromForm(
+      null,
+      { ...base, coinSource: 'copy', copyTrade: DEFAULT_COPY_TRADE },
+      'zh',
+      null
+    ).ai_config!.coin_source
+    expect(off.copy_trade_min_openers).toBeUndefined()
+    expect(off.copy_trade_min_hit_rate).toBeUndefined()
+    expect(off.copy_trade_trend_filter).toBeUndefined()
 
     const staticCfg = configFromForm(
       null,

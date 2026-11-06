@@ -92,7 +92,8 @@ func copyTradeView(m *copytrade.Monitor, now time.Time) kernel.CopyTradeView {
 	}
 	recent := copytrade.RecentBySymbol(snaps, now.Add(-24*time.Hour).UnixMilli(), 6)
 	side := func(s copytrade.SideSummary) kernel.CopyTradeSide {
-		return kernel.CopyTradeSide{Traders: s.Traders, Value: s.Value, AvgEntry: s.AvgEntry, Trapped: s.Trapped, Fresh: s.Fresh}
+		return kernel.CopyTradeSide{Traders: s.Traders, Value: s.Value, AvgEntry: s.AvgEntry, Trapped: s.Trapped, Fresh: s.Fresh,
+			Openers: s.Openers}
 	}
 	sums := copytrade.Symbols(snaps)
 	// High-frequency holders per side, for the prompt.
@@ -143,6 +144,10 @@ func copyTradeView(m *copytrade.Monitor, now time.Time) kernel.CopyTradeView {
 		out = append(out, coin)
 	}
 	view.Coins = out
+	for _, r := range m.RecentHitRates(now) {
+		view.HitRates = append(view.HitRates, kernel.CopyTradeHitRate{Band: r.Band, Direction: r.Direction,
+			Samples: r.Samples, Rate: r.Rate})
+	}
 	return view
 }
 
@@ -565,7 +570,8 @@ func copyTradeHolders(holders []copytrade.Holder, highFreq map[string]bool) []ke
 			FirstEntryReturnPct: h.FirstEntryReturnPct, FirstEntryPctOfMargin: h.FirstEntryPctOfMargin,
 			FirstEntryThresholdPct: h.FirstEntryThresholdPct, PositionsUpdatedAt: h.PositionsUpdatedAt,
 			FillsUpdatedAt: h.FillsUpdatedAt, ProfileUpdatedAt: h.ProfileUpdatedAt,
-			Trapped: h.Trapped, Fresh: h.Fresh, HighFreq: highFreq[h.PortfolioID], Style: h.Style})
+			Trapped: h.Trapped, Fresh: h.Fresh, HighFreq: highFreq[h.PortfolioID], Style: h.Style,
+			Calls: h.Accuracy.Calls, Accuracy: h.Accuracy.Rate})
 	}
 	return out
 }

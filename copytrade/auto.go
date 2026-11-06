@@ -86,6 +86,9 @@ func DropReasons(s Snapshot, now time.Time) []string {
 	if s.Style.Martingale() {
 		out = append(out, RuleMartingale)
 	}
+	if s.Accuracy.inaccurate() {
+		out = append(out, RuleInaccurate)
+	}
 	if f.ROI < 0 {
 		out = append(out, RuleROINegative)
 	}

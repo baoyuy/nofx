@@ -127,6 +127,14 @@ export interface CoinSourceConfig {
   // Confidence an open needs under follow/fade when copy-trade data is only
   // context: 0-100, default 40. The copy_trade source uses copy_trade_min_confidence.
   copy_trade_context_min_confidence?: number
+  // Signal-quality gates (0/false = off): fresh openers on the leading side,
+  // measured 24h hit rate (%) over min samples, 24h traded value (M USDT),
+  // 4h trend filter.
+  copy_trade_min_openers?: number
+  copy_trade_min_hit_rate?: number
+  copy_trade_min_samples?: number
+  copy_trade_min_volume_millions?: number
+  copy_trade_trend_filter?: boolean
   // Show followed lead traders' positions to the AI with any coin source
   copy_trade_context?: boolean
   // Program-enforced: follow = open only their side, fade = only the other side, free = AI decides

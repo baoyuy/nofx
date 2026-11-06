@@ -166,6 +166,12 @@ export function ruleLabel(language: string, code: string): string {
       )
     case 'inactive':
       return tr(language, '两周没有交易', 'No trade for two weeks')
+    case 'inaccurate':
+      return tr(
+        language,
+        '自己的开仓 24 小时后对的不到一半',
+        'Own calls right under half the time'
+      )
     case 'over_target':
       return tr(language, '超出目标人数', 'Over the target count')
     case 'manual':
