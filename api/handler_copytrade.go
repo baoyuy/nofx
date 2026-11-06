@@ -51,6 +51,8 @@ func (s *Server) StartCopyTrade(ctx context.Context) {
 		logger.Warnf("copy-trade: saved proxy not used: %v", err)
 	}
 	s.copyTrade = m
+	// Off until the user turns it on; runs only after the first polls.
+	m.SetAuto(s.loadCopyTradeAuto())
 	// Before traders start: their first cycle reads this.
 	m.Load()
 	kernel.CopyTradeResolver = func() kernel.CopyTradeView { return copyTradeView(m, time.Now()) }
@@ -185,6 +187,7 @@ func (s *Server) registerCopyTradeRoutes(protected *gin.RouterGroup) {
 	protected.GET("/copytrade/proxy", s.handleCopyTradeProxyGet)
 	protected.PUT("/copytrade/proxy", s.handleCopyTradeProxyPut)
 	protected.POST("/copytrade/proxy/test", s.handleCopyTradeProxyTest)
+	s.registerCopyTradeAutoRoutes(protected)
 }
 
 func (s *Server) copyTradeReady(c *gin.Context) bool {
@@ -342,7 +345,8 @@ func (s *Server) handleCopyTradeUnfollow(c *gin.Context) {
 	if !s.copyTradeReady(c) {
 		return
 	}
-	if _, ok := s.copyTrade.Snapshot(c.Param("id")); !ok {
+	snap, ok := s.copyTrade.Snapshot(c.Param("id"))
+	if !ok {
 		SafeNotFound(c, "Followed trader")
 		return
 	}
@@ -350,6 +354,7 @@ func (s *Server) handleCopyTradeUnfollow(c *gin.Context) {
 		SafeInternalError(c, "Unfollow lead trader", err)
 		return
 	}
+	s.excludeUnfollowed(snap)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 

@@ -6,6 +6,7 @@ import { confirmToast, notify } from '../../lib/notify'
 import { tr, ui } from '../market/marketUi'
 import { NoticeText } from '../NoticeText'
 import { HealthTag, ScoreBadge } from './ConfidenceUi'
+import { AutoFollowPanel } from './AutoFollowPanel'
 import {
   actionClass,
   actionLabel,
@@ -14,6 +15,7 @@ import {
   clock,
   pct,
   price,
+  rulesLabel,
   sideClass,
   sideLabel,
   signedUsd,
@@ -137,7 +139,53 @@ function TraderCard({
         ) : null}
         {t.status && t.status !== 'ACTIVE' ? (
           <span className="rounded bg-nofx-danger/10 px-1.5 text-[11px] text-nofx-danger">
-            {t.status === 'CLOSED' ? tr(language, '已结束带单', 'Closed') : tr(language, '带单状态异常', t.status)}
+            {t.status === 'CLOSED'
+              ? tr(language, '已结束带单', 'Closed')
+              : tr(language, '带单状态异常', t.status)}
+          </span>
+        ) : null}
+        <span
+          className="rounded bg-nofx-bg-deeper px-1.5 text-[11px] text-nofx-text-muted"
+          title={
+            t.source === 'manual'
+              ? tr(
+                  language,
+                  '你手动关注的，自动关注不会取关他',
+                  'You followed this one; auto-follow never drops it'
+                )
+              : tr(
+                  language,
+                  '自动关注管理的，不达标会被淘汰',
+                  'Managed by auto-follow; dropped when it falls below the bar'
+                )
+          }
+        >
+          {t.source === 'manual'
+            ? tr(language, '手动', 'Manual')
+            : tr(language, '自动', 'Auto')}
+        </span>
+        {snap.probation ? (
+          <span
+            className="rounded bg-nofx-gold/10 px-1.5 text-[11px] text-nofx-gold"
+            title={tr(
+              language,
+              '自动关注新选的人，观察 7 天，期间投票只算一半',
+              'New auto pick, watched for 7 days; its votes count half'
+            )}
+          >
+            {tr(language, '观察期', 'Probation')}
+          </span>
+        ) : null}
+        {snap.review?.length ? (
+          <span
+            className="rounded bg-nofx-danger/10 px-1.5 text-[11px] text-nofx-danger"
+            title={rulesLabel(language, snap.review.join(','))}
+          >
+            {t.source === 'manual'
+              ? tr(language, '建议移除', 'Consider dropping')
+              : tr(language, '不达标', 'Below the bar')}
+            {'：'}
+            {rulesLabel(language, snap.review.join(','))}
           </span>
         ) : null}
         <span className={`ml-auto ${ui.muted}`}>
@@ -321,17 +369,21 @@ export function FollowingTab({
   }, [snaps, sort, style])
   if (!snaps.length) {
     return (
-      <p className={`${ui.panel} py-10 text-center ${ui.muted}`}>
-        {tr(
-          language,
-          '还没有关注任何带单员。到「发现交易员」里挑选，或直接粘贴带单员主页链接。',
-          'Not following anyone yet. Pick traders under "Discover", or paste a lead trader page link.'
-        )}
-      </p>
+      <div>
+        <AutoFollowPanel language={language} onChanged={onChanged} />
+        <p className={`${ui.panel} py-10 text-center ${ui.muted}`}>
+          {tr(
+            language,
+            '还没有关注任何带单员。开启上面的自动关注，或到「发现交易员」里挑选，或直接粘贴带单员主页链接。',
+            'Not following anyone yet. Turn on auto-follow above, pick traders under "Discover", or paste a lead trader page link.'
+          )}
+        </p>
+      </div>
     )
   }
   return (
     <div>
+      <AutoFollowPanel language={language} onChanged={onChanged} />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <select
           className={`${ui.inputInline}`}

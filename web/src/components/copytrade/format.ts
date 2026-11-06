@@ -142,3 +142,55 @@ export function styleHint(language: string, kind?: string): string {
       return ''
   }
 }
+
+/** An auto-follow drop rule, or the reason of a log entry, for people. */
+export function ruleLabel(language: string, code: string): string {
+  switch (code) {
+    case 'closed':
+      return tr(language, '已停止带单', 'Stopped leading')
+    case 'private':
+      return tr(language, '私域账户，看不到成交', 'Private, trades hidden')
+    case 'martingale':
+      return tr(language, '摊平型', 'Averages down')
+    case 'roi_negative':
+      return tr(language, '30 天收益为负', 'Negative 30-day ROI')
+    case 'mdd_high':
+      return tr(language, '30 天回撤超过 40%', '30-day drawdown over 40%')
+    case 'balance_low':
+      return tr(language, '余额低于 1000 U', 'Balance under 1,000 USDT')
+    case 'stale_trapped':
+      return tr(
+        language,
+        '过半持仓是一周以上的被套单',
+        'Over half the book is week-old trapped positions'
+      )
+    case 'inactive':
+      return tr(language, '两周没有交易', 'No trade for two weeks')
+    case 'over_target':
+      return tr(language, '超出目标人数', 'Over the target count')
+    case 'manual':
+      return tr(language, '你手动取消关注', 'You unfollowed')
+    default:
+      if (code.startsWith('roi90=')) {
+        const m = /roi90=(-?\d+),mdd90=(-?\d+)/.exec(code)
+        if (m)
+          return tr(
+            language,
+            `90 天收益 ${m[1]}%，回撤 ${m[2]}%`,
+            `90-day ROI ${m[1]}%, drawdown ${m[2]}%`
+          )
+      }
+      return code
+  }
+}
+
+/** Comma-separated rule codes, labelled. */
+export function rulesLabel(language: string, codes: string): string {
+  // A pick reason is one item even though it has a comma.
+  if (codes.startsWith('roi90=')) return ruleLabel(language, codes)
+  return codes
+    .split(',')
+    .filter(Boolean)
+    .map((c) => ruleLabel(language, c))
+    .join(tr(language, '、', ', '))
+}

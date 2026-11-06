@@ -39,6 +39,13 @@ type CopyTradeFollow struct {
 	// PublicID is the trader's public portfolio, if any.
 	Private  bool   `gorm:"column:private" json:"private"`
 	PublicID string `gorm:"column:public_id" json:"public_id,omitempty"`
+	// Source is "auto" for traders the auto-follow manager picked and may drop,
+	// "manual" for ones the user followed, which it never drops. Follows from
+	// before auto-follow existed count as auto.
+	Source string `gorm:"column:source;default:auto" json:"source"`
+	// PickedAt is when the auto-follow manager picked the trader (ms); 0 for
+	// manual follows and for those from before auto-follow existed.
+	PickedAt int64 `gorm:"column:picked_at" json:"picked_at,omitempty"`
 
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"followed_at"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"-"`
@@ -71,7 +78,62 @@ func NewCopyTradeStore(db *gorm.DB) *CopyTradeStore { return &CopyTradeStore{db:
 func (s *CopyTradeStore) InitTables() error { return s.initTables() }
 
 func (s *CopyTradeStore) initTables() error {
-	return s.db.AutoMigrate(&CopyTradeFollow{}, &CopyTradeFill{}, &CopyTradeSignal{})
+	return s.db.AutoMigrate(&CopyTradeFollow{}, &CopyTradeFill{}, &CopyTradeSignal{},
+		&CopyTradeExclusion{}, &CopyTradeAutoLog{})
+}
+
+// CopyTradeExclusion keeps a lead trader out of auto-follow until Until (ms;
+// 0 = for good): dropped for low quality, or unfollowed by the user.
+type CopyTradeExclusion struct {
+	PortfolioID string `gorm:"column:portfolio_id;primaryKey" json:"portfolio_id"`
+	Nickname    string `gorm:"column:nickname" json:"nickname"`
+	// Reason is a comma-separated list of rule codes, or "manual".
+	Reason    string `gorm:"column:reason" json:"reason"`
+	Until     int64  `gorm:"column:until" json:"until"`
+	CreatedAt int64  `gorm:"column:created_at" json:"created_at"`
+}
+
+func (CopyTradeExclusion) TableName() string { return "copytrade_exclusions" }
+
+// CopyTradeAutoLog is one action of the auto-follow manager.
+type CopyTradeAutoLog struct {
+	ID          int64  `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	Time        int64  `gorm:"column:time;index" json:"time"`
+	Action      string `gorm:"column:action" json:"action"` // follow | drop | trim
+	PortfolioID string `gorm:"column:portfolio_id" json:"portfolio_id"`
+	Nickname    string `gorm:"column:nickname" json:"nickname"`
+	Reason      string `gorm:"column:reason" json:"reason"`
+}
+
+func (CopyTradeAutoLog) TableName() string { return "copytrade_auto_log" }
+
+// Exclude upserts an exclusion.
+func (s *CopyTradeStore) Exclude(e CopyTradeExclusion) error { return s.db.Save(&e).Error }
+
+func (s *CopyTradeStore) Unexclude(id string) error {
+	return s.db.Delete(&CopyTradeExclusion{}, "portfolio_id = ?", id).Error
+}
+
+// Exclusions returns the exclusions still in force at nowMs, newest first.
+func (s *CopyTradeStore) Exclusions(nowMs int64) ([]CopyTradeExclusion, error) {
+	var out []CopyTradeExclusion
+	err := s.db.Where("until = 0 OR until > ?", nowMs).Order("created_at DESC").Find(&out).Error
+	return out, err
+}
+
+// AddAutoLog records an action and keeps the newest 500.
+func (s *CopyTradeStore) AddAutoLog(l CopyTradeAutoLog) error {
+	if err := s.db.Create(&l).Error; err != nil {
+		return err
+	}
+	return s.db.Exec("DELETE FROM copytrade_auto_log WHERE id <= (SELECT id FROM copytrade_auto_log ORDER BY id DESC LIMIT 1 OFFSET 500)").Error
+}
+
+// AutoLogs returns actions at or after sinceMs, newest first, at most limit.
+func (s *CopyTradeStore) AutoLogs(sinceMs int64, limit int) ([]CopyTradeAutoLog, error) {
+	var out []CopyTradeAutoLog
+	err := s.db.Where("time >= ?", sinceMs).Order("time DESC, id DESC").Limit(limit).Find(&out).Error
+	return out, err
 }
 
 // CopyTradeSignal is one hourly snapshot of a coin's direction confidence

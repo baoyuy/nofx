@@ -74,6 +74,10 @@ export interface FollowedTrader {
   private?: boolean
   /** the same trader's public portfolio, when private */
   public_id?: string
+  /** auto = picked by auto-follow (may be dropped); manual = never dropped */
+  source?: 'auto' | 'manual'
+  /** ms when auto-follow picked the trader */
+  picked_at?: number
   followed_at: string
 }
 
@@ -150,6 +154,56 @@ export interface TraderSnapshot {
   high_freq: boolean
   /** Holding-time style and whether they average into losses. */
   style: TraderStyle
+  /** auto-follow drop rules broken (codes, see ruleLabel) */
+  review?: string[]
+  /** picked by auto-follow within 7 days; votes count half */
+  probation?: boolean
+}
+
+export interface AutoConfig {
+  enabled: boolean
+  target: number
+}
+
+export interface AutoState {
+  config: AutoConfig
+  last_run: string
+  error?: string
+  added: number
+  dropped: number
+  trimmed: number
+  checked: number
+  candidates: number
+  running: boolean
+}
+
+export interface AutoLog {
+  id: number
+  time: number
+  action: 'follow' | 'drop' | 'trim'
+  portfolio_id: string
+  nickname: string
+  /** rule codes, comma separated */
+  reason: string
+}
+
+export interface AutoExclusion {
+  portfolio_id: string
+  nickname: string
+  reason: string
+  /** ms; 0 = for good */
+  until: number
+  created_at: number
+}
+
+export interface AutoFollowInfo {
+  state: AutoState
+  log: AutoLog[] | null
+  exclusions: AutoExclusion[] | null
+  auto_follows: number
+  manual_follows: number
+  min_target: number
+  max_target: number
 }
 
 export interface FeedItem extends TradeEvent {
@@ -342,6 +396,24 @@ export const copyTradeApi = {
 
   getHitRate: (days = 30) =>
     get<{ days: number; rows: HitRate[] }>('/copytrade/hit-rate', { days }),
+
+  getAutoFollow: () => get<AutoFollowInfo>('/copytrade/auto'),
+
+  async setAutoFollow(cfg: AutoConfig): Promise<AutoState> {
+    const r = await httpClient.request<{ state: AutoState }>(
+      `${API_BASE}/copytrade/auto`,
+      { method: 'PUT', data: cfg, silent: true }
+    )
+    return unwrap(r, 'Save failed').state
+  },
+
+  async removeAutoExclusion(id: string): Promise<void> {
+    const r = await httpClient.request<{ ok: boolean }>(
+      `${API_BASE}/copytrade/auto/exclusions/${encodeURIComponent(id)}`,
+      { method: 'DELETE', silent: true }
+    )
+    unwrap(r, 'Remove failed')
+  },
 
   getCopyTradeProxy: () =>
     get<{ proxy: string; configured: boolean }>('/copytrade/proxy'),

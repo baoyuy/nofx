@@ -116,20 +116,26 @@ func openedValue(p Position) float64 {
 	return p.EntryValue
 }
 
-// holdFactor scales a vote by how long the position has been held: one opened
-// minutes ago is a snapshot, one that survived moves for hours is a view. An
-// unknown age (opened before the stored fills) counts as long held.
+// holdFactor scales a vote by how long the position has been held. A
+// position opened minutes ago may be noise; one opened in the last few days
+// is the trader's current view; one held for a week or more is mostly a loss
+// being sat out (most old positions are under water) and fades. An unknown
+// age means it was opened before the 30 days of stored fills: oldest of all.
 func holdFactor(p Position, now time.Time) float64 {
 	if p.PreExisting || p.OpenedAt <= 0 {
-		return 1
+		return 0.3
 	}
 	switch age := now.Sub(time.UnixMilli(p.OpenedAt)); {
 	case age < time.Hour:
 		return 0.6
 	case age < 4*time.Hour:
 		return 0.8
-	default:
+	case age < 3*24*time.Hour:
 		return 1
+	case age < 7*24*time.Hour:
+		return 0.6
+	default:
+		return 0.3
 	}
 }
 
@@ -144,11 +150,14 @@ func Symbols(snaps []Snapshot) []SymbolSummary {
 	balance := map[string]float64{}
 	// Traders who average into losses: their size says little, see style.go.
 	martingale := map[string]bool{}
+	// New auto-follow picks, still being watched: their votes count half.
+	probation := map[string]bool{}
 	// One vote per trader and side.
 	votes := map[string]map[string]*vote{}
 	for _, s := range snaps {
 		balance[s.Follow.PortfolioID] = s.Follow.MarginBalance
 		martingale[s.Follow.PortfolioID] = s.Style.Martingale()
+		probation[s.Follow.PortfolioID] = onProbation(s.Follow, now)
 		counted := map[string]bool{}
 		gone := map[string]bool{}
 		hf := map[string]bool{}
@@ -225,8 +234,13 @@ func Symbols(snaps []Snapshot) []SymbolSummary {
 			if martingale[v.trader] {
 				base *= martingaleWeight
 			}
-			list = append(list, vote{trader: v.trader, side: v.side, score: v.score, base: base,
-				weight: base * health * hold})
+			if probation[v.trader] {
+				base *= probationWeight
+			}
+			// Age shapes how much the vote counts, not how healthy it is:
+			// Health must stay about losses only.
+			list = append(list, vote{trader: v.trader, side: v.side, score: v.score, base: base * hold,
+				weight: base * hold * health})
 		}
 		s.Confidence = confidence(list)
 		if q := qty[s.Symbol+"long"]; q > 0 {

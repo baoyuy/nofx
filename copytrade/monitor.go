@@ -65,6 +65,11 @@ type Snapshot struct {
 	// say much about direction.
 	OrdersPerDay int  `json:"orders_per_day"`
 	HighFreq     bool `json:"high_freq"`
+	// Review lists the auto-follow drop rules the trader breaks (see
+	// DropReasons). Manual follows are only flagged, never dropped.
+	Review []string `json:"review,omitempty"`
+	// Probation: picked by auto-follow within the last 7 days; votes count half.
+	Probation bool `json:"probation,omitempty"`
 
 	// Independent deadlines keep history backfills from blocking live work.
 	nextDue     time.Time // pause / initial stagger
@@ -95,6 +100,8 @@ type Monitor struct {
 	boards  map[string]cachedBoard
 
 	loadOnce sync.Once
+
+	auto autoManager
 }
 
 type cachedBoard struct {
@@ -143,6 +150,7 @@ func (m *Monitor) Run(ctx context.Context) {
 	m.Load()
 	go m.signalLoop(ctx)
 	go m.markLoop(ctx)
+	go m.autoLoop(ctx)
 	prune := time.NewTicker(time.Hour)
 	defer prune.Stop()
 	for {
@@ -309,16 +317,31 @@ func (m *Monitor) Follow(ctx context.Context, id string) (*store.CopyTradeFollow
 			return nil, ErrPrivate
 		}
 	}
-	f := store.CopyTradeFollow{PortfolioID: id}
+	f := store.CopyTradeFollow{PortfolioID: id, Source: "manual"}
 	applyDetail(&f, d)
-	if err := m.store.SaveFollow(&f); err != nil {
+	if err := m.addFollow(f); err != nil {
 		return nil, err
 	}
+	// Following by hand lifts an earlier drop or unfollow.
+	if err := m.store.Unexclude(id); err != nil {
+		logger.Warnf("copy-trade: clear exclusion of %s: %v", id, err)
+	}
+	return &f, nil
+}
+
+// addFollow saves a follow and schedules its first poll.
+func (m *Monitor) addFollow(f store.CopyTradeFollow) error {
+	if err := m.canFollow(f.PortfolioID); err != nil {
+		return err
+	}
+	if err := m.store.SaveFollow(&f); err != nil {
+		return err
+	}
 	m.mu.Lock()
-	m.snaps[id] = &Snapshot{Follow: f, PositionsSource: "inferred", nextDue: time.Now()}
+	m.snaps[f.PortfolioID] = &Snapshot{Follow: f, PositionsSource: "inferred", nextDue: time.Now()}
 	m.mu.Unlock()
 	m.poke()
-	return &f, nil
+	return nil
 }
 
 // ErrPrivate refuses a private portfolio with no public one to follow.
@@ -371,11 +394,13 @@ func (m *Monitor) Snapshot(id string) (Snapshot, bool) {
 	return m.view(s, m.currentMarks(), time.Now()), true
 }
 
-// view copies a snapshot with its score and position health.
+// view copies a snapshot with its score, position health and review.
 func (m *Monitor) view(s *Snapshot, marks map[string]float64, now time.Time) Snapshot {
 	snap := *s
 	snap.Score = ScoreTrader(snap.Follow, now)
 	snap.Positions = assessHealth(s.Positions, marks, snap.Follow.MarginBalance, now)
+	snap.Review = DropReasons(snap, now)
+	snap.Probation = onProbation(snap.Follow, now)
 	return snap
 }
 

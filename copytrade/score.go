@@ -83,7 +83,8 @@ type vote struct {
 	trader string
 	side   string
 	weight float64
-	// base is weight without the health, hold and style factors.
+	// base is weight without the health factor (stake, score, style and age
+	// are in it).
 	base  float64
 	score float64
 	// Summed while collecting: entry value, entry value × health, the value
