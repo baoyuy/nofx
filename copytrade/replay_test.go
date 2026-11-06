@@ -177,3 +177,25 @@ func TestFeedPages(t *testing.T) {
 		t.Fatalf("past the end = %d items, total %d", len(page), total)
 	}
 }
+
+// Every round trip records its own opening size, so adding to a reopened
+// position does not make the vote weigh more (FirstValue fell to 0 before).
+func TestReplayOpeningSizePerRoundTrip(t *testing.T) {
+	positions, _ := Replay([]Fill{
+		fill(1000, "BUY", "LONG", 1, 100, 0),
+		fill(2000, "SELL", "LONG", 1, 110, 10), // first trip closed
+		fill(10000, "BUY", "LONG", 1, 100, 0),  // reopened: one order,
+		fill(11000, "BUY", "LONG", 2, 100, 0),  // two fills
+		fill(60000, "BUY", "LONG", 9, 90, 0),   // averaged down later
+	})
+	if len(positions) != 1 {
+		t.Fatalf("positions = %+v", positions)
+	}
+	p := positions[0]
+	if !approx(p.FirstEntry, 100) || !approx(p.FirstValue, 300) || !approx(p.EntryValue, 1110) {
+		t.Fatalf("opening size of the second trip: %+v", p)
+	}
+	if got := openedValue(p); !approx(got, 300) {
+		t.Fatalf("vote size must be the opening size, got %v", got)
+	}
+}

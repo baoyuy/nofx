@@ -129,8 +129,8 @@ export function styleHint(language: string, kind?: string): string {
     case 'martingale':
       return tr(
         language,
-        '亏损时反复加仓、多半亏损离场：仓位越重越可能是在摊平，票权只算 0.3。',
-        'Keeps adding to losing positions and mostly exits at a loss: a bigger position means averaging down, so its vote counts 0.3.'
+        '亏损时反复加仓、等回本再走：仓位越重越可能是在摊平，票权只算 0.3。',
+        'Keeps adding to losing positions and waits to break even: a bigger position means averaging down, so its vote counts 0.3.'
       )
     case 'few_samples':
       return tr(

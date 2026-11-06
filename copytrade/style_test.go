@@ -56,7 +56,7 @@ func TestStyleOfHoldingTime(t *testing.T) {
 }
 
 // Averaging into a losing position is what makes a martingale, whatever its
-// holding time: one add per trade, made underwater, over half closed at a loss.
+// holding time: one add per trade, made underwater, however the trade ends.
 func TestStyleOfMartingale(t *testing.T) {
 	fills := repeats(7, 48, func(i int64) []Fill {
 		// Opened at 100, averaged at 90, closed at 85: every trip loses.
@@ -68,6 +68,15 @@ func TestStyleOfMartingale(t *testing.T) {
 	}
 	if got.AddsPerTrade != 1 || got.AdverseAddShare != 1 || got.LossExitShare != 1 {
 		t.Fatalf("measures: %+v", got)
+	}
+	// The usual one: averages down twice and waits for the bounce, so every
+	// trip closes green. Winning exits must not hide it.
+	green := repeats(7, 48, func(i int64) []Fill {
+		// Opened at 100, averaged at 90 and 80, closed at 95.
+		return roundTrip("BTCUSDT", i, i+24, 100, 95, 90, 80)
+	})
+	if got := StyleOf(green); got.Kind != StyleMartingale || got.LossExitShare != 0 || got.AddsPerTrade != 2 {
+		t.Fatalf("averaging down with green exits: %+v", got)
 	}
 	// Adding to a position that is winning is conviction, not martingale.
 	better := repeats(7, 48, func(i int64) []Fill {

@@ -178,8 +178,14 @@ func ReplayKnown(fills []Fill, pre map[string]bool) ([]Position, []Event) {
 			emit(key, base)
 		case b.q == 0 || (b.q > 0) == (delta > 0):
 			action := "add"
+			if b.q != 0 && !b.pre && f.Time-b.openedAt <= mergeWindowMs {
+				// Another fill of the opening order.
+				b.firstQty += f.Qty
+			}
 			if b.q == 0 {
-				action, b.openedAt, b.first = "open", f.Time, f.Price
+				// Every new round trip starts its own opening size, not only
+				// the first one of the book.
+				action, b.openedAt, b.first, b.firstQty = "open", f.Time, f.Price, f.Qty
 				// Already held before the stored fills: this fill adds to a
 				// position whose open time and size we never saw.
 				if pre[PreKey(f.Symbol, sideOf(delta))] {

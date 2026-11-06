@@ -29,13 +29,12 @@ const (
 	longMinHold    = 72 * time.Hour
 	minStyleTrades = 5
 
-	// martingaleAddsPerTrade, martingaleAdverseShare and martingaleLossShare
-	// are the bar for StyleMartingale: on average at least one add per trade,
-	// over half of those adds made while underwater, and over half the trades
-	// closed at a loss.
+	// martingaleAddsPerTrade and martingaleAdverseShare are the bar for
+	// StyleMartingale: on average at least one add per trade, and over half of
+	// those adds made while underwater. How the trades end does not matter: a
+	// trader who averages down and waits to break even mostly exits green.
 	martingaleAddsPerTrade = 1.0
 	martingaleAdverseShare = 0.5
-	martingaleLossShare    = 0.5
 
 	// martingaleWeight scales a martingale's vote. Adding to a losing position
 	// makes the size look like conviction when it is the opposite.
@@ -176,8 +175,7 @@ func StyleOf(fills []Fill) Style {
 	switch {
 	case trips < minStyleTrades:
 		style.Kind = StyleFewSamples
-	case style.AddsPerTrade >= martingaleAddsPerTrade && style.AdverseAddShare >= martingaleAdverseShare &&
-		style.LossExitShare >= martingaleLossShare:
+	case style.AddsPerTrade >= martingaleAddsPerTrade && style.AdverseAddShare >= martingaleAdverseShare:
 		style.Kind = StyleMartingale
 	case median < scalpMaxHold.Hours():
 		style.Kind = StyleScalp
