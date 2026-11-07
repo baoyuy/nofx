@@ -12,7 +12,6 @@ import { LogOut, Loader2, Eye, EyeOff, Copy, Check } from 'lucide-react'
 import { DeepVoidBackground } from '../components/common/DeepVoidBackground'
 import { NofxSelect } from '../components/ui/select'
 import { GridRiskPanel } from '../components/strategy/GridRiskPanel'
-import { MirrorPanel } from '../components/trader/MirrorPanel'
 import type {
     SystemStatus,
     AccountInfo,
@@ -603,15 +602,6 @@ export function TraderDashboardPage({
                             refreshInterval={5000}
                         />
                     </div>
-                )}
-
-                {/* Copy trading: other accounts copy this AI */}
-                {selectedTraderId && (
-                    <MirrorPanel
-                        language={language}
-                        traderId={selectedTraderId}
-                        traderExchangeId={selectedTrader.exchange_id}
-                    />
                 )}
 
                 {/* Main Content Area */}

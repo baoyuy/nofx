@@ -4,11 +4,12 @@ import { SWRConfig } from 'swr'
 import { TerminalDashboard } from './TerminalDashboard'
 import type { DecisionRecord } from '../../types'
 
-const mocks = vi.hoisted(() => ({ flow: vi.fn(), rank: vi.fn(), stats: vi.fn(), history: vi.fn(), config: vi.fn(), matrix: vi.fn() }))
+const mocks = vi.hoisted(() => ({ flow: vi.fn(), rank: vi.fn(), stats: vi.fn(), history: vi.fn(), config: vi.fn(), matrix: vi.fn(), links: vi.fn() }))
 vi.mock('../../contexts/LanguageContext', () => ({ useLanguage: () => ({ language: 'en' }) }))
 vi.mock('../../lib/api', () => ({ api: {
   getFlowMarkets: mocks.flow, getDirectionChangeLeaderboard: mocks.rank,
   getFullStats: mocks.stats, getPositionHistory: mocks.history, getTraderConfig: mocks.config,
+  getMirrorLinks: mocks.links,
 } }))
 vi.mock('../../lib/demo/useDemoEngine', () => ({ useDemoEngine: () => null }))
 vi.mock('./OrchestrationTopology', () => ({ OrchestrationTopology: () => null }))
@@ -29,6 +30,7 @@ beforeEach(() => {
   mocks.stats.mockResolvedValue({ total_pnl: 0, total_fee: 0, profit_factor: 0, max_drawdown_pct: 0, total_trades: 0, win_trades: 0, loss_trades: 0, win_rate: 0, sharpe_ratio: 0, avg_win: 0, avg_loss: 0 })
   mocks.history.mockResolvedValue({ positions: [] })
   mocks.config.mockResolvedValue({})
+  mocks.links.mockResolvedValue([])
 })
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.clearAllMocks() })
 
@@ -67,4 +69,14 @@ it('isolates one-second clocks from panel rendering and does not refetch on focu
   expect(mocks.flow).toHaveBeenCalledTimes(1)
   expect(mocks.stats).toHaveBeenCalledTimes(1)
   expect(screen.getByText('Dashboard')).toBeVisible()
+})
+
+it('shows copy trading for the selected trader', async () => {
+  render(<SWRConfig value={{ provider: () => new Map() }}>
+    <TerminalDashboard selectedTraderId="one" onTraderSelect={() => {}} />
+  </SWRConfig>)
+  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  expect(screen.getByText('Copy trading')).toBeVisible()
+  expect(screen.getByText('+ New copy')).toBeVisible()
+  expect(mocks.links).toHaveBeenCalledWith('one')
 })

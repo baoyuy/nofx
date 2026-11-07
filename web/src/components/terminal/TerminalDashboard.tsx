@@ -23,6 +23,7 @@ import { EdgeProfile } from './EdgeProfile'
 import { useDemoEngine } from '../../lib/demo/useDemoEngine'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { TerminalTime } from './TerminalTime'
+import { MirrorPanel } from '../trader/MirrorPanel'
 
 // Public market snapshots are shared across traders; focus must not trigger
 // expensive scans. Keep the existing refresh budgets and hidden-page pause.
@@ -582,6 +583,21 @@ export function TerminalDashboard({
           />
         </div>
         <div className="tm-rule" />
+
+        {/* copy trading: the user's other Binance accounts copy this AI */}
+        {traderId && !on && (
+          <>
+            <div style={sc}>
+              <MirrorPanel
+                language={language}
+                traderId={traderId}
+                traderExchangeId={selectedTrader?.exchange_id}
+                className="mb-0 p-0"
+              />
+            </div>
+            <div className="tm-rule" />
+          </>
+        )}
 
         {/* ── row 3: execution log · risk radar · recent trades ── */}
         <div className="tm-grid-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr)' }}>

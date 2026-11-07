@@ -33,20 +33,25 @@ export function MirrorPanel({
   language,
   traderId,
   traderExchangeId,
+  className = 'nofx-glass mb-6 p-6',
 }: {
   language: string
   traderId: string
   traderExchangeId?: string
+  className?: string
 }) {
-  const { data: links, mutate } = useSWR<MirrorLink[]>(
+  const {
+    data: links,
+    error,
+    mutate,
+  } = useSWR<MirrorLink[]>(
     `mirror-links-${traderId}`,
     () => api.getMirrorLinks(traderId),
     { refreshInterval: 10000 }
   )
   const [adding, setAdding] = useState(false)
-  if (!links) return null
   return (
-    <section className="nofx-glass mb-6 p-6">
+    <section className={className}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h2 className="text-lg font-bold uppercase tracking-wide text-nofx-text-main">
           <span className="text-nofx-gold">⇉</span>{' '}
@@ -59,7 +64,7 @@ export function MirrorPanel({
             "Your other Binance accounts (real or paper) copy this AI's orders as they happen. Positions open before the start are not copied."
           )}
         </span>
-        {!adding ? (
+        {links && !adding ? (
           <button
             type="button"
             className={`${ui.btnGhost} ml-auto`}
@@ -69,25 +74,35 @@ export function MirrorPanel({
           </button>
         ) : null}
       </div>
-      {adding ? (
+      {!links ? (
+        error ? (
+          <p role="alert" className="text-xs text-nofx-danger">
+            {tr(language, '跟单数据加载失败：', 'Could not load copies: ')}
+            {errorText(error)}
+          </p>
+        ) : (
+          <Loader2 className="h-4 w-4 animate-spin text-nofx-text-muted" />
+        )
+      ) : null}
+      {links && adding ? (
         <NewLink
           language={language}
           traderId={traderId}
           traderExchangeId={traderExchangeId}
-          taken={links.map((l) => l.exchange_id)}
+          taken={(links || []).map((l) => l.exchange_id)}
           onDone={() => {
             setAdding(false)
             void mutate()
           }}
         />
       ) : null}
-      {links.length === 0 && !adding ? (
+      {links && links.length === 0 && !adding ? (
         <p className={ui.muted}>
           {tr(language, '还没有跟单账户。', 'No copies yet.')}
         </p>
       ) : null}
       <div className="grid gap-3">
-        {links.map((l) => (
+        {(links || []).map((l) => (
           <LinkCard
             key={l.id}
             language={language}
