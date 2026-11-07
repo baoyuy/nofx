@@ -289,6 +289,7 @@ func FormatPositions(positions []map[string]interface{}) []map[string]interface{
 // action: open_long, open_short, close_long, close_short
 // entryPrice: entry price when closing (0 when opening)
 func (at *AutoTrader) recordAndConfirmOrder(orderResult map[string]interface{}, symbol, action string, quantity float64, price float64, leverage int, entryPrice float64) {
+	notifyPositionChange(at.id)
 	if at.store == nil {
 		return
 	}

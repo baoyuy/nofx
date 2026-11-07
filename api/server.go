@@ -11,6 +11,7 @@ import (
 	"nofx/internal/apischeduler"
 	"nofx/logger"
 	"nofx/manager"
+	"nofx/mirror"
 	"nofx/store"
 	"os"
 	"strings"
@@ -37,6 +38,8 @@ type Server struct {
 	telegramReloadCh          chan<- struct{} // signal Telegram bot to reload
 	authLimiter               *ipRateLimiter  // per-IP throttle for login/register
 	copyTrade                 *copytrade.Monitor
+	mirror                    *mirror.Engine
+	mirrorCtx                 context.Context
 	proxyTestMu               sync.Mutex
 	proxyTestAt               time.Time
 }
@@ -214,6 +217,7 @@ func (s *Server) setupRoutes() {
 		s.registerCoinPoolRoutes(protected)
 		s.registerMarketBoardRoutes(protected)
 		s.registerCopyTradeRoutes(protected)
+		s.registerMirrorRoutes(protected)
 		protected.GET("/api-scheduler/status", s.handleAPISchedulerStatus)
 		// UI-only secret export: do not register in the AI route/tool catalog.
 		protected.POST("/wallet/export", s.handleWalletExport)

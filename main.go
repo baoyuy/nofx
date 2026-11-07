@@ -130,6 +130,8 @@ func main() {
 	if err := traderManager.LoadTradersFromStore(st); err != nil {
 		logger.Fatalf("❌ Failed to load traders: %v", err)
 	}
+	// Accounts copying AI traders need the traders loaded.
+	server.StartMirror(copyTradeCtx)
 
 	// Display loaded trader information
 	traders, err := st.Trader().List("default")

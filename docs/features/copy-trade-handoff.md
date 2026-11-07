@@ -165,6 +165,14 @@ gofmt 会对齐结构体字段；新字段加在结构体中间时注意对齐�
 - 多空分开的命中率：带单页「历史命中率」面板可选「多空合计 / 只看偏多 / 只看偏空」。
 - 前端：策略页带单面板和「附带带单参考」下都有「信号质量门槛」；「我的关注」卡片显示个人准确率；「按币种」显示有效新开人数。
 
+**第七批（跟单：别的币安账户跟看板上的 AI 下单）**
+- 和上面「跟币安带单员」是两件事：这里 AI 交易员是带单方，用户自己的其他币安账户（实盘 `binance` 或模拟盘 `binance_paper`）是跟单方。只支持币安。
+- 后端 `mirror/`：每个运行中的跟单（`mirror_links`）一个 goroutine，每 10 秒对比一次 AI 和跟单账户的持仓（`plan.go`，纯函数），按差异开/加/减/平。AI 自己下单后经 `trader.SetPositionHook` 立刻唤醒（等 3 秒让 AI 挂好止损），交易所侧触发的止损止盈/强平靠 10 秒轮询发现。每个 AI 仓位的跟单状态存在 `mirror_positions`，记录在 `mirror_events`（每个跟单保留 1000 条）。
+- 规则：开始（或重新开始）时 AI 已有的仓位和这期间的加仓不跟，只跟之后的；平仓和减仓总是跟。固定金额 = 每单 `fixed_margin` U 保证金；按比例 = AI 这单保证金占它权益的比例 × `ratio` × 跟单账户权益。杠杆跟 AI（`max_leverage` 封顶，0 不限）或固定。`follow_protect` 跟 AI 的止盈止损（每 30 秒或下单后对比一次，变了就撤掉该币的止盈止损重挂）；不跟也会跟着 AI 平仓。加仓/减仓按 AI 的变化比例。开仓失败跳过并记原因，平仓失败每轮重试（同样的错误 10 分钟只记一次）。跟单仓位被外部平掉后不再重开。用户在同一个币上自己多拿的部分，AI 平仓时不动。`max_margin` 单笔保证金上限；`max_loss` 账户比开始时亏这么多就平掉跟单仓位并停止。
+- 账户互斥（`api/handler_mirror.go` 的 `mirrorBusy`，每轮都查）：不能是 AI 自己的账户，不能有正在运行的 AI 交易员在用，不能被另一个运行中的跟单占用。同一个 API key 配成两行也算同一个账户。实盘必须带 `confirm_real`。
+- 接口：`GET /api/mirror/accounts`、`GET/POST /api/mirror/links`、`PUT/DELETE /api/mirror/links/:id`、`POST /api/mirror/links/:id/start|stop`（stop 可带 `close_positions`）、`GET /api/mirror/links/:id/events`。前端 `web/src/components/trader/MirrorPanel.tsx` 在看板页。
+- 测试：`mirror/engine_test.go`（假账户跑完整开/加/减/平/止损、比例、亏损上限、失败重试、外部平仓）、`api/handler_mirror_test.go`（账户安全检查）、`web/src/components/trader/mirrorFormat.test.ts`。
+
 **其他**
 - 私密账户批量换成公开账户，没有公开账户的取消关注；老关注重新回填到 30 天（把 `FillsUntil` 置 0 会触发回填，每个账户最多 25 页请求）。
 - 「代理设置」在设置页的「数据」标签里，不是带单页的 tab；要挪位置属于产品决定，没动。

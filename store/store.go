@@ -32,6 +32,7 @@ type Store struct {
 	marketAnalysis *MarketAnalysisStore
 	coinPool       *CoinPoolStore
 	copyTrade      *CopyTradeStore
+	mirror         *MirrorStore
 	telegramConfig TelegramConfigStore
 
 	mu sync.RWMutex
@@ -175,6 +176,9 @@ func (s *Store) initTables() error {
 	}
 	if err := s.CopyTrade().initTables(); err != nil {
 		return fmt.Errorf("failed to initialize copy-trade tables: %w", err)
+	}
+	if err := s.Mirror().initTables(); err != nil {
+		return fmt.Errorf("failed to initialize mirror tables: %w", err)
 	}
 	return nil
 }
@@ -337,6 +341,16 @@ func (s *Store) CopyTrade() *CopyTradeStore {
 		s.copyTrade = NewCopyTradeStore(s.gdb)
 	}
 	return s.copyTrade
+}
+
+// Mirror gets the storage of accounts copying AI traders
+func (s *Store) Mirror() *MirrorStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.mirror == nil {
+		s.mirror = NewMirrorStore(s.gdb)
+	}
+	return s.mirror
 }
 
 // TelegramConfig gets Telegram bot configuration storage

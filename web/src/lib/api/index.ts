@@ -7,6 +7,7 @@ import { walletApi } from './wallet'
 import { marketApi } from './market'
 import { coinPoolApi } from './coinPool'
 import { copyTradeApi } from './copyTrade'
+import { mirrorApi } from './mirror'
 
 export const api = {
   ...traderApi,
@@ -18,4 +19,5 @@ export const api = {
   ...marketApi,
   ...coinPoolApi,
   ...copyTradeApi,
+  ...mirrorApi,
 }
