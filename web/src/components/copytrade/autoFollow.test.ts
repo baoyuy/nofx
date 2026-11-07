@@ -28,4 +28,14 @@ describe('auto-follow rule labels', () => {
       '90-day ROI 120%, drawdown 15%'
     )
   })
+
+  it('reads why a candidate was not picked', () => {
+    expect(rulesLabel('zh', 'pick_balance=3000')).toBe(
+      '余额 3000 U，不到 5000 U'
+    )
+    expect(rulesLabel('zh', 'pick_roi30=-5,mdd30=12')).toBe(
+      '近 30 天收益 -5%，回撤 12%'
+    )
+    expect(rulesLabel('en', 'private')).toBe('Private, trades hidden')
+  })
 })

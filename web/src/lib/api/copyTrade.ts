@@ -181,7 +181,7 @@ export interface AutoState {
 export interface AutoLog {
   id: number
   time: number
-  action: 'follow' | 'drop' | 'trim'
+  action: 'follow' | 'drop' | 'trim' | 'skip'
   portfolio_id: string
   nickname: string
   /** rule codes, comma separated */

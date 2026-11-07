@@ -152,8 +152,9 @@ func TestRunAutoPicksAndKeepsManualFollows(t *testing.T) {
 		fake.details[id] = map[string]any{"leadPortfolioId": id, "nickname": "L" + id, "status": "ACTIVE",
 			"positionShow": true, "marginBalance": "20000", "portfolioType": "PUBLIC"}
 	}
-	fake.details["102"]["positionShow"] = false  // hidden positions: skipped
-	fake.details["103"]["marginBalance"] = "300" // too small: skipped
+	fake.details["102"]["positionShow"] = false      // hidden positions: inferred from fills, picked
+	fake.details["103"]["marginBalance"] = "300"     // too small: skipped
+	fake.details["106"]["portfolioType"] = "PRIVATE" // trades hidden: skipped
 	srv := httptest.NewServer(fake)
 	defer srv.Close()
 	m := NewMonitor(st)
@@ -177,9 +178,9 @@ func TestRunAutoPicksAndKeepsManualFollows(t *testing.T) {
 	for _, s := range m.Snapshots() {
 		ids[s.Follow.PortfolioID] = s.Follow.Source
 	}
-	// 101, 105, 106 picked; 102, 103 fail the profile check; 104 is excluded;
+	// 101, 102, 105 picked; 103, 106 fail the profile check; 104 is excluded;
 	// the closed manual follow is flagged but kept.
-	for _, id := range []string{"101", "105", "106"} {
+	for _, id := range []string{"101", "102", "105"} {
 		if ids[id] != "auto" {
 			t.Fatalf("%s not picked: %v", id, ids)
 		}
@@ -200,8 +201,13 @@ func TestRunAutoPicksAndKeepsManualFollows(t *testing.T) {
 		t.Fatalf("rejected picks were checked again: %d → %d", before, after)
 	}
 	logs, _ := st.AutoLogs(0, 10)
-	if len(logs) != 3 || logs[0].Action != "follow" {
-		t.Fatalf("logs = %+v", logs)
+	actions := map[string]string{}
+	for _, l := range logs {
+		actions[l.PortfolioID] = l.Action + ":" + l.Reason
+	}
+	if len(logs) != 5 || actions["103"] != "skip:"+RejectBalance+"=300" || actions["106"] != "skip:"+RulePrivate ||
+		!strings.HasPrefix(actions["102"], "follow:") {
+		t.Fatalf("logs = %v", actions)
 	}
 	// Lowering the target trims the weakest picks, never the manual follow.
 	m.SetAuto(AutoConfig{Enabled: true, Target: MinAutoTarget})
@@ -217,5 +223,21 @@ func TestRunAutoOff(t *testing.T) {
 	m.RunAuto(context.Background(), time.Now())
 	if len(fake.calls) != 0 || len(m.Snapshots()) != 0 {
 		t.Fatalf("auto-follow off made requests: %v", fake.calls)
+	}
+}
+
+func TestPickRejectAcceptsHiddenPositions(t *testing.T) {
+	ok := Detail{Status: "ACTIVE", PortfolioType: "PUBLIC", MarginBalance: 8000}
+	if r := pickReject(ok); r != "" {
+		t.Fatalf("hidden positions rejected: %q", r)
+	}
+	for want, d := range map[string]Detail{
+		RulePrivate:             {Status: "ACTIVE", PortfolioType: "PRIVATE", MarginBalance: 8000},
+		RuleClosed:              {Status: "CLOSED", MarginBalance: 8000},
+		RejectBalance + "=3000": {Status: "ACTIVE", MarginBalance: 3000},
+	} {
+		if r := pickReject(d); r != want {
+			t.Errorf("pickReject = %q, want %q", r, want)
+		}
 	}
 }

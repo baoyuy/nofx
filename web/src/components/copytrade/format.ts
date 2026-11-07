@@ -177,6 +177,23 @@ export function ruleLabel(language: string, code: string): string {
     case 'manual':
       return tr(language, '你手动取消关注', 'You unfollowed')
     default:
+      if (code.startsWith('pick_balance=')) {
+        const v = code.slice('pick_balance='.length)
+        return tr(
+          language,
+          `余额 ${v} U，不到 5000 U`,
+          `Balance ${v} USDT, under 5,000`
+        )
+      }
+      if (code.startsWith('pick_roi30=')) {
+        const m = /pick_roi30=(-?\d+),mdd30=(-?\d+)/.exec(code)
+        if (m)
+          return tr(
+            language,
+            `近 30 天收益 ${m[1]}%，回撤 ${m[2]}%`,
+            `30-day ROI ${m[1]}%, drawdown ${m[2]}%`
+          )
+      }
       if (code.startsWith('roi90=')) {
         const m = /roi90=(-?\d+),mdd90=(-?\d+)/.exec(code)
         if (m)
@@ -193,7 +210,8 @@ export function ruleLabel(language: string, code: string): string {
 /** Comma-separated rule codes, labelled. */
 export function rulesLabel(language: string, codes: string): string {
   // A pick reason is one item even though it has a comma.
-  if (codes.startsWith('roi90=')) return ruleLabel(language, codes)
+  if (codes.startsWith('roi90=') || codes.startsWith('pick_roi30='))
+    return ruleLabel(language, codes)
   return codes
     .split(',')
     .filter(Boolean)

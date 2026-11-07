@@ -63,6 +63,12 @@ const (
 	RuleInactive     = "inactive"      // no trade and nothing held for 2 weeks
 )
 
+// Entry-bar rejections of a candidate, logged as "skip" with the value.
+const (
+	RejectBalance = "pick_balance" // balance below pickMinBalance
+	Reject30D     = "pick_roi30"   // last 30 days lost or drew down too much
+)
+
 // onProbation tells a pick the manager made less than probation ago.
 func onProbation(f store.CopyTradeFollow, now time.Time) bool {
 	return f.Source != "manual" && f.PickedAt > 0 && now.Sub(time.UnixMilli(f.PickedAt)) < probation
@@ -208,15 +214,14 @@ func pickable(rows []Leader, skip map[string]bool, now time.Time) []Leader {
 
 // pickReject tells why a profile fails the entry bar, or "".
 func pickReject(d Detail) string {
+	// Hidden positions are fine: they are inferred from the public fills.
 	switch {
 	case d.Private():
-		return "private"
-	case !d.PositionShow:
-		return "positions hidden"
+		return RulePrivate
 	case d.Status != "" && !strings.EqualFold(d.Status, "ACTIVE"):
-		return "not leading"
+		return RuleClosed
 	case float64(d.MarginBalance) < pickMinBalance:
-		return "balance below " + fmt.Sprint(pickMinBalance)
+		return fmt.Sprintf("%s=%.0f", RejectBalance, float64(d.MarginBalance))
 	}
 	return ""
 }
@@ -423,6 +428,11 @@ func (m *Monitor) fillAuto(ctx context.Context, cfg AutoConfig, now time.Time, s
 			m.auto.mu.Lock()
 			m.auto.rejected[r.PortfolioID] = now.Add(24 * time.Hour)
 			m.auto.mu.Unlock()
+			logger.Infof("copy-trade auto-follow: skip %s (%s)", r.Nickname, reject)
+			if err := m.store.AddAutoLog(store.CopyTradeAutoLog{Time: now.UnixMilli(), Action: "skip", PortfolioID: r.PortfolioID,
+				Nickname: r.Nickname, Reason: reject}); err != nil {
+				return err
+			}
 			continue
 		}
 		f.Source, f.PickedAt = "auto", now.UnixMilli()
@@ -459,7 +469,7 @@ func (m *Monitor) checkPick(ctx context.Context, id string) (string, store.CopyT
 		return "", f, err
 	}
 	if perf.ROI <= 0 || float64(perf.MDD) > pickMaxMDD {
-		return "30-day results", f, nil
+		return fmt.Sprintf("%s=%.0f,mdd30=%.0f", Reject30D, float64(perf.ROI), float64(perf.MDD)), f, nil
 	}
 	applyDetail(&f, d)
 	f.ROI, f.PnL, f.MDD, f.WinRate = float64(perf.ROI), float64(perf.PnL), float64(perf.MDD), float64(perf.WinRate)

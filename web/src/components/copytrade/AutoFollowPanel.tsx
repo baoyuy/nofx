@@ -13,7 +13,9 @@ const actionText = (language: string, a: string) =>
     ? tr(language, '关注', 'Followed')
     : a === 'drop'
       ? tr(language, '淘汰', 'Dropped')
-      : tr(language, '减员', 'Trimmed')
+      : a === 'skip'
+        ? tr(language, '未通过', 'Not picked')
+        : tr(language, '减员', 'Trimmed')
 
 /**
  * Auto-follow: the user sets how many lead traders to follow; the backend
@@ -159,8 +161,8 @@ export function AutoFollowPanel({
       <p className={`${ui.muted} mt-1`}>
         {tr(
           language,
-          '每小时检查一次。补人：从币安 90 天跟单收益榜里挑带单满 60 天、90 天收益为正且回撤不超过 30%、跟单者赚钱、公开持仓、余额至少 5000 U、近 30 天也赚钱的人，每次最多补 10 人（每人要回填 30 天成交，比较慢）。新关注的人观察 7 天，期间投票只算一半。淘汰：摊平型、30 天收益为负、回撤超过 40%、余额低于 1000 U、过半持仓是一周以上的被套单、两周没交易，每天最多淘汰目标人数的 10%，淘汰后 30 天内不再选他。你手动关注的人只标记，不会被自动取关；你手动取关的人不会再被自动选回来。',
-          "Checks hourly. Picks from Binance's 90-day copier-PnL board: leading 60+ days, positive 90-day ROI with drawdown ≤ 30%, copiers in profit, public positions, balance ≥ 5,000 USDT and a profitable last 30 days; at most 10 per run (each backfills 30 days of trades, which is slow). New picks are watched for 7 days and vote half. Drops traders who average down, lose over 30 days, draw down over 40%, fall under 1,000 USDT, sit on week-old trapped positions for over half their book, or stop trading for two weeks; at most 10% of the target a day, kept out for 30 days. Your manual follows are only flagged, never dropped; traders you unfollow are not picked again."
+          '每小时检查一次。补人：从币安 90 天跟单收益榜里挑带单满 60 天、90 天收益为正且回撤不超过 30%、跟单者赚钱、不是私域账户、余额至少 5000 U、近 30 天也赚钱的人（不公开持仓的也可以，持仓按公开成交推算），每次最多补 10 人（每人要回填 30 天成交，比较慢）。新关注的人观察 7 天，期间投票只算一半。淘汰：摊平型、30 天收益为负、回撤超过 40%、余额低于 1000 U、过半持仓是一周以上的被套单、两周没交易，每天最多淘汰目标人数的 10%，淘汰后 30 天内不再选他。你手动关注的人只标记，不会被自动取关；你手动取关的人不会再被自动选回来。',
+          "Checks hourly. Picks from Binance's 90-day copier-PnL board: leading 60+ days, positive 90-day ROI with drawdown ≤ 30%, copiers in profit, not private (hidden positions are fine, they are inferred from public trades), balance ≥ 5,000 USDT and a profitable last 30 days; at most 10 per run (each backfills 30 days of trades, which is slow). New picks are watched for 7 days and vote half. Drops traders who average down, lose over 30 days, draw down over 40%, fall under 1,000 USDT, sit on week-old trapped positions for over half their book, or stop trading for two weeks; at most 10% of the target a day, kept out for 30 days. Your manual follows are only flagged, never dropped; traders you unfollow are not picked again."
         )}
       </p>
       {log.length || exclusions.length ? (
@@ -191,7 +193,9 @@ export function AutoFollowPanel({
                   className={
                     l.action === 'follow'
                       ? 'text-nofx-success'
-                      : 'text-nofx-danger'
+                      : l.action === 'skip'
+                        ? 'text-nofx-text-muted'
+                        : 'text-nofx-danger'
                   }
                 >
                   {actionText(language, l.action)}
