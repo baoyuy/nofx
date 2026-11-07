@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Component, useState, type ReactNode } from 'react'
 import useSWR from 'swr'
 import { Loader2 } from 'lucide-react'
 import { api } from '../../lib/api'
@@ -25,11 +25,39 @@ const fmt = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '--')
 
 const signed = (v: number) => `${v >= 0 ? '+' : ''}${fmt(v)}`
 
+/** Keeps a crash in the copy panel from blanking the whole dashboard. */
+class PanelBoundary extends Component<
+  { language: string; children: ReactNode },
+  { error?: Error }
+> {
+  state: { error?: Error } = {}
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+  render() {
+    if (!this.state.error) return this.props.children
+    return (
+      <p role="alert" className="text-xs text-nofx-danger">
+        {tr(this.props.language, '跟单区域出错：', 'Copy trading failed: ')}
+        {this.state.error.message}
+      </p>
+    )
+  }
+}
+
 /**
  * Copy trading on the dashboard: other Binance accounts of the user (real
  * or paper) copy the selected AI trader's positions.
  */
-export function MirrorPanel({
+export function MirrorPanel(props: Parameters<typeof MirrorPanelInner>[0]) {
+  return (
+    <PanelBoundary language={props.language}>
+      <MirrorPanelInner {...props} />
+    </PanelBoundary>
+  )
+}
+
+function MirrorPanelInner({
   language,
   traderId,
   traderExchangeId,
@@ -269,8 +297,10 @@ function LinkCard({
   const [editing, setEditing] = useState<MirrorForm | null>(null)
   const [showEvents, setShowEvents] = useState(false)
   const st = link.status
-  const copied = link.positions.filter((p) => !p.skip && p.follower_qty > 0)
-  const skipped = link.positions.filter((p) => p.skip)
+  const copied = (link.positions || []).filter(
+    (p) => !p.skip && p.follower_qty > 0
+  )
+  const skipped = (link.positions || []).filter((p) => p.skip)
 
   const act = async (f: () => Promise<unknown>, done?: string) => {
     setBusy(true)
@@ -482,7 +512,7 @@ function LinkCard({
           </button>
         </div>
       ) : null}
-      {st && st.positions.length ? (
+      {st?.positions?.length ? (
         <table className="mt-2 w-full text-xs">
           <thead className={ui.muted}>
             <tr>
@@ -507,7 +537,7 @@ function LinkCard({
             </tr>
           </thead>
           <tbody className="text-nofx-text">
-            {st.positions.map((p) => (
+            {(st.positions || []).map((p) => (
               <tr key={`${p.symbol}-${p.side}`}>
                 <td>{p.symbol}</td>
                 <td

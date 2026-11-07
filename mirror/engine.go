@@ -169,6 +169,12 @@ func (e *Engine) Status(linkID string) (Status, bool) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.status.UpdatedAt.IsZero() {
+		return Status{}, false // no tick yet
+	}
+	if r.status.Positions == nil {
+		r.status.Positions = []FollowerHolding{}
+	}
 	return r.status, true
 }
 

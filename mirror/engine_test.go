@@ -306,3 +306,16 @@ func TestStartAndStopLinkClosingTheCopies(t *testing.T) {
 		t.Fatalf("link %+v, follower %v", l, g.follower.orders)
 	}
 }
+
+func TestStatusIsHiddenUntilTheFirstTick(t *testing.T) {
+	g := newRig(t, store.MirrorLink{SizeMode: "fixed", FixedMargin: 10, LeverageMode: "fixed", Leverage: 1})
+	g.e.runners["L1"] = g.r
+	if _, ok := g.e.Status("L1"); ok {
+		t.Fatal("status before any tick")
+	}
+	g.tick()
+	st, ok := g.e.Status("L1")
+	if !ok || st.Positions == nil {
+		t.Fatalf("status = %+v %v", st, ok)
+	}
+}
