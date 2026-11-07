@@ -252,15 +252,31 @@ export const DEFAULT_PROFIT_PROTECTION: ProfitProtectionConfig = {
 
 // Mirrors store.NormalizeProfitProtection. Zero activations/giveback use defaults;
 // a zero lock means fee/slippage-adjusted breakeven, NOT zero-cost execution.
-export function normalizeProfitProtection(value?: Partial<ProfitProtectionConfig>): ProfitProtectionConfig {
-  const positive = (v: number | undefined, fallback: number, min: number, max: number) =>
+export function normalizeProfitProtection(
+  value?: Partial<ProfitProtectionConfig>
+): ProfitProtectionConfig {
+  const positive = (
+    v: number | undefined,
+    fallback: number,
+    min: number,
+    max: number
+  ) =>
     !Number.isFinite(v) || v === 0 ? fallback : Math.max(min, Math.min(max, v!))
   const activation = positive(value?.breakeven_activation_pct, 2, 0.1, 100)
   return {
     enabled: value?.enabled === true,
     breakeven_activation_pct: activation,
-    breakeven_lock_pct: clampNumber(value?.breakeven_lock_pct, { min: 0, max: activation }, 0),
-    trailing_activation_pct: positive(value?.trailing_activation_pct, 5, 0.1, 100),
+    breakeven_lock_pct: clampNumber(
+      value?.breakeven_lock_pct,
+      { min: 0, max: activation },
+      0
+    ),
+    trailing_activation_pct: positive(
+      value?.trailing_activation_pct,
+      5,
+      0.1,
+      100
+    ),
     trailing_giveback_pct: positive(value?.trailing_giveback_pct, 40, 1, 99),
   }
 }
@@ -531,14 +547,14 @@ export function configFromForm(
                   : undefined,
               ...(copy || form.copyTradeContext
                 ? {
-                    copy_trade_min_openers: copyTrade.minOpeners || undefined,
-                    copy_trade_min_hit_rate: copyTrade.minHitRate || undefined,
-                    copy_trade_min_samples: copyTrade.minHitRate
-                      ? copyTrade.minSamples
-                      : undefined,
-                    copy_trade_min_volume_millions:
-                      copyTrade.minVolumeM || undefined,
-                    copy_trade_trend_filter: copyTrade.trendFilter || undefined,
+                    // Sent even when 0 / false: the backend merges a save into
+                    // the stored config, so a missing key keeps the old value
+                    // and a gate could never be turned off.
+                    copy_trade_min_openers: copyTrade.minOpeners,
+                    copy_trade_min_hit_rate: copyTrade.minHitRate,
+                    copy_trade_min_samples: copyTrade.minSamples,
+                    copy_trade_min_volume_millions: copyTrade.minVolumeM,
+                    copy_trade_trend_filter: copyTrade.trendFilter,
                   }
                 : {}),
               static_coins:
@@ -597,7 +613,9 @@ export function configFromForm(
         min_risk_reward_ratio: form.minRiskReward,
         min_stop_atr: form.minStopATR || 0,
         min_confidence: form.minConfidence,
-        profit_protection: normalizeProfitProtection(form.profitProtection ?? ai?.risk_control.profit_protection),
+        profit_protection: normalizeProfitProtection(
+          form.profitProtection ?? ai?.risk_control.profit_protection
+        ),
       },
       custom_prompt: form.customPrompt.trim(),
       prompt_sections: sections,

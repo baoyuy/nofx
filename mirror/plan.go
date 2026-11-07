@@ -189,10 +189,14 @@ func plan(leader, follower map[string]Position, states []store.MirrorPosition, f
 	return out
 }
 
-// leverageFor is the follower's leverage for a copy of l.
+// leverageFor is the follower's leverage for a copy of l: the fixed one, or
+// the AI's capped at MaxLeverage. The cap only applies when following.
 func leverageFor(link store.MirrorLink, l Position) int {
+	if link.LeverageMode == "fixed" {
+		return max(link.Leverage, 1)
+	}
 	lev := l.Leverage
-	if link.LeverageMode == "fixed" || lev <= 0 {
+	if lev <= 0 {
 		lev = link.Leverage
 	}
 	if link.MaxLeverage > 0 && lev > link.MaxLeverage {

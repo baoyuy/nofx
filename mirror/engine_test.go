@@ -319,3 +319,18 @@ func TestStatusIsHiddenUntilTheFirstTick(t *testing.T) {
 		t.Fatalf("status = %+v %v", st, ok)
 	}
 }
+
+func TestFixedLeverageIsNotCappedByTheFollowCap(t *testing.T) {
+	l := Position{Leverage: 5}
+	fixed := store.MirrorLink{LeverageMode: "fixed", Leverage: 20, MaxLeverage: 10}
+	if got := leverageFor(fixed, l); got != 20 {
+		t.Fatalf("fixed 20x opened at %dx", got)
+	}
+	follow := store.MirrorLink{LeverageMode: "follow", Leverage: 20, MaxLeverage: 10}
+	if got := leverageFor(follow, Position{Leverage: 25}); got != 10 {
+		t.Fatalf("follow capped at 10 opened at %dx", got)
+	}
+	if got := leverageFor(follow, l); got != 5 {
+		t.Fatalf("follow 5x opened at %dx", got)
+	}
+}

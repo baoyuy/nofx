@@ -132,16 +132,18 @@ describe('copy-trade source', () => {
       minVolumeM: 20,
       trendFilter: true,
     })
-    // Gates at 0 are left out of the saved config (off).
+    // Gates turned off are sent as 0 / false: the backend merges a save
+    // into the stored config, so leaving them out kept the old values.
     const off = configFromForm(
       null,
       { ...base, coinSource: 'copy', copyTrade: DEFAULT_COPY_TRADE },
       'zh',
       null
     ).ai_config!.coin_source
-    expect(off.copy_trade_min_openers).toBeUndefined()
-    expect(off.copy_trade_min_hit_rate).toBeUndefined()
-    expect(off.copy_trade_trend_filter).toBeUndefined()
+    expect(off.copy_trade_min_openers).toBe(0)
+    expect(off.copy_trade_min_hit_rate).toBe(0)
+    expect(off.copy_trade_min_volume_millions).toBe(0)
+    expect(off.copy_trade_trend_filter).toBe(false)
 
     const staticCfg = configFromForm(
       null,

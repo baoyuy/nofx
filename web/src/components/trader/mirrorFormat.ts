@@ -62,6 +62,8 @@ export function fromForm(
     max_margin: num(f.max_margin),
     max_loss: num(f.max_loss),
   }
+  // Each mode has one leverage field; the other is not used.
+  if (s.leverage_mode === 'fixed') s.max_leverage = 0
   if (Object.values(s).some((v) => typeof v === 'number' && !isFinite(v)))
     return tr(language, '请输入数字', 'Enter numbers')
   if (s.size_mode === 'fixed' && (s.fixed_margin < 1 || s.fixed_margin > 1e6))

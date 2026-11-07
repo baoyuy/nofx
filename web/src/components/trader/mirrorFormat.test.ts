@@ -17,6 +17,10 @@ describe('copy link settings', () => {
       fromForm('en', { ...f, leverage_mode: 'fixed', leverage: '200' })
     ).toBeTypeOf('string')
     expect(fromForm('en', { ...f, max_loss: '-1' })).toBeTypeOf('string')
+    // A fixed leverage is not capped by the follow-mode cap.
+    expect(
+      fromForm('en', { ...f, leverage_mode: 'fixed', leverage: '20' })
+    ).toMatchObject({ leverage: 20, max_leverage: 0 })
   })
 
   it('describes a link in one line', () => {
